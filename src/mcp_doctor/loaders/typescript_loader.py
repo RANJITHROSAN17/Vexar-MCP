@@ -1,497 +1,399 @@
-"""Best-standard static TypeScript / JavaScript loader for MCP SDK.
+"""Static extraction of literal MCP SDK registrations and inline handlers.
 
-Design principles (safe by construction):
-  1. Zero execution — pure regex / line scanning; no Node, no eval, no subprocess.
-  2. Import-aware sink detection — tracks `import { exec } from "child_process"`
-     so bare `exec(` is only flagged when sourced from dangerous modules.
-  3. Zod-aware parameter expansion — parses `.describe()`, `.optional()`, `.default()`,
-     `.max()/.min()` and nested `z.object()` properties where structurally simple.
-  4. Timeout audit integration — reports `timeout_missing` on HTTP sinks (MCP010)
-     by inspecting call keyword args (`timeout=` present / `timeout=None` / absent).
-  5. Precise source-line tracking — parameters and sinks report real line numbers.
-  6. Ignores `.d.ts` declaration files; respects `node_modules` exclusions already
-     configured in `ScanConfig`.
+This is a small text scanner, not a JavaScript interpreter: source is never
+imported or executed. Comments and quoted strings are tokenized before matching
+calls, and balanced delimiters bound schemas and handlers. Computed registrations,
+external schema variables and referenced handler bodies are not resolved. Full
+JavaScript semantics (regex literals, template interpolation and lexical scope
+resolution) are outside this scanner's supported subset.
 """
 
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
 from pathlib import Path
-from typing import NamedTuple, TypedDict
+from typing import NamedTuple
 
 from mcp_doctor.models import CodeSink, ParameterSpec, ToolSpec
 from mcp_doctor.tokens import estimate_tool_tokens
 
-# ------------------------------------------------------------------
-# Safe matching constants
-# ------------------------------------------------------------------
-_DECLARATION_SUFFIX = ".d.ts"
-_EXTS = (".ts", ".js", ".jsx")
-
-# Tool-registration entry points (both SDK patterns)
-_TOOL_PATTERNS = [
-    re.compile(r"(?:\bserver\.)?tool\s*\("),
-    re.compile(r"\bregisterTool\s*\("),
-]
-
-# Zod scalar / container tokens (ordered by specificity)
-_ZOD_SCALARS = {
-    "z.string": "string",
-    "z.number": "number",
-    "z.boolean": "boolean",
-    "z.bigint": "bigint",
-    "z.date": "date",
-    "z.any": "any",
-    "z.unknown": "unknown",
-    "z.never": "never",
+_EXTENSIONS = frozenset({".ts", ".js", ".jsx"})
+_LEX = re.compile(
+    r"""(?P<comment>//[^\n]*|/\*.*?\*/)|"""
+    r"""(?P<string>"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|"""
+    r"""(?P<word>[A-Za-z_$][\w$]*)|(?P<number>\d+(?:\.\d+)?)|(?P<other>=>|\S)""",
+    re.DOTALL,
+)
+_TYPES = {
+    "string": "string",
+    "number": "number",
+    "boolean": "boolean",
+    "bigint": "bigint",
+    "date": "date",
+    "any": "any",
+    "unknown": "unknown",
+    "never": "never",
+    "array": "list",
+    "object": "object",
+    "record": "record",
+    "tuple": "tuple",
+    "map": "map",
+    "set": "set",
+    "enum": "enum",
+    "union": "union",
+    "intersection": "intersection",
 }
-_ZOD_CONTAINERS = {
-    "z.array": "list",
-    "z.object": "object",
-    "z.record": "record",
-    "z.tuple": "tuple",
-    "z.map": "map",
-    "z.set": "set",
-    "z.enum": "enum",
-    "z.union": "union",
-    "z.intersection": "intersection",
+_MEMBERS = {
+    "child_process": {"exec", "execSync", "spawn", "spawnSync", "execFile", "execFileSync"},
+    "fs": {"unlink", "unlinkSync", "rmdir", "rmdirSync", "rm", "rmSync"},
+    "vm": {"runInContext", "runInNewContext", "runInThisContext", "compileFunction"},
+    "axios": {"get", "post", "put", "patch", "delete", "head", "options", "request"},
 }
-
-# Dangerous module import tracking (text-only; never executes)
-_BAD_IMPORT_MODULES = {"child_process", "eval", "vm"}
-_BAD_IMPORT_NAMES = {"exec", "execSync", "spawn", "execFile", "execFileSync"}
-
-# Sink patterns (text-only; never executes JS)
-_SINK_PATTERNS = [
-    # shell — only when from child_process or bare exec after import tracking
-    ("shell", re.compile(r"\bchild_process\.exec(?:Sync)?\b")),
-    ("shell", re.compile(r"\bexec(?:Sync)?\b")),
-    # eval / dynamic code
-    ("eval", re.compile(r"\beval\s*\(")),
-    ("shell", re.compile(r"\bnew\s+Function\b")),
-    ("shell", re.compile(r"\bFunction\s*\(")),
-    # filesystem destructive (quick safe patterns)
-    ("filesystem", re.compile(r"\bfs\.unlink(?:Sync)?\b")),
-    ("filesystem", re.compile(r"\bfs\.rmdir(?:Sync)?\b")),
-    ("filesystem", re.compile(r"\bfs\.rm(?:Sync)?\b")),
-]
-
-# HTTP / SSRF / timeout audit patterns
-_HTTP_CALL_PATTERNS = [
-    re.compile(r"\brequests\.(?:get|post|put|delete|patch|request)\b"),
-    re.compile(r"\bhttpx\.(?:get|post|put|delete|patch|request|AsyncClient)\b"),
-    re.compile(r"\burllib\.request\.urlopen\b"),
-    re.compile(r"\bfetch\b"),
-    re.compile(r"\baxios\.(?:get|post|put|delete|patch|request)\b"),
-]
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
+_KINDS = {"child_process": "shell", "fs": "filesystem", "vm": "shell", "axios": "ssrf"}
+_Span = tuple[int, int]
 
 
-class _SourceWindow(NamedTuple):
-    text: str
-    offset: int  # absolute char offset of text start in source
+class _Token(NamedTuple):
+    value: str
+    offset: int
+    kind: str
 
 
-def _line_of(source: str, char_offset: int) -> int:
-    return source[:char_offset].count("\n") + 1
+class _Source:
+    def __init__(self, text: str) -> None:
+        self.tokens = [
+            _Token(m.group(), m.start(), m.lastgroup or "other")
+            for m in _LEX.finditer(text)
+            if m.lastgroup != "comment"
+        ]
+        self.lines = [0, *(m.end() for m in re.finditer("\n", text))]
+        self.pairs: dict[int, int] = {}
+        stack: list[int] = []
+        for i, token in enumerate(self.tokens):
+            if token.value in {"(", "[", "{"}:
+                stack.append(i)
+            elif token.value in {")", "]", "}"}:
+                if (
+                    stack
+                    and self.tokens[stack[-1]].value == {")": "(", "]": "[", "}": "{"}[token.value]
+                ):
+                    self.pairs[stack.pop()] = i
+                else:
+                    stack.clear()
+
+    def line(self, index: int) -> int:
+        return bisect_right(self.lines, self.tokens[index].offset)
+
+    def values(self, start: int, end: int) -> list[str]:
+        return [token.value for token in self.tokens[start:end]]
+
+    def literal(self, span: _Span) -> str | None:
+        start, end = span
+        if end != start + 1 or self.tokens[start].kind != "string":
+            return None
+        text = self.tokens[start].value
+        if text.startswith("`") and "${" in text:
+            return None
+        escapes = {"n": "\n", "r": "\r", "t": "\t"}
+        return re.sub(r"""\\([nrt\\'"`])""", lambda m: escapes.get(m[1], m[1]), text[1:-1])
+
+    def parts(self, start: int, end: int) -> list[_Span]:
+        result = []
+        index = start
+        while index < end:
+            if self.tokens[index].value == ",":
+                if start < index:
+                    result.append((start, index))
+                start = index + 1
+            index = self.pairs.get(index, index) + 1
+        if start < end:
+            result.append((start, end))
+        return result
+
+    def fields(self, span: _Span) -> dict[str, tuple[int, _Span]]:
+        start, end = span
+        if start >= end or self.tokens[start].value != "{" or start not in self.pairs:
+            return {}
+        fields = {}
+        for a, b in self.parts(start + 1, self.pairs[start]):
+            if a + 2 < b and self.tokens[a + 1].value == ":":
+                name = (
+                    self.literal((a, a + 1))
+                    if self.tokens[a].kind == "string"
+                    else self.tokens[a].value
+                )
+                if name is not None:
+                    fields[name] = (a, (a + 2, b))
+        return fields
+
+    def schema(self, span: _Span) -> dict[str, tuple[int, _Span]]:
+        start, end = span
+        if self.values(start, start + 4) == ["z", ".", "object", "("]:
+            close = self.pairs.get(start + 3)
+            if close is None:
+                return {}
+            args = self.parts(start + 4, close)
+            return self.fields(args[0]) if args else {}
+        return self.fields((start, end))
 
 
-def _find_paren(source: str, open_idx: int) -> int:
-    """Safe parenthesis match (ignores strings via simple escape tracking)."""
-    depth = 1
-    i = open_idx + 1
-    in_str = False
-    str_char = ""
-    while i < len(source):
-        ch = source[i]
-        if ch == "\\" and i + 1 < len(source):
-            i += 2
+def _parameters(source: _Source, schema: _Span) -> tuple[ParameterSpec, ...]:
+    params = []
+    pending = [
+        (name, key, span, True) for name, (key, span) in reversed(source.schema(schema).items())
+    ]
+    while pending:
+        name, key, (start, end), parent_required = pending.pop()
+        if source.values(start, start + 2) != ["z", "."] or start + 3 not in source.pairs:
             continue
-        if ch in ('"', "'", "`"):
-            if not in_str:
-                in_str = True
-                str_char = ch
-            elif str_char == ch:
-                in_str = False
-                str_char = ""
-            i += 1
-            continue
-        if not in_str:
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                depth -= 1
-                if depth == 0:
-                    return i
-        i += 1
-    return len(source) - 1
-
-
-def _extract_quoted(source: str, start: int) -> tuple[str | None, int]:
-    """Best-effort quoted-string extraction starting at start (expects opening quote at start)."""
-    if start >= len(source):
-        return None, start
-    quote = source[start]
-    if quote not in ('"', "'", "`"):
-        # Maybe quote is slightly after (whitespace); scan forward briefly
-        j = start
-        while j < len(source) and source[j] in " \t\n\r":
-            j += 1
-        if j < len(source) and source[j] in ('"', "'", "`"):
-            start = j
-            quote = source[j]
-        else:
-            return None, start
-    i = start + 1
-    chars = []
-    while i < len(source):
-        ch = source[i]
-        if ch == "\\" and i + 1 < len(source):
-            chars.append(source[i + 1])
-            i += 2
-            continue
-        if ch == quote:
-            return "".join(chars), i + 1
-        chars.append(ch)
-        i += 1
-    return "".join(chars), i
-
-
-class _ToolCall(TypedDict):
-    name: str | None
-    description: str | None
-    props: list[tuple[str, str]]
-
-
-def _parse_tool_call(source: str, match_start: int, match_end: int) -> _ToolCall:
-    """Extract name, description, zod props from a tool-registration call."""
-    open_idx = match_end - 1
-    close_idx = _find_paren(source, open_idx)
-    args_text = source[open_idx + 1 : close_idx]
-
-    info: _ToolCall = {"name": None, "description": None, "props": []}
-
-    # Strategy: find first two string literals; anything else is schema descriptor
-    # We split by unquoted commas to inspect arguments
-    args: list[str] = []
-    current: list[str] = []
-    depth = 0
-    in_str = False
-    str_char = ""
-    i = 0
-    while i < len(args_text):
-        ch = args_text[i]
-        if ch == "\\" and i + 1 < len(args_text):
-            current.append(ch)
-            current.append(args_text[i + 1])
-            i += 2
-            continue
-        if ch in ('"', "'", "`"):
-            if not in_str:
-                in_str = True
-                str_char = ch
-            elif str_char == ch:
-                in_str = False
-                str_char = ""
-            current.append(ch)
-            i += 1
-            continue
-        if not in_str:
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                depth -= 1
-            elif ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-            elif ch == "," and depth == 0:
-                args.append("".join(current).strip())
-                current = []
-                i += 1
-                continue
-        current.append(ch)
-        i += 1
-    if current:
-        args.append("".join(current).strip())
-
-    # First string arg -> name; second -> description
-    strings_found: list[str] = []
-    for arg in args:
-        if not arg:
-            continue
-        # Quick heuristic: starts with quote
-        stripped = arg.lstrip()
-        if stripped.startswith('"') or stripped.startswith("'") or stripped.startswith("`"):
-            val, _ = _extract_quoted(stripped, 0)
-            if val is not None:
-                strings_found.append(val)
-
-    if len(strings_found) >= 1:
-        info["name"] = strings_found[0]
-    if len(strings_found) >= 2:
-        info["description"] = strings_found[1]
-
-    # Extract z.object / z.array property names from schema args
-    # We scan all args for patterns: key: z.xxx(...)
-    for arg in args:
-        # Look for property definitions inside object schemas
-        # Pattern: propName: z.string() or propName : z.number().max(10)
-        for m in re.finditer(
-            r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(z\.[A-Za-z_][A-Za-z0-9_]*\b(?:\.[A-Za-z_][A-Za-z0-9_]*|\([^)]*\))*)",
-            arg,
-        ):
-            prop = m.group(1)
-            z_expr = m.group(2)
-            if prop not in info["props"]:
-                info["props"].append((prop, z_expr))
-    return info
-
-
-def _infer_param_from_z_expr(z_expr: str) -> tuple[str, bool, bool, str]:
-    """Return (type_name, has_bounds, required, description_hint)."""
-    has_bounds = False
-    required = True
-    description = ""
-
-    # Bounds: .max(.min(.length(
-    if ".max" in z_expr or ".min" in z_expr or ".length" in z_expr or ".email" in z_expr:
-        has_bounds = True
-
-    # Optional / default -> not required
-    if ".optional" in z_expr or ".default" in z_expr or ".nullable" in z_expr:
-        required = False
-
-    # Description from .describe("...")
-    m = re.search(r"\.describe\s*\(\s*([\"\'])(.*?)\1", z_expr, re.DOTALL)
-    if m:
-        description = m.group(2)
-
-    # Type resolution (best-effort)
-    type_name = "unknown"
-    for scalar_key, scalar_val in _ZOD_SCALARS.items():
-        if scalar_key in z_expr:
-            type_name = scalar_val
-            break
-    if type_name == "unknown":
-        for container_key, container_val in _ZOD_CONTAINERS.items():
-            if container_key in z_expr:
-                type_name = container_val
+        kind = source.tokens[start + 2].value
+        required, bounds, description = parent_required, False, ""
+        index = source.pairs[start + 3] + 1
+        while index + 2 < end and source.tokens[index].value == ".":
+            method = source.tokens[index + 1].value
+            close = source.pairs.get(index + 2)
+            if close is None:
                 break
-    # Nested object props — if z.object with props found separately, type stays object
-    return type_name, has_bounds, required, description
-
-
-def _build_params_from_info(info: _ToolCall, tool_line: int) -> list[ParameterSpec]:
-    params: list[ParameterSpec] = []
-    for prop, z_expr in info.get("props", []):
-        type_name, has_bounds, required, desc = _infer_param_from_z_expr(z_expr)
+            if method in {"optional", "default"}:
+                required = False
+            if method in {"max", "min", "length", "email"}:
+                bounds = True
+            if method == "describe":
+                description = source.literal((index + 3, close)) or ""
+            index = close + 1
         params.append(
             ParameterSpec(
-                name=prop,
-                type_name=type_name,
-                description=desc,
+                name=name,
+                type_name=_TYPES.get(kind, "unknown"),
+                description=description,
                 required=required,
-                has_bounds=has_bounds,
-                line=tool_line,
+                has_bounds=bounds,
+                line=source.line(key),
             )
         )
-    # If no z.object props parsed but schema_props remain (simple arg patterns), add basic
-    if not params and info.get("props") == []:
-        # Nothing more; tool may have no explicit schema (return special case handled by caller)
-        pass
-    return params
+        if kind == "object":
+            pending.extend(
+                (f"{name}.{child}", child_key, span, required)
+                for child, (child_key, span) in reversed(source.schema((start, end)).items())
+            )
+    return tuple(params)
 
 
-def _extract_sinks(
-    source: str, tool_start: int, tool_end: int, bad_imports: set[str]
-) -> list[CodeSink]:
-    sinks: list[CodeSink] = []
-    # Build a small window from tool body; include handler if inside args (already covered by close_idx)
-    window_text = source[max(0, tool_start - 50) : min(len(source), tool_end + 200)]
-    # Break at next tool to avoid cross-contamination
-    # (callers pass precise tool_end; we just constrain locally)
-    seen: set[tuple[str, str, int]] = set()
-    # First: import-tracked dangerous names
-    # Scan patterns
-    for kind, pattern in _SINK_PATTERNS:
-        for m in pattern.finditer(window_text):
-            abs_offset = max(0, tool_start - 50) + m.start()
-            line = _line_of(source, abs_offset)
-            call_text = m.group(0)[:60]
-            key = (kind, call_text, line)
-            if key in seen:
-                continue
-            seen.add(key)
-            sinks.append(
+def _imports(source: _Source) -> tuple[dict[str, tuple[str, str]], dict[str, str]]:
+    functions: dict[str, tuple[str, str]] = {}
+    namespaces = {name: name for name in _MEMBERS}
+    tokens = source.tokens
+    for i, token in enumerate(tokens[:-1]):
+        if (
+            token.value != "import"
+            or tokens[i + 1].value == "type"
+            or tokens[i + 1].kind == "string"
+        ):
+            continue
+        end = i + 1
+        while end < len(tokens) and tokens[end].value not in {"from", ";", "import"}:
+            end += 1
+        if end + 1 >= len(tokens) or tokens[end].value != "from":
+            continue
+        module = (source.literal((end + 1, end + 2)) or "").removeprefix("node:")
+        if module not in _MEMBERS:
+            continue
+        if tokens[i + 1].kind == "word":
+            namespaces[tokens[i + 1].value] = module
+        for index in range(i + 1, end):
+            if tokens[index].value == "*" and index + 2 < end and tokens[index + 1].value == "as":
+                namespaces[tokens[index + 2].value] = module
+            if tokens[index].value == "{" and index in source.pairs:
+                for a, b in source.parts(index + 1, source.pairs[index]):
+                    original = tokens[a].value
+                    if original in _MEMBERS[module]:
+                        alias = (
+                            tokens[a + 2].value
+                            if a + 2 < b and tokens[a + 1].value == "as"
+                            else original
+                        )
+                        functions[alias] = (_KINDS[module], f"{module}.{original}")
+    return functions, namespaces
+
+
+def _handler(source: _Source, span: _Span) -> _Span:
+    start, end = span
+    while start < end and source.tokens[start].value == "(" and source.pairs.get(start) == end - 1:
+        start, end = start + 1, end - 1
+    index = start
+    is_function = "function" in source.values(start, min(start + 2, end))
+    while index < end:
+        if source.tokens[index].value == "=>":
+            return index + 1, end
+        if is_function and source.tokens[index].value == "{":
+            return index + 1, source.pairs.get(index, end)
+        index = source.pairs.get(index, index) + 1
+    # A named handler cannot be inspected without resolving another declaration.
+    return end, end
+
+
+def _positive_number(source: _Source, span: _Span) -> bool:
+    start, end = span
+    return (
+        end == start + 1
+        and source.tokens[start].kind == "number"
+        and float(source.tokens[start].value) > 0
+    )
+
+
+def _bounded_http(source: _Source, args: list[_Span], call: str) -> bool:
+    is_fetch = call in {"fetch", "globalThis.fetch"}
+    method = call.rsplit(".", 1)[-1]
+    # Axios body verbs take config third; request/config overloads differ.
+    # Fetch has no native `timeout` option: only a bounded abort signal counts.
+    if method in {"post", "put", "patch"}:
+        option_index = 2
+    elif method in {"axios", "request"}:
+        option_index = min(1, len(args) - 1)
+    else:
+        option_index = 1
+    if not args or option_index >= len(args):
+        return False
+    fields = source.fields(args[option_index])
+    timeout = fields.get("timeout")
+    if not is_fetch and timeout and _positive_number(source, timeout[1]):
+        return True
+    signal = fields.get("signal")
+    if signal:
+        start, end = signal[1]
+        if (
+            source.values(start, start + 4) == ["AbortSignal", ".", "timeout", "("]
+            and source.pairs.get(start + 3) == end - 1
+        ):
+            return _positive_number(source, (start + 4, end - 1))
+    return False
+
+
+def _sinks(
+    source: _Source,
+    handler: _Span,
+    params: tuple[ParameterSpec, ...],
+    functions: dict[str, tuple[str, str]],
+    namespaces: dict[str, str],
+) -> tuple[CodeSink, ...]:
+    result = []
+    roots = {p.name.split(".", 1)[0] for p in params}
+    start, end = _handler(source, handler)
+    tokens = source.tokens
+    for index in range(start, end):
+        if tokens[index].kind != "word" or (index > start and tokens[index - 1].value == "."):
+            continue
+        names = [tokens[index].value]
+        after = index + 1
+        while after + 1 < end and tokens[after].value == "." and tokens[after + 1].kind == "word":
+            names.append(tokens[after + 1].value)
+            after += 2
+        if after >= end or tokens[after].value != "(" or after not in source.pairs:
+            continue
+        close = source.pairs[after]
+        if close >= end:
+            continue
+        call = ".".join(names)
+        imported = functions.get(call)
+        kind = imported[0] if imported else None
+        canonical = imported[1] if imported else call
+        if call in {"eval", "Function", "globalThis.eval", "globalThis.Function"}:
+            kind = "shell"
+        elif call in {"fetch", "globalThis.fetch"}:
+            kind = "ssrf"
+        elif names[0] in namespaces:
+            module = namespaces[names[0]]
+            if (len(names) == 2 and names[1] in _MEMBERS[module]) or (
+                len(names) == 1 and module == "axios"
+            ):
+                kind = _KINDS[module]
+                canonical = ".".join([module, *names[1:]])
+        if kind is not None:
+            args = source.parts(after + 1, close)
+            used = next(
+                (
+                    t.value
+                    for t in tokens[after + 1 : close]
+                    if t.kind == "word" and t.value in roots
+                ),
+                None,
+            )
+            result.append(
                 CodeSink(
                     kind=kind,
-                    call_name=call_text,
-                    line=line,
-                    uses_param=None,
-                    validated=False,
-                    timeout_missing=False,
+                    call_name=call,
+                    line=source.line(index),
+                    uses_param=used,
+                    timeout_missing=kind == "ssrf" and not _bounded_http(source, args, canonical),
                 )
             )
-    # HTTP / network-timeout audit (MCP010 integration) — check for timeout= absence
-    for http_pat in _HTTP_CALL_PATTERNS:
-        for m in http_pat.finditer(window_text):
-            abs_offset = max(0, tool_start - 50) + m.start()
-            line = _line_of(source, abs_offset)
-            # Inspect call args in source near match for timeout= keyword
-            call_start = abs_offset  # Already absolute; do not add the window offset twice.
-            # Find matching closing paren for this call (approximate from match end)
-            # Best safe approximation: search next ')' within 300 chars
-            paren_open = source.find("(", call_start)
-            if paren_open == -1:
-                continue
-            paren_close = _find_paren(source, paren_open)
-            call_args = source[paren_open + 1 : paren_close]
-            timeout_missing = True
-            # Check for timeout=... keyword
-            for kw_m in re.finditer(r"timeout\s*=\s*([^,)]+)", call_args):
-                val_str = kw_m.group(1).strip()
-                # If explicitly None -> missing; if numeric/constant -> present
-                if val_str == "None" or val_str == "null" or val_str == "undefined":
-                    timeout_missing = True
-                else:
-                    timeout_missing = False
-                    break
-            # Only add a network-timeout sink if missing; do NOT duplicate existing ssrf sink
-            # We use a dedicated kind for audit consistency
-            if timeout_missing:
-                key = ("network-timeout", m.group(0)[:60], line)
-                if key not in seen:
-                    seen.add(key)
-                    sinks.append(
-                        CodeSink(
-                            kind="ssrf",  # use ssrf kind + timeout_missing for rule check
-                            call_name=m.group(0)[:60],
-                            line=line,
-                            uses_param=None,
-                            validated=False,
-                            timeout_missing=True,
-                        )
-                    )
-    return sinks
-
-
-# ------------------------------------------------------------------
-# Import tracking (text-only; best-effort for sink classification)
-# ------------------------------------------------------------------
-
-
-def _track_bad_imports(source: str) -> set[str]:
-    bad: set[str] = set()
-    for m in re.finditer(r"import\s+\{([^}]+)\}\s+from\s+['\"]([^'\"]+)['\"]", source):
-        import_block = m.group(1)
-        module = m.group(2)
-        if (
-            module.split("/")[-1].split(".")[0] in _BAD_IMPORT_MODULES
-            or module in _BAD_IMPORT_MODULES
-        ):
-            for name in import_block.split(","):
-                clean = name.split(" as ")[-1].strip()
-                if clean:
-                    bad.add(clean)
-    # Also default imports: import child_process from "child_process"
-    for m in re.finditer(r"import\s+([A-Za-z_][A-Za-z0-9_]*)\s+from\s+['\"]([^'\"]+)['\"]", source):
-        name = m.group(1)
-        module = m.group(2).split("/")[-1].split(".")[0]
-        if module in _BAD_IMPORT_MODULES:
-            bad.add(name)
-    return bad
+    return tuple(result)
 
 
 def load_typescript_file(path: Path) -> list[ToolSpec]:
-    """Parse a .ts / .js / .jsx file and return discovered MCP SDK ToolSpecs.
+    """Extract literal SDK tool registrations without executing JavaScript.
 
-    Safety guarantees:
-      - Opens file in text mode only; never executes code.
-      - Uses balanced-paren scanning (string-aware) rather than fragile split.
-      - Tracks dangerous imports so bare `exec(` is only flagged when sourced
-        from `child_process`; avoids false positives on harmless variable names.
-      - Reports real source line numbers.
-      - Respects `.d.ts` exclusion and existing `node_modules` exclusions.
+    Args:
+        path: A TypeScript, JavaScript or JSX source file. Declaration files are ignored.
+
+    Returns:
+        Tools in source order, with statically known parameters and inline-handler
+        sinks. Unreadable files and unsupported extensions yield an empty list.
     """
-    suffix = path.suffix
-    # Exclude declaration files explicitly (also handled by .d.ts not in _EXTS,
-    # but guard against paths like foo.d.ts where .ts is suffix)
-    if path.name.endswith(_DECLARATION_SUFFIX):
+    if path.name.endswith(".d.ts") or path.suffix not in _EXTENSIONS:
         return []
-    if suffix not in _EXTS:
-        return []
-
     try:
-        source = path.read_text(encoding="utf-8", errors="ignore")
-    except Exception:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
         return []
-
-    bad_imports = _track_bad_imports(source)
-    tools: list[ToolSpec] = []
-
-    for pattern in _TOOL_PATTERNS:
-        for match in pattern.finditer(source):
-            tool_start = match.start()
-            open_idx = match.end() - 1
-            close_idx = _find_paren(source, open_idx)
-            info = _parse_tool_call(source, tool_start, open_idx + 1)
-
-            tool_name = info.get("name") or f"ts_anon_{tool_start}"
-            description = info.get("description") or ""
-            tool_line = _line_of(source, tool_start)
-
-            params = _build_params_from_info(info, tool_line)
-            # Fallback: if no z.object props found but schema object literal exists,
-            # try to extract top-level keys from args that look like prop definitions
-            if not params and info.get("props") == []:
-                # Scan argument text for property names near z. expressions
-                args_text = source[open_idx + 1 : close_idx]
-                for m in re.finditer(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:z\.|\w+)", args_text):
-                    prop = m.group(1)
-                    if prop and prop not in {p.name for p in params}:
-                        params.append(
-                            ParameterSpec(
-                                name=prop,
-                                type_name="unknown",
-                                description="",
-                                required=True,
-                                has_bounds=False,
-                                line=tool_line,
-                            )
-                        )
-
-            sinks = _extract_sinks(source, tool_start, close_idx, bad_imports)
-            # Deduplicate sinks by (kind, line, truncated call)
-            seen_sinks: set[tuple[str, int, str]] = set()
-            unique_sinks: list[CodeSink] = []
-            for s in sinks:
-                key = (s.kind, s.line, s.call_name[:40])
-                if key not in seen_sinks:
-                    seen_sinks.add(key)
-                    unique_sinks.append(s)
-
-            param_tuple = tuple(params)
-            est = estimate_tool_tokens(
-                tool_name,
-                description,
-                param_tuple,
+    source = _Source(text)
+    functions, namespaces = _imports(source)
+    tools = []
+    tokens = source.tokens
+    for index in range(2, len(tokens) - 1):
+        if (
+            tokens[index].value not in {"tool", "registerTool"}
+            or tokens[index - 1].value != "."
+            or tokens[index - 2].kind != "word"
+        ):
+            continue
+        opening = index + 1
+        if tokens[opening].value != "(" or opening not in source.pairs:
+            continue
+        args = source.parts(opening + 1, source.pairs[opening])
+        if len(args) < 2:
+            continue
+        name = source.literal(args[0])
+        if name is None:
+            continue
+        description = ""
+        schema = (0, 0)
+        if tokens[index].value == "registerTool":
+            if len(args) < 3:
+                continue
+            metadata = source.fields(args[1])
+            if "description" in metadata:
+                description = source.literal(metadata["description"][1]) or ""
+            if "inputSchema" in metadata:
+                schema = metadata["inputSchema"][1]
+        else:
+            first_schema = 1
+            literal = source.literal(args[1])
+            if literal is not None:
+                description, first_schema = literal, 2
+            if first_schema < len(args) - 1:
+                schema = args[first_schema]
+        params = _parameters(source, schema)
+        tools.append(
+            ToolSpec(
+                name=name,
+                description=description,
+                source_file=str(path),
+                line=source.line(index - 2),
+                parameters=params,
+                sinks=_sinks(source, args[-1], params, functions, namespaces),
+                estimated_tokens=estimate_tool_tokens(name, description, params),
             )
-            tools.append(
-                ToolSpec(
-                    name=tool_name,
-                    description=description,
-                    source_file=str(path),
-                    line=tool_line,
-                    parameters=param_tuple,
-                    sinks=tuple(unique_sinks),
-                    suppressed_rules=frozenset(),
-                    estimated_tokens=est,
-                )
-            )
-
-    tools.sort(key=lambda t: t.line)
+        )
     return tools
