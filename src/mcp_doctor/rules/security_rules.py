@@ -106,34 +106,36 @@ def check_filesystem_sinks(tools: Sequence[ToolSpec], config: ScanConfig) -> lis
                 )
     return out
 
+
 @register_rule(
-    rule_id="MCP013",
-    slug="unsafe-deserialization",
-    severity=Severity.ERROR,
+    rule_id="MCP010",
+    slug="missing-network-timeout",
+    severity=Severity.WARNING,
     category=Category.SECURITY,
-    summary="Tool handler deserializes untrusted data using pickle, marshal, shelve, or unsafe yaml.load.",
-    remediation="Avoid pickle/marshal/shelve on untrusted input. Use yaml.safe_load or yaml.load(..., Loader=yaml.SafeLoader).",
+    summary="Outbound HTTP call inside tool handler omits explicit `timeout=` (or passes `timeout=None`), risking indefinite hangs.",
+    remediation="Add `timeout=10` (or appropriate value) to all `requests.get/post`, `httpx.*`, and `urllib.request.urlopen` calls.",
 )
-def check_unsafe_deserialization(tools: Sequence[ToolSpec], config: ScanConfig) -> list[Diagnostic]:
+def check_network_timeouts(tools: Sequence[ToolSpec], config: ScanConfig) -> list[Diagnostic]:
     del config
     out: list[Diagnostic] = []
     for tool in tools:
         for sink in tool.sinks:
-            if sink.kind == "deserialization":
+            if sink.kind == "ssrf" and sink.timeout_missing:
                 param_note = f" with parameter '{sink.uses_param}'" if sink.uses_param else ""
                 out.append(
                     Diagnostic(
-                        rule_id="MCP013",
-                        rule_slug="unsafe-deserialization",
-                        severity=Severity.ERROR,
+                        rule_id="MCP010",
+                        rule_slug="missing-network-timeout",
+                        severity=Severity.WARNING,
                         category=Category.SECURITY,
                         message=(
-                            f"Tool '{tool.name}' performs unsafe deserialization via `{sink.call_name}`{param_note}."
+                            f"Tool '{tool.name}' performs HTTP sink `{sink.call_name}`{param_note} "
+                            "without an explicit `timeout=` argument."
                         ),
                         source_file=tool.source_file,
                         line=sink.line,
                         tool_name=tool.name,
-                        remediation="Use safe alternatives such as `yaml.safe_load` or validated JSON. Never use pickle on untrusted data.",
+                        remediation="Pass `timeout=<seconds>` to the HTTP call (e.g., `requests.get(url, timeout=10)`).",
                     )
                 )
     return out

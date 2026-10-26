@@ -229,6 +229,14 @@ def _extract_sinks(
             if qual in _HTTP_CALLS or any(
                 client in qual for client in ("requests", "httpx", "urllib", "client", "session")
             ):
+                timeout_missing = True
+                for kw in node.keywords:
+                    if kw.arg == "timeout":
+                        if isinstance(kw.value, ast.Constant) and kw.value.value is None:
+                            timeout_missing = True
+                        else:
+                            timeout_missing = False
+                        break
                 sinks.append(
                     CodeSink(
                         kind="ssrf",
@@ -236,6 +244,7 @@ def _extract_sinks(
                         line=node.lineno,
                         uses_param=first_param,
                         validated=has_url_guard,
+                        timeout_missing=timeout_missing,
                     )
                 )
         elif qual == "open" and first_param:

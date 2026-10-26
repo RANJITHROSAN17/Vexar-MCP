@@ -50,6 +50,7 @@ class CodeSink:
     line: int
     uses_param: str | None = None
     validated: bool = False
+    timeout_missing: bool = False
 
 
 @dataclass(frozen=True)

@@ -104,3 +104,35 @@ def load_yaml_safe(data: str) -> object:
     # Safe loaders should NOT trigger MCP013
     assert not any("safe_load" in m.lower() and "MCP013" in str(d) for d in report.diagnostics)
 
+
+
+def test_mcp010_missing_timeout_flagged(tmp_path: Path) -> None:
+    srv = tmp_path / "timeout_server.py"
+    srv.write_text('''
+import requests
+
+@mcp.tool()
+def fetch(url: str) -> str:
+    """Fetch."""
+    return requests.get(url).text
+''')
+    from mcp_doctor.engine import scan_paths
+    report = scan_paths([srv])
+    triggered = {d.rule_id for d in report.diagnostics}
+    assert "MCP010" in triggered
+
+
+def test_mcp010_timeout_present_clean(tmp_path: Path) -> None:
+    srv = tmp_path / "timeout_ok_server.py"
+    srv.write_text('''
+import requests
+
+@mcp.tool()
+def fetch(url: str) -> str:
+    """Fetch with timeout."""
+    return requests.get(url, timeout=10).text
+''')
+    from mcp_doctor.engine import scan_paths
+    report = scan_paths([srv])
+    triggered = {d.rule_id for d in report.diagnostics}
+    assert "MCP010" not in triggered
