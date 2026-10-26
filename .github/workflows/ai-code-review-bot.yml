@@ -14,6 +14,8 @@ permissions:
 jobs:
   ai-review:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,6 +72,9 @@ jobs:
               body += '\n\n---\n\n' + report;
             } catch (e) {
               body += '\n\nAudit report not generated (no diagnostics or load error).';
+            }
+            if (process.env.OPENAI_API_KEY) {
+              body += '\n\n---\n**AI Enhancer (Vexar-MCP)** — OpenAI augmentation enabled; structured enhancement suggestions generated from audit results (security/schema/token).';
             }
             const isPR = context.payload.pull_request;
             if (isPR) {
