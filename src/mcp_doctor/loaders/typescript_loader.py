@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TypedDict
 
 from mcp_doctor.models import CodeSink, ParameterSpec, ToolSpec
 from mcp_doctor.tokens import estimate_tool_tokens
@@ -89,13 +89,14 @@ _HTTP_CALL_PATTERNS = [
 # Helpers
 # ------------------------------------------------------------------
 
+
 class _SourceWindow(NamedTuple):
     text: str
     offset: int  # absolute char offset of text start in source
 
 
 def _line_of(source: str, char_offset: int) -> int:
-    return source[: char_offset].count("\n") + 1
+    return source[:char_offset].count("\n") + 1
 
 
 def _find_paren(source: str, open_idx: int) -> int:
@@ -159,13 +160,19 @@ def _extract_quoted(source: str, start: int) -> tuple[str | None, int]:
     return "".join(chars), i
 
 
-def _parse_tool_call(source: str, match_start: int, match_end: int) -> dict | None:
+class _ToolCall(TypedDict):
+    name: str | None
+    description: str | None
+    props: list[tuple[str, str]]
+
+
+def _parse_tool_call(source: str, match_start: int, match_end: int) -> _ToolCall:
     """Extract name, description, zod props from a tool-registration call."""
     open_idx = match_end - 1
     close_idx = _find_paren(source, open_idx)
     args_text = source[open_idx + 1 : close_idx]
 
-    info: dict = {"name": None, "description": None, "props": []}
+    info: _ToolCall = {"name": None, "description": None, "props": []}
 
     # Strategy: find first two string literals; anything else is schema descriptor
     # We split by unquoted commas to inspect arguments
@@ -278,7 +285,7 @@ def _infer_param_from_z_expr(z_expr: str) -> tuple[str, bool, bool, str]:
     return type_name, has_bounds, required, description
 
 
-def _build_params_from_info(info: dict, tool_line: int) -> list[ParameterSpec]:
+def _build_params_from_info(info: _ToolCall, tool_line: int) -> list[ParameterSpec]:
     params: list[ParameterSpec] = []
     for prop, z_expr in info.get("props", []):
         type_name, has_bounds, required, desc = _infer_param_from_z_expr(z_expr)
@@ -299,7 +306,9 @@ def _build_params_from_info(info: dict, tool_line: int) -> list[ParameterSpec]:
     return params
 
 
-def _extract_sinks(source: str, tool_start: int, tool_end: int, bad_imports: set[str]) -> list[CodeSink]:
+def _extract_sinks(
+    source: str, tool_start: int, tool_end: int, bad_imports: set[str]
+) -> list[CodeSink]:
     sinks: list[CodeSink] = []
     # Build a small window from tool body; include handler if inside args (already covered by close_idx)
     window_text = source[max(0, tool_start - 50) : min(len(source), tool_end + 200)]
@@ -307,7 +316,6 @@ def _extract_sinks(source: str, tool_start: int, tool_end: int, bad_imports: set
     # (callers pass precise tool_end; we just constrain locally)
     seen: set[tuple[str, str, int]] = set()
     # First: import-tracked dangerous names
-    dangerous_names = set(bad_imports) | {"eval", "exec", "execSync"}
     # Scan patterns
     for kind, pattern in _SINK_PATTERNS:
         for m in pattern.finditer(window_text):
@@ -334,7 +342,7 @@ def _extract_sinks(source: str, tool_start: int, tool_end: int, bad_imports: set
             abs_offset = max(0, tool_start - 50) + m.start()
             line = _line_of(source, abs_offset)
             # Inspect call args in source near match for timeout= keyword
-            call_start = abs_offset + m.start()
+            call_start = abs_offset  # Already absolute; do not add the window offset twice.
             # Find matching closing paren for this call (approximate from match end)
             # Best safe approximation: search next ')' within 300 chars
             paren_open = source.find("(", call_start)
@@ -375,12 +383,16 @@ def _extract_sinks(source: str, tool_start: int, tool_end: int, bad_imports: set
 # Import tracking (text-only; best-effort for sink classification)
 # ------------------------------------------------------------------
 
+
 def _track_bad_imports(source: str) -> set[str]:
     bad: set[str] = set()
     for m in re.finditer(r"import\s+\{([^}]+)\}\s+from\s+['\"]([^'\"]+)['\"]", source):
         import_block = m.group(1)
         module = m.group(2)
-        if module.split("/")[-1].split(".")[0] in _BAD_IMPORT_MODULES or module in _BAD_IMPORT_MODULES:
+        if (
+            module.split("/")[-1].split(".")[0] in _BAD_IMPORT_MODULES
+            or module in _BAD_IMPORT_MODULES
+        ):
             for name in import_block.split(","):
                 clean = name.split(" as ")[-1].strip()
                 if clean:
@@ -438,9 +450,7 @@ def load_typescript_file(path: Path) -> list[ToolSpec]:
             if not params and info.get("props") == []:
                 # Scan argument text for property names near z. expressions
                 args_text = source[open_idx + 1 : close_idx]
-                for m in re.finditer(
-                    r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:z\.|\w+)", args_text
-                ):
+                for m in re.finditer(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:z\.|\w+)", args_text):
                     prop = m.group(1)
                     if prop and prop not in {p.name for p in params}:
                         params.append(

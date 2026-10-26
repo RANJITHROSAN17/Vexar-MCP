@@ -478,52 +478,176 @@
     },
     {
       "id": "RM-016",
-      "label": "feat(rules): add MCP009 protocol / transport validation",
       "status": "queued",
       "priority": "high",
-      "linked_issue": null
+      "linked_issue": null,
+      "title": "feat(rules): add MCP009 protocol / transport validation",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/rules",
+        "type/feature"
+      ],
+      "summary": "Validate MCP protocol and transport configuration with actionable diagnostics.",
+      "motivation": "Transport and protocol mismatches should be visible before deployment.",
+      "files": [
+        "src/mcp_doctor/rules/mcp009_protocol.py",
+        "tests/test_rules.py"
+      ],
+      "acceptance_criteria": [
+        "Use a non-conflicting rule ID and document supported protocol assumptions.",
+        "Test supported and unsupported transport configurations without executing a server."
+      ]
     },
     {
       "id": "RM-017",
-      "label": "feat(engine): add runtime risk scoring (severity + exploitability + mitigation)",
       "status": "queued",
       "priority": "high",
-      "linked_issue": null
+      "linked_issue": null,
+      "title": "feat(engine): add runtime risk scoring (severity + exploitability + mitigation)",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/rules",
+        "type/feature"
+      ],
+      "summary": "Add configurable risk scoring using finding severity, exploitability and available mitigations.",
+      "motivation": "A documented score can help operators prioritize findings consistently.",
+      "files": [
+        "src/mcp_doctor/engine.py",
+        "src/mcp_doctor/models.py",
+        "tests/test_rules.py"
+      ],
+      "acceptance_criteria": [
+        "Define and document deterministic scoring weights and output fields.",
+        "Test score boundaries, mitigated findings and compatibility with existing reports."
+      ]
     },
     {
       "id": "RM-018",
-      "label": "feat(engine): baseline comparison --current vs --previous scan",
       "status": "queued",
       "priority": "medium",
-      "linked_issue": null
+      "linked_issue": null,
+      "title": "feat(engine): baseline comparison --current vs --previous scan",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/cli",
+        "type/feature"
+      ],
+      "summary": "Compare current and previous scan results to identify new, resolved and unchanged findings.",
+      "motivation": "Scan comparisons make regressions and remediation progress visible.",
+      "files": [
+        "src/mcp_doctor/engine.py",
+        "src/mcp_doctor/cli.py",
+        "tests/test_cli_and_reporters.py"
+      ],
+      "acceptance_criteria": [
+        "Specify stable diagnostic matching keys and an explicit comparison interface.",
+        "Test added, resolved and unchanged findings, including malformed baseline input."
+      ]
     },
     {
       "id": "RM-019",
-      "label": "feat(cli): add mcp-doctor simulate --model cost benchmark",
       "status": "queued",
       "priority": "medium",
-      "linked_issue": null
+      "linked_issue": null,
+      "title": "feat(cli): add mcp-doctor simulate --model cost benchmark",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/cli",
+        "type/feature"
+      ],
+      "summary": "Integrate model-specific token-cost estimates into the mcp-doctor simulate command.",
+      "motivation": "Operators need transparent estimates of tool-schema context costs.",
+      "files": [
+        "src/mcp_doctor/cli_simulate.py",
+        "src/mcp_doctor/simulate/cost_model.py",
+        "tests/test_cli_and_reporters.py"
+      ],
+      "acceptance_criteria": [
+        "Load tool schemas from the requested input rather than a placeholder example.",
+        "Document pricing units and assumptions; test model selection and unknown-model behavior."
+      ]
     },
     {
       "id": "RM-020",
-      "label": "feat(policies): strict-prod + enterprise-gov policy templates",
       "status": "queued",
       "priority": "medium",
-      "linked_issue": null
+      "linked_issue": null,
+      "title": "feat(policies): strict-prod + enterprise-gov policy templates",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/rules",
+        "type/feature"
+      ],
+      "summary": "Provide documented strict-production and enterprise-governance policy presets.",
+      "motivation": "Reusable policy settings reduce inconsistent deployment checks.",
+      "files": [
+        "src/mcp_doctor/config.py",
+        "src/mcp_doctor/models.py",
+        "tests/test_cli_and_reporters.py"
+      ],
+      "acceptance_criteria": [
+        "Define supported preset settings and explicit override precedence.",
+        "Test preset loading, invalid names and backward compatibility with existing configuration."
+      ]
     },
     {
       "id": "RM-021",
-      "label": "feat(dashboard): live audit-report.json feed + trend analytics",
       "status": "queued",
       "priority": "low",
-      "linked_issue": null
+      "linked_issue": null,
+      "title": "feat(dashboard): live audit-report.json feed + trend analytics",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/reporters",
+        "type/feature"
+      ],
+      "summary": "Expose audit-report JSON data and historical trends in the dashboard.",
+      "motivation": "Teams need a readable view of audit results and changes over time.",
+      "files": [
+        "src/mcp_doctor/reporters/json_reporter.py",
+        "tests/test_cli_and_reporters.py"
+      ],
+      "acceptance_criteria": [
+        "Specify a versioned report feed and history format.",
+        "Test missing reports, escaped untrusted display content and trend calculations."
+      ]
     },
     {
       "id": "RM-022",
-      "label": "feat(plugin): rule-pack marketplace (custom + community rules)",
       "status": "queued",
       "priority": "low",
-      "linked_issue": null
+      "linked_issue": null,
+      "title": "feat(plugin): rule-pack marketplace (custom + community rules)",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/rules",
+        "type/feature"
+      ],
+      "summary": "Design explicit opt-in discovery and configuration of third-party rule packs.",
+      "motivation": "Organizations need extensible checks without implicitly trusting or running arbitrary plugins.",
+      "files": [
+        "src/mcp_doctor/rules/base.py",
+        "src/mcp_doctor/config.py",
+        "tests/test_rules.py"
+      ],
+      "acceptance_criteria": [
+        "Document the plugin trust boundary and require explicit opt-in.",
+        "Reject duplicate rule IDs and test disabled plugins and load errors."
+      ]
     }
   ]
 }
