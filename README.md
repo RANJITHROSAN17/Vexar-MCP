@@ -1,120 +1,167 @@
+<!-- https://github.com/RANJITHROSAN17/mcp-doctor -->
 <p align="center">
-  <img src="assets/banner.svg" alt="mcp-doctor — Static Security Scanner, Schema Linter & Token-Budget Auditor for MCP Servers" width="100%">
+  <img src="assets/banner.svg" alt="mcp-doctor" width="100%" style="max-width:1100px; border-radius:12px;">
 </p>
 
 <p align="center">
   <a href="https://github.com/RANJITHROSAN17/mcp-doctor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/RANJITHROSAN17/mcp-doctor/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/labels/good%20first%20issue"><img alt="Good First Issues" src="https://img.shields.io/github/issues/RANJITHROSAN17/mcp-doctor/good%20first%20issue?color=7057ff&label=good%20first%20issues"></a>
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/labels/help%20wanted"><img alt="Help Wanted" src="https://img.shields.io/github/issues/RANJITHROSAN17/mcp-doctor/help%20wanted?color=008672"></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-black"></a>
-  <a href="CONTRIBUTING.md"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-10b981"></a>
+  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/releases"><img alt="Release" src="https://img.shields.io/github/release/RANJITHROSAN17/mcp-doctor.svg?color=00d4aa"></a>
+  <a href="https://pypi.org/pypi/mcp-doctor"><img alt="PyPI" src="https://img.shields.io/pypi/v/mcp-doctor.svg?color=6366f1"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-3776ab?logo=python&logoColor=white">
+  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/blob/main/LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-111"></a>
+  <a href="CODE_OF_CONDUCT.md"><img alt="Code of Conduct" src="https://img.shields.io/badge/conduct-CoC-10b981"></a>
+  <br>
+  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"><img alt="Good First Issue" src="https://img.shields.io/github/issues/RANJITHROSAN17/mcp-doctor/good%20first%20issue?color=7057ff&label=good+first+issues"></a>
+  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22"><img alt="Help Wanted" src="https://img.shields.io/github/issues/RANJITHROSAN17/mcp-doctor/help%20wanted?color=008672"></a>
+  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/pulls"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-10b981"></a>
+  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/actions"><img alt="GitHub Actions" src="https://img.shields.io/badge/actions-11%20workflows-555"></a>
 </p>
 
-<p align="center">
-  <b>Audit any Model Context Protocol (MCP) server or AI agent tool manifest in milliseconds — before unsafe tools, broken schemas, or 8,000-token descriptions ship to production.</b>
-</p>
+<h1 align="center">mcp-doctor</h1>
+<p align="center"><b>Static Security Scanner · Schema Linter · Token-Budget Auditor for MCP Servers</b></p>
+<p align="center">Enterprise-grade GitHub Actions bot stack. Zero external runtime dependencies. 90.77% test coverage.</p>
 
 ---
 
-## Why `mcp-doctor`?
+## 🎯 Product Overview
 
-Every MCP server and agent tool registry exposes two invisible failure surfaces:
-1. **Security & Reliability Sinks:** LLM-controlled arguments flowing straight into `subprocess.run(..., shell=True)`, unvalidated SSRF `urlopen(url)` calls, or unconfined `open(path, "w")` path traversal.
-2. **Context-Window Token Tax & Schema Drift:** Missing descriptions, untyped `Any` parameters, unbounded `limit` / array inputs, and bloated tool docstrings paid on **every single conversation turn**.
+Every MCP server exposes two invisible failure surfaces:
 
-`mcp-doctor` inspects Python MCP servers (`FastMCP`, official `mcp` SDK, `@tool` decorators) via pure `ast.parse` (**never executing untrusted code**) alongside MCP `tools/list`, OpenAI, and Anthropic JSON manifests — with **zero external runtime dependencies** on Python 3.11+.
+| Failure Surface | How `mcp-doctor` Handles It |
+|---|---|
+| **Security sinks** — `subprocess.run(shell=True)`, unvalidated `urlopen`, unconfined `open(path)` | 8 modular rules (`MCP001`–`MCP008`) detect at AST level; never executes untrusted code |
+| **Schema / token tax** — missing descriptions, `Any` params, unbounded pagination, bloated docstrings | Token-budget calculator + schema validator + 4 reporters (terminal / JSON / SARIF / GitHub) |
+
+**Target:** Python MCP servers (`FastMCP`, official `mcp` SDK, `@tool` decorators) + JSON manifests (OpenAI, Anthropic, `tools/list`).
 
 ---
 
-## Quickstart (30 Seconds)
+## 🏆 Key Metrics (Live)
+
+| Metric | Value | Source |
+|---|---|---|
+| **Test Coverage** | `90.77%` (pytest, `--cov-fail-under=85`) | [`tests/`](tests/) |
+| **Quality Gates** | 0 `ruff` / 0 `mypy` errors | `CI` (3.10 / 3.11 / 3.12) |
+| **Contributor Issues** | `8` open (`#1`–`#8`) — `good first issue` + `help wanted` | [`issues/`](https://github.com/RANJITHROSAN17/mcp-doctor/issues) |
+| **Queued Roadmap** | `15` tasks (`RM-001` → `RM-015`) | [`.github/roadmap.json`](.github/roadmap.json) |
+| **Labels** | `23` color-coded | Bot-curated |
+| **Bot Workflows** | `11` (7 new + CI / governance / release / dusty / welcome) | [`.github/workflows/`](.github/workflows/) |
+| **Community Health** | `100%` | GitHub Insights |
+| **Release** | `v0.1.0` (`.whl` + `.tar.gz`) | [`releases/v0.1.0`](https://github.com/RANJITHROSAN17/mcp-doctor/releases/tag/v0.1.0) |
+
+---
+
+## ⚡ Quickstart
 
 ```bash
-# Run directly with uvx (zero install) or pip:
-uvx --from git+https://github.com/RANJITHROSAN17/mcp-doctor.git mcp-doctor scan .
+# Install (direct from repo — no PyPI dependency conflicts)
+pip install git+https://github.com/RANJITHROSAN17/mcp-doctor.git@main
 
-# Or install into your environment:
-pip install git+https://github.com/RANJITHROSAN17/mcp-doctor.git
-mcp-doctor scan path/to/mcp_server.py
+# Or with uv / pipx
+uvx --from git+https://github.com/RANJITHROSAN17/mcp-doctor.git mcp-doctor --help
+
+# Run on a server
+mcp-doctor audit examples/clean_server.py
+
+# Use as reusable GitHub Action (composite)
+uses: RANJITHROSAN17/mcp-doctor@main
 ```
 
-### Example Output
+**Output formats:** terminal scorecard (`A+` → `F`, token leaderboards), JSON, SARIF v2.1.0 (GitHub Security tab), GitHub Markdown (`$GITHUB_STEP_SUMMARY`).
+
+---
+
+## 🧩 What It Ships
+
+### Core Engine (`src/mcp_doctor/`)
+
+- **AST Parser** (`python_ast.py`) — `ast.parse` only; never executes untrusted code
+- **JSON Loaders** (`loaders/`) — MCP `tools/list`, OpenAI manifest, Anthropic schema
+- **Rules** (`rules/`) — 8 modular diagnostics (`MCP001`–`MCP008`): security sinks (shell, SSRF, path traversal), schema drift (`Any`, missing descriptions), token overflow, pagination, duplicates
+- **Engine** (`engine.py`) — scan → diagnose → score (`0`–`100`) → report; fixed `SIM110` / `SIM102`
+- **Reporters** (`reporters/`) — 4 output formats (terminal / JSON / SARIF / GitHub Markdown)
+- **CLI** (`cli.py`) — `audit`, `init`, `--format`, `--baseline`, `--stdio`
+
+### Enterprise Bot Stack (7 Flow Suites — All Dynamic / Live)
+
+**Only 3 notification sources — zero noise for contributors:**
+
+| Bot | Trigger | What It Does | Notifies? |
+|---|---|---|---|
+| **Feature Upgrade** | Daily 09:00 UTC + `push`/`pull_request` | Proposes next queued roadmap item (`RM-009`...) | Silent (opens only if queued) |
+| **Issue Raise** | Mon 10:00 UTC + `pull_request` | Opens structured contributor issue (`good first` / `help wanted`) | Silent open (max 8 live) |
+| **Issue Resolve** | `pull_request` merge + `push` | Verifies linked fix, closes issue, promotes next queued | Silent (only linked issue) |
+| **Code Review** | Every PR event (5+ triggers) | Required gate: `ruff` + `mypy` + `pytest ≥85%` + format + labels | **Only if blocked** |
+| **Final Merge** | Your `approved` review + `push` | Confirms all 7 flows; pings **only you** | **Only you** (no auto-merge) |
+| **Welcome** | First issue / PR open | One-time greeting + rules link | Single comment |
+| **Stale** | Sun 00:00 UTC + `push` | Gentle reminder (>90d); never closes contributor/pinned | Silent reminder |
+
+**Governance layer:** `.github/rulesets/contributor-enforcement.json` (hard branch protection + required checks + linear history), `.github/CODEOWNERS`, `CONTRIBUTOR_RULES.md`, `ENTREPRISE_REPLICATION_GUIDE.md` (4-file replication to other repos).
+
+---
+
+## 🏗 Architecture
 
 ```text
-==============================================================================
-MCP Doctor Report  |  Health Score: 27/100 (F)  |  Tools: 2 across 1 file(s)
-Context Footprint: ~102 tokens  |  Errors: 3  Warnings: 4  Info: 1
-==============================================================================
-
-[ERROR] MCP001 (missing-tool-description) at examples/vulnerable_server.py:21 [run]
-        Tool 'run' has an empty or overly brief description (0 chars; minimum 12 recommended).
-[ERROR] MCP008 (ambiguous-or-duplicate-tool-name) at examples/vulnerable_server.py:21 [run]
-        Tool name 'run' is overly generic or violates `[a-z][a-z0-9_-]{2,63}`.
-[ERROR] MCP005 (dangerous-shell-execution) at examples/vulnerable_server.py:23 [run]
-        Tool 'run' invokes dangerous execution sink `subprocess.run(shell=True)` with parameter 'cmd'.
-[WARN ] MCP006 (unvalidated-ssrf-sink) at examples/vulnerable_server.py:31 [fetch_and_save_remote_blob]
-        Tool 'fetch_and_save_remote_blob' passes parameter 'target_url' into outbound request `urllib.request.urlopen` without visible URL/host validation (potential SSRF).
-[WARN ] MCP007 (unconfined-filesystem-access) at examples/vulnerable_server.py:33 [fetch_and_save_remote_blob]
-        Tool 'fetch_and_save_remote_blob' passes parameter 'output_path' to `open(write)` without `.resolve()` / base-directory confinement (path traversal risk).
+Input (Python AST / JSON manifest / @tool decorator)
+    │
+    ▼
+Parser (ast.parse — zero execution of untrusted code)
+    │
+    ▼
+Engine — scan → diagnose (MCP001–MCP008) → score (0–100)
+    │
+    ▼
+Reporters — terminal · JSON · SARIF · GitHub Markdown
+    │
+    ▼
+Output — scorecard + token leaderboard + inline PR annotations
 ```
 
-### Inspect Context-Window Token Tax
-
-```bash
-mcp-doctor token-report examples/
-```
+**Composite GitHub Action (`action.yml`):** consumable by any repo (`uses: RANJITHROSAN17/mcp-doctor@main`). Pre-commit hook (`.pre-commit-hooks.yaml`) included.
 
 ---
 
-## Built-in Diagnostic Rules
+## 📦 Installation & Usage
 
-| Rule ID | Slug | Severity | Category | What It Catches |
-| :--- | :--- | :---: | :---: | :--- |
-| **`MCP001`** | `missing-tool-description` | `error` | `contract` | Empty or `<12`-char tool description impairing LLM tool routing |
-| **`MCP002`** | `excessive-tool-tokens` | `warning` | `tokens` | Single tool schema exceeding token budget (`--max-tokens`, default `250`) |
-| **`MCP003`** | `untyped-or-any-parameter` | `warning` | `schema` | Missing type annotation or unconstrained `Any` / bare `dict` / `list` |
-| **`MCP004`** | `unbounded-collection-or-limit` | `info` | `schema` | Pagination or array parameter (`limit`, `items`, `list[T]`) with no upper cap |
-| **`MCP005`** | `dangerous-shell-execution` | `error` | `security` | `subprocess.*(..., shell=True)`, `os.system`, `eval`, or `exec` in tool body |
-| **`MCP006`** | `unvalidated-ssrf-sink` | `warning` | `security` | Outbound HTTP request (`requests`, `httpx`, `urlopen`) on unvalidated URL input |
-| **`MCP007`** | `unconfined-filesystem-access` | `warning` | `security` | File read/write/delete on raw input path without `.resolve()` confinement |
-| **`MCP008`** | `ambiguous-or-duplicate-tool-name` | `error` | `contract` | Duplicate tool identifiers or generic names (`run`, `do`, `execute`) |
+```python
+# Direct install (always current)
+pip install git+https://github.com/RANJITHROSAN17/mcp-doctor.git@main
 
-Suppress an intentional finding inline with `# noqa: MCP005` or project-wide in `.mcp-doctor.toml`:
+# Use CLI
+python -m mcp_doctor audit examples/clean_server.py --format sarif --output report.sarif
 
-```toml
-max-tool-tokens = 250
-max-server-tokens = 4000
-ignore = ["MCP004"]
-exclude = [".venv", "tests/fixtures"]
+# Composite action (in your CI)
+- uses: RANJITHROSAN17/mcp-doctor@main
 ```
 
 ---
 
-## GitHub Action & SARIF Code Scanning
+## 🛡 Security & Governance
 
-Drop `mcp-doctor` into any repository's `.github/workflows/ci.yml` to get automatic **GitHub Step Summary scorecards** and optional **SARIF v2.1.0** Security tab uploads:
-
-```yaml
-- name: Audit MCP Server
-  uses: RANJITHROSAN17/mcp-doctor@main
-  with:
-    path: src/
-    fail-on: error
-    max-tokens: "250"
-    sarif-output: mcp-doctor.sarif
-```
+- **No secrets / tokens** in source; use `os.environ.get()` + `.env` (not committed)
+- **Security issues:** email (see [`SECURITY.md`](SECURITY.md)) — never open public issue
+- **Contributor rules:** [`CONTRIBUTOR_RULES.md`](CONTRIBUTOR_RULES.md) — 8 enforceable rules (`R1` conventional commits → `R8` bot silence + ethics)
+- **Ruleset:** [`.github/rulesets/contributor-enforcement.json`](.github/rulesets/contributor-enforcement.json) — restricts updates, requires linear history, 1 review, code-owner, required status checks
+- **CODEOWNERS:** required for `src/`, `.github/workflows/`, protected files
+- **Dependabot:** grouped (`groups:`) — max 2 PRs/week per ecosystem + `versioning-strategy: increase-if-necessary`
 
 ---
 
-## Contribute to `mcp-doctor` (Open-Source Friendly!)
+## 🔗 Links
 
-`mcp-doctor` is architected specifically for clean, modular community contributions — adding a new lint rule, framework loader (TypeScript MCP SDK, YAML/OpenAPI, live stdio introspection), or output reporter (`--format github`, `--format html`) takes **~50–120 lines of Python**:
-
-- Browse open [**`good first issue`**](https://github.com/RANJITHROSAN17/mcp-doctor/labels/good%20first%20issue) and [**`help wanted`**](https://github.com/RANJITHROSAN17/mcp-doctor/labels/help%20wanted) tasks (automatically curated and replenished by our **Roadmap Bot** as issues close!).
-- Read [**`CONTRIBUTING.md`**](CONTRIBUTING.md) and [**`ARCHITECTURE.md`**](ARCHITECTURE.md) for a 10-minute rule walkthrough.
+| Resource | Link |
+|---|---|
+| Repository | [`github.com/RANJITHROSAN17/mcp-doctor`](https://github.com/RANJITHROSAN17/mcp-doctor) |
+| Release | [`v0.1.0`](https://github.com/RANJITHROSAN17/mcp-doctor/releases/tag/v0.1.0) |
+| Live Dashboard | [`assets/dashboard.html`](assets/dashboard.html) (interactive status) |
+| Contributor Issues | [`#1` – `#8`](https://github.com/RANJITHROSAN17/mcp-doctor/issues) |
+| Roadmap (15 queued) | [`.github/roadmap.json`](.github/roadmap.json) |
+| Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| Bot Replication Guide | [`ENTREPRISE_REPLICATION_GUIDE.md`](ENTREPRISE_REPLICATION_GUIDE.md) |
+| Security Policy | [`SECURITY.md`](SECURITY.md) |
 
 ---
 
-## License
-
-MIT © [Ranjith Rosan](https://github.com/RANJITHROSAN17)
+<p align="center"><img src="assets/banner.svg" alt="mcp-doctor" width="60%" style="max-width:700px; border-radius:12px;"></p>
+<p align="center"><sub>Enterprise-grade bot stack · 11 workflows · 100% Community Health · Only 3 notification sources · Zero auto-merge</sub></p>
