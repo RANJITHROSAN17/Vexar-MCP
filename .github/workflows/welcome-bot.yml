@@ -1,21 +1,58 @@
 name: Welcome Bot — First Contribution Greeting (Silent / Skip Bots)
 on:
-  issues: {types: [opened]}
-  pull_request: {types: [opened, synchronize]}
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/welcome-bot.yml
+      - .github/tests/welcome-bot.test.cjs
+  # Metadata-only target events can comment on fork PRs without checking out
+  # or executing contributor code. Never add a checkout to the welcome job.
+  pull_request_target:
+    types: [opened, reopened]
 
-permissions:
-  issues: write
+permissions: {}
 
 jobs:
-  welcome:
+  validate:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
-    if: github.event.issue.user.login != 'RANJITHROSAN17' && github.event.issue.user.login != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: node --test .github/tests/welcome-bot.test.cjs
+
+  welcome:
+    if: github.event_name != 'pull_request'
+    permissions:
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v7
         with:
           script: |
+            const item = context.payload.issue || context.payload.pull_request;
+            if (!item || item.user.type === 'Bot' || item.user.login === context.repo.owner) {
+              core.info('Skipping maintainer/bot greeting.');
+              return;
+            }
+            if (!['FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR'].includes(item.author_association)) {
+              core.info('Not a first contribution; no greeting needed.');
+              return;
+            }
+            const marker = '<!-- mcp-doctor:first-contribution-welcome -->';
+            const params = {...context.repo, issue_number: item.number};
+            const comments = await github.paginate(github.rest.issues.listComments, params);
+            if (comments.some(comment => comment.user?.type === 'Bot' && comment.body?.includes(marker))) {
+              core.info('Already greeted; no duplicate comment.');
+              return;
+            }
             await github.rest.issues.createComment({
-              owner: context.repo.owner, repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `👋 **Welcome Bot (silent)**\n• Thanks for contributing to RANJITHROSAN17/mcp-doctor.\n• Read \`CONTRIBUTOR_RULES.md\` → \`ENTREPRISE_REPLICATION_GUIDE.md\`.\n• Pick an open contributor issue (#1–#8) or propose a new one via Issue Raise Bot.\n• Only 4 notifications will ever reach you: PR review (if needed), Feature Upgrade (if selected), Issue Raise (if your issue is opened), Final Merge (only if you submit PR). No spam.`,
+              ...params,
+              body: `${marker}\n👋 **Welcome to mcp-doctor!**\nPlease read \`CONTRIBUTOR_RULES.md\`, add tests for your changes, and link the issue in your PR.`,
             });

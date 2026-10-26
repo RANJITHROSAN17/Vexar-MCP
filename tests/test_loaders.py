@@ -114,6 +114,7 @@ def search(req: SearchRequest, resp: SearchResp = None) -> list[str]:
     return []
 ''')
     from mcp_doctor.loaders import load_python_file
+
     tools = load_python_file(src)
     assert len(tools) == 1
     names = [p.name for p in tools[0].parameters]
@@ -126,6 +127,7 @@ def search(req: SearchRequest, resp: SearchResp = None) -> list[str]:
 
 def test_typescript_loader_clean_fixture() -> None:
     from mcp_doctor.loaders import load_typescript_file
+
     fixture = Path(__file__).resolve().parent / "fixtures" / "clean_ts_server.ts"
     tools = load_typescript_file(fixture)
     assert len(tools) == 1
@@ -137,6 +139,7 @@ def test_typescript_loader_clean_fixture() -> None:
 
 def test_typescript_loader_vulnerable_fixture() -> None:
     from mcp_doctor.loaders import load_typescript_file
+
     fixture = Path(__file__).resolve().parent / "fixtures" / "vulnerable_ts_server.ts"
     tools = load_typescript_file(fixture)
     names = {t.name for t in tools}
@@ -150,6 +153,7 @@ def test_typescript_loader_vulnerable_fixture() -> None:
 
 def test_typescript_loader_best_standard() -> None:
     from mcp_doctor.loaders import load_typescript_file
+
     clean = Path(__file__).resolve().parent / "fixtures" / "clean_ts_server.ts"
     vuln = Path(__file__).resolve().parent / "fixtures" / "vulnerable_ts_server.ts"
     clean_tools = load_typescript_file(clean)

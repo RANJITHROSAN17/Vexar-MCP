@@ -53,7 +53,9 @@ def test_cli_rules_and_token_report_subcommands(capsys: pytest.CaptureFixture[st
 
     assert main(["rules", "--format", "json"]) == 0
     rules_json = json.loads(capsys.readouterr().out)
-    assert len(rules_json) == 8
+    expected_ids = {f"MCP{i:03d}" for i in range(1, 9)} | {"MCP010", "MCP013"}
+    assert {rule["rule_id"] for rule in rules_json} == expected_ids
+    assert len(rules_json) == len(expected_ids)
 
     assert main(["token-report", str(ROOT / "examples" / "clean_server.py")]) == 0
     tok_out = capsys.readouterr().out

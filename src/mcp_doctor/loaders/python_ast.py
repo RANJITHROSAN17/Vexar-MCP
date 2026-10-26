@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from typing import TypedDict
 
 from mcp_doctor.models import CodeSink, ParameterSpec, ToolSpec
 from mcp_doctor.tokens import estimate_tool_tokens
@@ -51,6 +52,65 @@ _FS_DESTRUCTIVE_CALLS = frozenset(
         "Path.write_bytes",
     }
 )
+
+
+_DESERIALIZATION_CALLS = frozenset(
+    {
+        "pickle.load",
+        "pickle.loads",
+        "marshal.load",
+        "marshal.loads",
+        "shelve.open",
+        "yaml.load",
+        "yaml.load_all",
+        "yaml.unsafe_load",
+        "yaml.unsafe_load_all",
+    }
+)
+_SAFE_YAML_LOADERS = frozenset(
+    {
+        "yaml.SafeLoader",
+        "yaml.CSafeLoader",
+        "yaml.loader.SafeLoader",
+        "yaml.cyaml.CSafeLoader",
+    }
+)
+
+
+def _import_aliases(statements: list[ast.stmt]) -> dict[str, str]:
+    """Resolve direct imports without importing or executing inspected source."""
+    aliases: dict[str, str] = {}
+    for statement in statements:
+        if isinstance(statement, ast.Import):
+            for imported in statement.names:
+                root = imported.name.split(".")[0]
+                aliases[imported.asname or root] = imported.name if imported.asname else root
+        elif isinstance(statement, ast.ImportFrom) and statement.module and statement.level == 0:
+            for imported in statement.names:
+                if imported.name != "*":
+                    aliases[imported.asname or imported.name] = (
+                        f"{statement.module}.{imported.name}"
+                    )
+    return aliases
+
+
+def _resolve_imported_name(node: ast.expr, aliases: dict[str, str]) -> str:
+    name = _call_qualname(node)
+    root, separator, member = name.partition(".")
+    return aliases[root] + separator + member if root in aliases else ""
+
+
+def _unsafe_deserialization(node: ast.Call, aliases: dict[str, str]) -> bool:
+    name = _resolve_imported_name(node.func, aliases)
+    if name not in _DESERIALIZATION_CALLS:
+        return False
+    if name in {"yaml.load", "yaml.load_all"}:
+        loader = next((kw.value for kw in node.keywords if kw.arg == "Loader"), None)
+        if loader is None and len(node.args) > 1:
+            loader = node.args[1]
+        if loader is not None and _resolve_imported_name(loader, aliases) in _SAFE_YAML_LOADERS:
+            return False
+    return True
 
 
 def _call_qualname(node: ast.expr) -> str:
@@ -188,10 +248,14 @@ def _body_clamps_param(func: ast.FunctionDef | ast.AsyncFunctionDef, param_name:
 def _extract_sinks(
     func: ast.FunctionDef | ast.AsyncFunctionDef,
     param_names: set[str],
+    module_aliases: dict[str, str],
 ) -> tuple[CodeSink, ...]:
     sinks: list[CodeSink] = []
     has_url_guard = _body_has_url_validation(func)
     has_path_guard = _body_has_path_confinement(func)
+    # Local imports belong to this handler only; do not leak aliases between tools.
+    aliases = {name: value for name, value in module_aliases.items() if name not in param_names}
+    aliases.update(_import_aliases(func.body))
 
     for node in ast.walk(func):
         if not isinstance(node, ast.Call):
@@ -200,7 +264,16 @@ def _extract_sinks(
         used_params = sorted(_referenced_names(node) & param_names)
         first_param = used_params[0] if used_params else None
 
-        if qual in _SHELL_CALLS:
+        if _unsafe_deserialization(node, aliases):
+            sinks.append(
+                CodeSink(
+                    kind="deserialization",
+                    call_name=qual,
+                    line=node.lineno,
+                    uses_param=first_param,
+                )
+            )
+        elif qual in _SHELL_CALLS:
             sinks.append(
                 CodeSink(
                     kind="shell",
@@ -297,21 +370,33 @@ def _extract_suppressions(lines: list[str], start_line: int, end_line: int) -> f
     return frozenset(suppressed)
 
 
-def _build_base_index(tree: ast.AST) -> dict[str, list[dict]]:
+class _ModelField(TypedDict):
+    name: str
+    type_str: str | None
+    description: str
+    required: bool
+    has_bounds: bool
+    line: int
+
+
+def _build_base_index(tree: ast.AST) -> dict[str, list[_ModelField]]:
     """Index module-level BaseModel / TypedDict classes and their fields."""
-    index: dict[str, list[dict]] = {}
+    index: dict[str, list[_ModelField]] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
             continue
         is_model = False
         for base in node.bases:
-            if isinstance(base, ast.Name) and base.id in ("BaseModel", "TypedDict"):
-                is_model = True
-            elif isinstance(base, ast.Attribute) and base.attr in ("BaseModel", "TypedDict"):
+            if (
+                isinstance(base, ast.Name)
+                and base.id in ("BaseModel", "TypedDict")
+                or isinstance(base, ast.Attribute)
+                and base.attr in ("BaseModel", "TypedDict")
+            ):
                 is_model = True
         if not is_model:
             continue
-        fields: list[dict] = []
+        fields: list[_ModelField] = []
         for item in node.body:
             if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                 name = item.target.id
@@ -321,26 +406,38 @@ def _build_base_index(tree: ast.AST) -> dict[str, list[dict]]:
                 if isinstance(item.value, ast.Call):
                     call_func = item.value.func
                     is_field = False
-                    if isinstance(call_func, ast.Name) and call_func.id == "Field":
-                        is_field = True
-                    elif isinstance(call_func, ast.Attribute) and call_func.attr == "Field":
+                    if (
+                        isinstance(call_func, ast.Name)
+                        and call_func.id == "Field"
+                        or isinstance(call_func, ast.Attribute)
+                        and call_func.attr == "Field"
+                    ):
                         is_field = True
                     if is_field:
                         for kw in item.value.keywords:
-                            if kw.arg == "description" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                            if (
+                                kw.arg == "description"
+                                and isinstance(kw.value, ast.Constant)
+                                and isinstance(kw.value.value, str)
+                            ):
                                 desc = kw.value.value
                             if kw.arg in ("le", "lt", "ge", "gt", "max_length", "min_length"):
                                 bounds = True
-                if ann_str and any(tok in ann_str for tok in ("max_length", "le=", "lt=", "ge=", "gt=", "Literal[", "MaxLen")):
+                if ann_str and any(
+                    tok in ann_str
+                    for tok in ("max_length", "le=", "lt=", "ge=", "gt=", "Literal[", "MaxLen")
+                ):
                     bounds = True
-                fields.append({
-                    "name": name,
-                    "type_str": ann_str,
-                    "description": desc,
-                    "required": item.value is None,
-                    "has_bounds": bounds,
-                    "line": item.lineno,
-                })
+                fields.append(
+                    {
+                        "name": name,
+                        "type_str": ann_str,
+                        "description": desc,
+                        "required": item.value is None,
+                        "has_bounds": bounds,
+                        "line": item.lineno,
+                    }
+                )
         if fields:
             index[node.name] = fields
     return index
@@ -355,6 +452,7 @@ def load_python_file(path: Path) -> list[ToolSpec]:
     except SyntaxError:
         return []
     base_index = _build_base_index(tree)
+    module_aliases = _import_aliases(tree.body)
 
     tools: list[ToolSpec] = []
 
@@ -414,7 +512,8 @@ def load_python_file(path: Path) -> list[ToolSpec]:
                             ParameterSpec(
                                 name=f"{arg.arg}.{fld['name']}",
                                 type_name=fld.get("type_str"),
-                                description=fld.get("description", "") or param_docs.get(arg.arg, ""),
+                                description=fld.get("description", "")
+                                or param_docs.get(arg.arg, ""),
                                 required=fld["required"] if not has_default else False,
                                 has_bounds=fld["has_bounds"] or clamped,
                                 line=fld.get("line", arg.lineno),
@@ -432,7 +531,7 @@ def load_python_file(path: Path) -> list[ToolSpec]:
                         )
                     )
 
-            sinks = _extract_sinks(node, user_param_names)
+            sinks = _extract_sinks(node, user_param_names, module_aliases)
             end_lineno = getattr(node, "end_lineno", node.lineno) or node.lineno
             suppressed = _extract_suppressions(lines, node.lineno, end_lineno)
             param_tuple = tuple(params)

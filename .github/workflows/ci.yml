@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: ["main"]
+  # Validate stacked prerequisite PRs as well as PRs targeting main.
   pull_request:
-    branches: ["main"]
 
 permissions:
   contents: read

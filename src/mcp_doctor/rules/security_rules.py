@@ -139,3 +139,40 @@ def check_network_timeouts(tools: Sequence[ToolSpec], config: ScanConfig) -> lis
                     )
                 )
     return out
+
+
+@register_rule(
+    rule_id="MCP013",
+    slug="unsafe-deserialization",
+    severity=Severity.ERROR,
+    category=Category.SECURITY,
+    summary="Tool handler invokes unsafe deserialization such as pickle.loads or yaml.load without SafeLoader.",
+    remediation="Use JSON for untrusted payloads, or yaml.safe_load / yaml.SafeLoader for YAML; never unpickle untrusted data.",
+)
+def check_unsafe_deserialization(tools: Sequence[ToolSpec], config: ScanConfig) -> list[Diagnostic]:
+    """Report deserializers that can construct unsafe objects from tool input.
+
+    Args:
+        tools: Statically extracted tool definitions and their sensitive calls.
+        config: Scan configuration; rule suppression is applied by the engine.
+
+    Returns:
+        Error diagnostics for each unsafe deserialization sink.
+    """
+    del config
+    return [
+        Diagnostic(
+            rule_id="MCP013",
+            rule_slug="unsafe-deserialization",
+            severity=Severity.ERROR,
+            category=Category.SECURITY,
+            message=f"Tool '{tool.name}' invokes unsafe deserialization `{sink.call_name}`.",
+            source_file=tool.source_file,
+            line=sink.line,
+            tool_name=tool.name,
+            remediation="Prefer JSON or yaml.safe_load for untrusted data; avoid pickle, marshal and shelve.",
+        )
+        for tool in tools
+        for sink in tool.sinks
+        if sink.kind == "deserialization"
+    ]
