@@ -4,8 +4,9 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize]
-  schedule:
-    - cron: "0 9 * * *"
+  # Disabled to stop duplicate daily bot issues; use workflow_dispatch for manual runs.
+  # schedule:
+  #   - cron: "0 9 * * *"
   workflow_dispatch: {}
 permissions:
   issues: write
