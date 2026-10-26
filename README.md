@@ -129,7 +129,7 @@ Output — scorecard + token leaderboard + inline PR annotations
 pip install git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main
 
 # Use CLI
-python -m mcp_doctor audit examples/clean_server.py --format sarif --output report.sarif
+vexar-mcp audit examples/clean_server.py --format sarif --output report.sarif
 
 # Composite action (in your CI)
 - uses: RANJITHROSAN17/Vexar-MCP@main
