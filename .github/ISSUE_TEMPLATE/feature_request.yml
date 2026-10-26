@@ -1,0 +1,39 @@
+name: Feature Request / Roadmap Proposal
+about: Propose new rules, reporters, CLI commands, or architecture upgrades
+title: "[feature] "
+labels: ["help wanted", "roadmap", "difficulty/low"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Value Proposition
+        Why does this feature matter for mcp-doctor users? What failure surface does it address?
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Technical Blueprint / Proposed Solution
+      description: Suggested architecture, libraries, or code paths. Include rule IDs (MCPxxx) if applicable.
+      placeholder: "Add `MCP014` rule to detect unvalidated file upload paths..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Effort
+      options:
+        - Low
+        - Medium
+        - High
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Quantifiable Impact (Before / After / Improvement %)
+      description: If this feature improves performance, cover coverage, or security detection — include exact metrics.
+      placeholder: "Coverage: 82% → 89% (+7%) | New rules detect 3 additional sink types"
+    validations:
+      required: false

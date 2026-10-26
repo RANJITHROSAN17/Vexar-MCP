@@ -1,5 +1,7 @@
 # Contributing to `mcp-doctor`
 
+> **Metrics-First Requirement:** Every PR must include a `Quantifiable Impact` section with Before/After/Improvement percentages (speed, memory, coverage). Qualitative claims alone are not accepted. See `.github/PULL_REQUEST_TEMPLATE.md`.
+
 Thank you for your interest in contributing to **`mcp-doctor`**! Every lint rule, loader, and output reporter is intentionally modular so you can ship an impactful Pull Request in a single sitting.
 
 ---
