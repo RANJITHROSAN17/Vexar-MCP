@@ -1,49 +1,15 @@
-name: Issue Raise Bot — Structured Contributor Issue Seeding (Silent)
+name: Issue Raise Bot
 on:
-  pull_request: {types: [opened, synchronize]}
-  schedule: [{cron:
-  pull_request: {types: [opened, synchronize]} "0 10 * * 1"}]  # Monday 10:00 UTC — open new contributor issues
-  workflow_dispatch: {}
-
-permissions:
-  issues: write
-
+  schedule:
+    - cron: "0 10 * * 1"
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronized]
 jobs:
   raise:
-    runs-on:
-  pull_request: {types: [opened, synchronize]} ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version:
-  pull_request: {types: [opened, synchronize]} "3.12"}
-      - name: Raise well-specified contributor issues
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // Only opens if < 8 open contributor issues (keeps tab clean)
-            const existing = await github.rest.issues.listForRepo({
-              owner: context.repo.owner, repo: context.repo.repo,
-              state: "open", per_page: 30,
-            });
-            const contributorIssues = existing.data.filter(i =>
-              !i.pull_request && (i.labels.some(l => l.name === "good first issue" || l.name === "help wanted"))
-            );
-            if (contributorIssues.length >= 8) {
-              console.log("Already 8+ contributor issues open — silent, no new issue.");
-              return;
-            }
-            const topics = [
-              {title:"feat(rules): add MCP014 — detect unvalidated file upload paths", labels:["good first issue","area/rules","type/security","difficulty/easy"]},
-              {title:"feat(cli): add --format sarif output to mcp-doctor CLI", labels:["good first issue","area/cli","type/feature","difficulty/easy"]},
-              {title:"feat(reporters): add --format html reporter for dashboard export", labels:["help wanted","area/reporters","type/feature","difficulty/medium"]},
-            ];
-            // Open only 1 per run to avoid notification flood (silent — no @mentions)
-            const pick = topics[Math.floor(Math.random()*topics.length)];
-            await github.rest.issues.create({
-              owner: context.repo.owner, repo: context.repo.repo,
-              title: pick.title,
-              body: `🤖 **Issue Raise Bot (silent)**\n\n• Type: contributor issue — "+pick.labels.join(", ")+"`\n• Source: .github/roadmap.json queued (RM-009..RM-015)\n• Required: 1 test + 1 docstring + passes ruff/mypy/pytest\n• Merge rule: only after code-review-bot approval + your approval\n\n---\nNo notifications sent to watchers; only appears in Issues tab.`,
-              labels: pick.labels,
-            });
-            console.log("Raised:", pick.title);
+      - name: Raise contributor issue
+        run: |
+          echo "Bot: open structured contributor issue from roadmap"

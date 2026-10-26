@@ -1,27 +1,23 @@
 name: Feature Upgrade Bot — Daily Feature Proposal (Silent)
 on:
-  push: {branches: [main]}
-  pull_request: {types: [opened, synchronize]}
-  schedule: [{cron:
-  push: {branches: [main]}
-  pull_request: {types: [opened, synchronize]} "0 9 * * *"}]  # 09:00 UTC daily — one new feature proposal
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+  schedule:
+    - cron: "0 9 * * *"
   workflow_dispatch: {}
-
 permissions:
   issues: write
   contents: read
-
 jobs:
   propose:
-    runs-on:
-  push: {branches: [main]}
-  pull_request: {types: [opened, synchronize]} ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version:
-  push: {branches: [main]}
-  pull_request: {types: [opened, synchronize]} "3.12"}
+        with:
+          python-version: "3.12"
       - name: Read queued roadmap tasks
         id: queued
         run: |
@@ -34,7 +30,6 @@ jobs:
           script: |
             const fs = require('fs');
             const proposed = fs.existsSync('proposed.md') ? fs.readFileSync('proposed.md','utf8') : 'Upgrade proposal — review queued roadmap for next feature,';
-            // Silent — only opens issue if queued roadmap item exists; else writes commit comment (silent)
             try {
               await github.rest.issues.create({
                 owner: context.repo.owner,

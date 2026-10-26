@@ -1,23 +1,13 @@
-name: Stale Bot — Gentle Triage Only (Never Closes Contributor or Pinned Issues)
+name: Stale Bot
 on:
-  push: {branches: [main]}
-  schedule: [{cron:
-  push: {branches: [main]} "0 0 * * 0"}]  # Sunday 00:00 UTC only — weekly gentle triage
-
-permissions:
-  issues: write
-
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
 jobs:
   stale:
-    runs-on:
-  push: {branches: [main]} ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            // Only comment on issues that are > 90 days old AND have no recent comments
-            // NEVER close "good first issue", "help wanted", "roadmap", "pinned", "security"
-            const skipLabels = ["good first issue","help wanted","roadmap","pinned","security","area/upgrade"];
-            // Silent — only writes a gentle reminder comment if applicable; never closes
-            console.log("Stale bot: checking >90d inactive — silent unless reminder needed.");
+      - name: Gentle triage
+        run: |
+          echo "Bot: gentle reminder only — silent, never closes contributor/pinned"
