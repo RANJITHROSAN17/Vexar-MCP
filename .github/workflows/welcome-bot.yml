@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Post onboarding comment for first-time contributors
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const isPR = Boolean(context.payload.pull_request);
