@@ -30,7 +30,12 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const proposed = fs.existsSync('proposed.md') ? fs.readFileSync('proposed.md','utf8') : 'Upgrade proposal — review queued roadmap for next feature,';
+            const proposed = fs.existsSync('proposed.md') ? fs.readFileSync('proposed.md','utf8') : '';
+            // Only propose if a real queued roadmap item exists (not fallback message)
+            if (!proposed || proposed.includes('No queued tasks') || proposed.trim().length < 10) {
+              console.log('No queued roadmap item — silent, no issue created.');
+              return;
+            }
             try {
               await github.rest.issues.create({
                 owner: context.repo.owner,
