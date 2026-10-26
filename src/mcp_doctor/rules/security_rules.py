@@ -105,3 +105,35 @@ def check_filesystem_sinks(tools: Sequence[ToolSpec], config: ScanConfig) -> lis
                     )
                 )
     return out
+
+@register_rule(
+    rule_id="MCP013",
+    slug="unsafe-deserialization",
+    severity=Severity.ERROR,
+    category=Category.SECURITY,
+    summary="Tool handler deserializes untrusted data using pickle, marshal, shelve, or unsafe yaml.load.",
+    remediation="Avoid pickle/marshal/shelve on untrusted input. Use yaml.safe_load or yaml.load(..., Loader=yaml.SafeLoader).",
+)
+def check_unsafe_deserialization(tools: Sequence[ToolSpec], config: ScanConfig) -> list[Diagnostic]:
+    del config
+    out: list[Diagnostic] = []
+    for tool in tools:
+        for sink in tool.sinks:
+            if sink.kind == "deserialization":
+                param_note = f" with parameter '{sink.uses_param}'" if sink.uses_param else ""
+                out.append(
+                    Diagnostic(
+                        rule_id="MCP013",
+                        rule_slug="unsafe-deserialization",
+                        severity=Severity.ERROR,
+                        category=Category.SECURITY,
+                        message=(
+                            f"Tool '{tool.name}' performs unsafe deserialization via `{sink.call_name}`{param_note}."
+                        ),
+                        source_file=tool.source_file,
+                        line=sink.line,
+                        tool_name=tool.name,
+                        remediation="Use safe alternatives such as `yaml.safe_load` or validated JSON. Never use pickle on untrusted data.",
+                    )
+                )
+    return out
