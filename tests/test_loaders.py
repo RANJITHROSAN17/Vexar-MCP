@@ -176,7 +176,7 @@ def test_typescript_loader_best_standard() -> None:
     kinds = {s.kind for s in run_t.sinks}
     assert "shell" in kinds
     eval_t = next(t for t in vuln_tools if t.name == "eval_script")
-    assert any(s.kind == "eval" for s in eval_t.sinks)
+    assert any(s.kind == "shell" and s.call_name == "eval" for s in eval_t.sinks)
     fetch_t = next(t for t in vuln_tools if t.name == "fetch_no_timeout")
     # MCP010 integration: timeout_missing reported
     assert any(s.timeout_missing for s in fetch_t.sinks if s.kind == "ssrf")

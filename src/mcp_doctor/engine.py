@@ -19,11 +19,13 @@ from mcp_doctor.rules import get_all_rules
 
 def _is_excluded(path: Path, exclude_globs: tuple[str, ...]) -> bool:
     parts = set(path.parts)
-    return any(pattern in parts or path.match(pattern) for pattern in exclude_globs)
+    return path.name.endswith(".d.ts") or any(
+        pattern in parts or path.match(pattern) for pattern in exclude_globs
+    )
 
 
 def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> list[Path]:
-    """Walk target files/directories and return candidate `.py` and `.json` files."""
+    """Walk target files/directories and return candidate Python, JSON, TS, JS and JSX files."""
     discovered: list[Path] = []
     seen: set[Path] = set()
 
@@ -33,7 +35,11 @@ def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> lis
             raise FileNotFoundError(f"Scan target does not exist: {raw_target}")
 
         if target.is_file():
-            if target.suffix in {".py", ".json", ".ts", ".js"} and target not in seen:
+            if (
+                target.suffix in {".py", ".json", ".ts", ".js", ".jsx"}
+                and target not in seen
+                and not _is_excluded(target, config.exclude_globs)
+            ):
                 seen.add(target)
                 discovered.append(raw_target)
             continue
@@ -43,7 +49,7 @@ def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> lis
                 continue
             if _is_excluded(child, config.exclude_globs):
                 continue
-            if child.suffix not in {".py", ".json", ".ts", ".js"}:
+            if child.suffix not in {".py", ".json", ".ts", ".js", ".jsx"}:
                 continue
             resolved = child.resolve()
             if resolved not in seen:
@@ -68,7 +74,7 @@ def _compute_grade(score: int) -> str:
 
 
 def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> ScanReport:
-    """Scan Python MCP servers and JSON tool manifests and return a complete ScanReport."""
+    """Scan Python/TypeScript/JavaScript servers and JSON tool manifests and return a complete ScanReport."""
     effective_cfg = config or ScanConfig()
     files = discover_candidate_files(targets, effective_cfg)
 
@@ -79,7 +85,7 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
             load_python_file(file_path)
             if file_path.suffix == ".py"
             else load_typescript_file(file_path)
-            if file_path.suffix in (".ts", ".js")
+            if file_path.suffix in (".ts", ".js", ".jsx")
             else load_json_manifest(file_path)
         )
         if loaded:
