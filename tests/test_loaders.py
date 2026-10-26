@@ -122,3 +122,27 @@ def search(req: SearchRequest, resp: SearchResp = None) -> list[str]:
     # TypedDict fields expanded
     assert "resp.items" in names
     assert "resp.total" in names
+
+
+def test_typescript_loader_clean_fixture() -> None:
+    from mcp_doctor.loaders import load_typescript_file
+    fixture = Path(__file__).resolve().parent / "fixtures" / "clean_ts_server.ts"
+    tools = load_typescript_file(fixture)
+    assert len(tools) == 1
+    assert tools[0].name == "search"
+    names = [p.name for p in tools[0].parameters]
+    assert "query" in names
+    assert "limit" in names
+
+
+def test_typescript_loader_vulnerable_fixture() -> None:
+    from mcp_doctor.loaders import load_typescript_file
+    fixture = Path(__file__).resolve().parent / "fixtures" / "vulnerable_ts_server.ts"
+    tools = load_typescript_file(fixture)
+    names = {t.name for t in tools}
+    assert "run" in names
+    assert "eval_script" in names
+    # Check sinks detected
+    run_tool = next(t for t in tools if t.name == "run")
+    kinds = {s.kind for s in run_tool.sinks}
+    assert "shell" in kinds

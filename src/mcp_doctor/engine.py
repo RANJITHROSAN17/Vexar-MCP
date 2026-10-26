@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from mcp_doctor.loaders import load_json_manifest, load_python_file
+from mcp_doctor.loaders import load_json_manifest, load_python_file, load_typescript_file
 from mcp_doctor.models import (
     Diagnostic,
     ScanConfig,
@@ -33,7 +33,7 @@ def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> lis
             raise FileNotFoundError(f"Scan target does not exist: {raw_target}")
 
         if target.is_file():
-            if target.suffix in {".py", ".json"} and target not in seen:
+            if target.suffix in {".py", ".json", ".ts", ".js"} and target not in seen:
                 seen.add(target)
                 discovered.append(raw_target)
             continue
@@ -43,7 +43,7 @@ def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> lis
                 continue
             if _is_excluded(child, config.exclude_globs):
                 continue
-            if child.suffix not in {".py", ".json"}:
+            if child.suffix not in {".py", ".json", ".ts", ".js"}:
                 continue
             resolved = child.resolve()
             if resolved not in seen:
@@ -78,6 +78,8 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
         loaded = (
             load_python_file(file_path)
             if file_path.suffix == ".py"
+            else load_typescript_file(file_path)
+            if file_path.suffix in (".ts", ".js")
             else load_json_manifest(file_path)
         )
         if loaded:
