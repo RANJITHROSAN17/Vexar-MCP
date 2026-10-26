@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>mcp-doctor Live Enterprise Dashboard</title>
+    <title>Vexar-MCP Example Audit Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -24,46 +24,47 @@
     <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
         <div class="flex items-center space-x-3">
             <span class="text-2xl">🩺</span>
-            <h1 class="text-xl font-bold tracking-tight text-white">mcp-doctor <span class="text-[#00d4aa] font-mono text-sm px-2 py-0.5 bg-[#00d4aa]/10 rounded-full border border-[#00d4aa]/20">Live Dashboard</span></h1>
+            <h1 class="text-xl font-bold tracking-tight text-white">Vexar-MCP <span class="text-[#00d4aa] font-mono text-sm px-2 py-0.5 bg-[#00d4aa]/10 rounded-full border border-[#00d4aa]/20">Example Audit</span></h1>
         </div>
         <div class="flex items-center space-x-4">
-            <span id="dashboard-status" class="text-xs font-mono text-[#8b96a8]">Syncing with GitHub Actions...</span>
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">● Active Scan Live</span>
+            <span id="dashboard-status" class="text-xs font-mono text-[#8b96a8]">Loading published report...</span>
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Example snapshot</span>
         </div>
     </div>
 </header>
 
 <main class="max-w-7xl mx-auto px-6 py-8 w-full space-y-8 flex-grow">
+    <p class="text-sm text-[#8b96a8]" role="note">This snapshot scans bundled examples, including deliberately vulnerable fixtures. It is not a repository-wide CI score or a production audit.</p>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between hover:border-[#00d4aa] transition">
-            <div><p class="text-sm font-medium text-[#8b96a8]">Codebase Health Score</p>
+            <div><p class="text-sm font-medium text-[#8b96a8]">Example scan score</p>
                 <div class="mt-4 flex items-baseline space-x-2"><span id="score-display" class="text-5xl font-extrabold tracking-tight text-white">--</span><span class="text-lg text-[#8b96a8]">/ 100</span></div>
             </div>
-            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Target: &gt;85</span><span class="text-emerald-400 font-semibold">Passing Gates</span></div>
+            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Bundled examples</span><span id="scan-result">--</span></div>
         </div>
         <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between hover:border-[#6366f1] transition">
-            <div><p class="text-sm font-medium text-[#8b96a8]">Test Coverage</p>
-                <div class="mt-4 flex items-baseline space-x-2"><span class="text-5xl font-extrabold tracking-tight text-[#22c55e]">90.77%</span><span class="text-sm font-mono text-[#8b96a8]">pytest</span></div>
+            <div><p class="text-sm font-medium text-[#8b96a8]">Tools scanned</p>
+                <div class="mt-4 flex items-baseline space-x-2"><span id="tools-display" class="text-5xl font-extrabold tracking-tight text-[#22c55e]">--</span><span class="text-sm font-mono text-[#8b96a8]">tools</span></div>
             </div>
-            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Threshold: 85%</span><span class="text-emerald-400 font-semibold">Strict Pass</span></div>
+            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Scan scope: examples/</span><span>Public fixtures</span></div>
         </div>
         <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between hover:border-[#f59e0b] transition">
-            <div><p class="text-sm font-medium text-[#8b96a8]">AST Security Rules Active</p>
-                <div class="mt-4 flex items-baseline space-x-2"><span class="text-5xl font-extrabold tracking-tight text-[#6366f1]">9</span><span class="text-sm font-mono text-[#8b96a8]">MCP001–MCP009</span></div>
+            <div><p class="text-sm font-medium text-[#8b96a8]">Diagnostic findings</p>
+                <div class="mt-4 flex items-baseline space-x-2"><span id="findings-display" class="text-5xl font-extrabold tracking-tight text-[#6366f1]">--</span><span class="text-sm font-mono text-[#8b96a8]">diagnostics</span></div>
             </div>
-            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Zero Runtime Execution</span><span class="text-[#6366f1] font-semibold">AST Safe</span></div>
+            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Zero Runtime Execution</span><span class="text-[#6366f1] font-semibold">Static analysis</span></div>
         </div>
     </div>
 
     <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl">
         <div class="flex justify-between items-center mb-4 pb-4 border-b border-[#1e2a45]">
-            <h2 class="text-lg font-semibold text-white">Live AST Scan Violations</h2>
-            <span class="text-xs text-[#8b96a8] font-mono">Last synced: <span id="last-updated">--</span></span>
+            <h2 class="text-lg font-semibold text-white">Example scan findings</h2>
+            <span class="text-xs text-[#8b96a8] font-mono">Report generated: <span id="last-updated">--</span></span>
         </div>
         <ul id="violation-list" class="space-y-3 font-mono text-sm">
             <li class="p-4 bg-[#070b14] border border-[#1e2a45] rounded-lg text-[#8b96a8] flex items-center space-x-2 animate-pulse">
-                <span>⏳ Fetching live diagnostic data from CI report...</span>
+                <span>⏳ Loading the bundled examples report...</span>
             </li>
         </ul>
     </div>
@@ -71,36 +72,65 @@
 </main>
 
 <footer class="border-t border-[#1e2a45] bg-[#0f1322]/55 py-6 text-center text-xs text-[#8b96a8]">
-    <p>mcp-doctor enterprise engine · Powered by GitHub Actions & Pages · <a href="https://github.com/RANJITHROSAN17/mcp-doctor" class="text-[#00d4aa] hover:underline">github.com/RANJITHROSAN17/mcp-doctor</a></p>
+    <p>Vexar-MCP example audit · Powered by GitHub Actions & Pages · <a href="https://github.com/RANJITHROSAN17/Vexar-MCP" class="text-[#00d4aa] hover:underline">github.com/RANJITHROSAN17/Vexar-MCP</a></p>
 </footer>
 
 <script>
 async function loadAuditData() {
+    const list = document.getElementById('violation-list');
+    const showMessage = (text) => {
+        const li = document.createElement('li');
+        li.className = 'p-4 bg-[#070b14] border border-[#1e2a45] rounded-lg text-[#8b96a8] font-sans';
+        li.textContent = text;
+        list.replaceChildren(li);
+    };
     try {
-      const response = await fetch('./audit-report.json');
-      if (!response.ok) throw new Error('Status ' + response.status);
-      const report = await response.json();
-      if (report.score !== undefined) document.getElementById('score-display').textContent = report.score;
-      const list = document.getElementById('violation-list');
-      if (report.violations && Array.isArray(report.violations)) {
-        list.innerHTML = '';
-        if (report.violations.length === 0) {
-          list.innerHTML = '<li class="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-emerald-400 font-sans font-semibold">✨ No violations detected! Codebase is fully clean.</li>';
-        } else {
-          report.violations.forEach(v => {
-            const li = document.createElement('li');
-            li.className = 'p-3 bg-red-950/20 border border-red-500/30 rounded-lg text-red-300 flex flex-col space-y-1';
-            li.innerHTML = `<div class="flex items-center space-x-2 font-bold text-red-400"><span class="px-2 py-0.5 bg-red-500/20 rounded text-xs">[${v.code || 'MCP001'}]</span><span>Line ${v.line || '-'}</span><span class="text-xs uppercase px-1.5 py-0.5 bg-[#1e2a45] text-[#8b96a8] rounded">${v.severity || 'warning'}</span></div><p class="text-[#e8ecf1] font-sans text-sm">${v.message || 'Violation detected.'}</p>`;
-            list.appendChild(li);
-          });
+        const response = await fetch('./audit-report.json', {cache: 'no-store'});
+        if (!response.ok) throw new Error('Status ' + response.status);
+        const report = await response.json();
+        const summary = report?.summary;
+        const diagnostics = report?.diagnostics;
+        const generated = new Date(report?.dashboard?.generated_at);
+        if (!summary || !Number.isFinite(summary.score) || summary.score < 0 || summary.score > 100 ||
+            !Number.isInteger(summary.tools_scanned) || summary.tools_scanned < 0 ||
+            !Array.isArray(diagnostics) || report?.dashboard?.scope !== 'examples/' ||
+            typeof report?.dashboard?.generated_at !== 'string' ||
+            Number.isNaN(generated.getTime()) ||
+            !diagnostics.every(d => d && typeof d.rule_id === 'string' && typeof d.message === 'string')) {
+            throw new Error('Invalid audit report');
         }
-      }
-      document.getElementById('last-updated').textContent = new Date().toUTCString();
-      document.getElementById('dashboard-status').textContent = 'Live Data Synced';
+        document.getElementById('score-display').textContent = String(summary.score);
+        document.getElementById('tools-display').textContent = String(summary.tools_scanned);
+        document.getElementById('findings-display').textContent = String(diagnostics.length);
+        document.getElementById('scan-result').textContent = diagnostics.length ? 'Findings present' : 'No findings';
+        list.replaceChildren();
+        if (diagnostics.length === 0) {
+            showMessage('No findings in this example scan. This is not a production safety guarantee.');
+        } else {
+            for (const diagnostic of diagnostics) {
+                const li = document.createElement('li');
+                li.className = 'p-3 bg-[#070b14] border border-[#1e2a45] rounded-lg flex flex-col space-y-1';
+                const heading = document.createElement('div');
+                heading.className = 'font-bold text-[#8b96a8]';
+                heading.textContent = `${diagnostic.rule_id} · ${diagnostic.source_file || 'unknown source'}:${diagnostic.line ?? '-'} · ${diagnostic.severity || 'unknown'}`;
+                const message = document.createElement('p');
+                message.className = 'text-[#e8ecf1] font-sans text-sm';
+                // Diagnostics can contain source-controlled text: never interpret it as HTML.
+                message.textContent = diagnostic.message;
+                li.appendChild(heading);
+                li.appendChild(message);
+                list.appendChild(li);
+            }
+        }
+        document.getElementById('last-updated').textContent = generated.toUTCString();
+        document.getElementById('dashboard-status').textContent = 'Example report loaded';
     } catch (error) {
-      console.warn('Audit load failed (offline/preview):', error);
-      document.getElementById('dashboard-status').textContent = 'Offline Preview Mode';
-      document.getElementById('violation-list').innerHTML = '<li class="p-4 bg-[#070b14] border border-[#1e2a45] rounded-lg text-[#8b96a8] font-sans">ℹ️ Running in static preview. audit-report.json will populate when deployed via GitHub Actions.</li>';
+        console.warn('Audit report unavailable:', error);
+        for (const id of ['score-display', 'tools-display', 'findings-display', 'scan-result', 'last-updated']) {
+            document.getElementById(id).textContent = '--';
+        }
+        document.getElementById('dashboard-status').textContent = 'Report unavailable';
+        showMessage('Unable to load the published audit report. Try reloading after the next deployment.');
     }
 }
 document.addEventListener('DOMContentLoaded', loadAuditData);
