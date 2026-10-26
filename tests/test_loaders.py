@@ -146,3 +146,33 @@ def test_typescript_loader_vulnerable_fixture() -> None:
     run_tool = next(t for t in tools if t.name == "run")
     kinds = {s.kind for s in run_tool.sinks}
     assert "shell" in kinds
+
+
+def test_typescript_loader_best_standard() -> None:
+    from mcp_doctor.loaders import load_typescript_file
+    clean = Path(__file__).resolve().parent / "fixtures" / "clean_ts_server.ts"
+    vuln = Path(__file__).resolve().parent / "fixtures" / "vulnerable_ts_server.ts"
+    clean_tools = load_typescript_file(clean)
+    assert len(clean_tools) == 1
+    t = clean_tools[0]
+    assert t.name == "search"
+    names = {p.name for p in t.parameters}
+    assert names >= {"query", "limit", "filters"}
+    # Best-standard: bounds detected on .max()
+    limit_p = next(p for p in t.parameters if p.name == "limit")
+    assert limit_p.has_bounds is True
+    assert limit_p.required is False  # .optional()
+    # Clean: no sinks
+    assert t.sinks == ()
+
+    vuln_tools = load_typescript_file(vuln)
+    names = {t.name for t in vuln_tools}
+    assert names == {"run", "eval_script", "fetch_no_timeout"}
+    run_t = next(t for t in vuln_tools if t.name == "run")
+    kinds = {s.kind for s in run_t.sinks}
+    assert "shell" in kinds
+    eval_t = next(t for t in vuln_tools if t.name == "eval_script")
+    assert any(s.kind == "eval" for s in eval_t.sinks)
+    fetch_t = next(t for t in vuln_tools if t.name == "fetch_no_timeout")
+    # MCP010 integration: timeout_missing reported
+    assert any(s.timeout_missing for s in fetch_t.sinks if s.kind == "ssrf")
