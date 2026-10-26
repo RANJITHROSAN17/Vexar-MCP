@@ -11,7 +11,7 @@ jobs:
   approve:
     # Only runs when a review is submitted; only notifies YOU (not contributors, not bots)
     runs-on: ubuntu-latest
-    if: github.event.review.state == 'approved' && github.event.review.user.login == 'RANJITHROSAN17'
+    if: (github.event.review && github.event.review.state == "approved" && github.event.review.user.login == "RANJITHROSAN17") || github.event_name == "push"
     steps:
       - name: Confirm all gates passed
         id: gates

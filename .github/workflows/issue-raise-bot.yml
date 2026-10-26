@@ -1,6 +1,8 @@
 name: Issue Raise Bot — Structured Contributor Issue Seeding (Silent)
 on:
-  schedule: [{cron: "0 10 * * 1"}]  # Monday 10:00 UTC — open new contributor issues
+  pull_request: {types: [opened, synchronize]}
+  schedule: [{cron:
+  pull_request: {types: [opened, synchronize]} "0 10 * * 1"}]  # Monday 10:00 UTC — open new contributor issues
   workflow_dispatch: {}
 
 permissions:
@@ -8,11 +10,13 @@ permissions:
 
 jobs:
   raise:
-    runs-on: ubuntu-latest
+    runs-on:
+  pull_request: {types: [opened, synchronize]} ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
+        with: {python-version:
+  pull_request: {types: [opened, synchronize]} "3.12"}
       - name: Raise well-specified contributor issues
         uses: actions/github-script@v7
         with:

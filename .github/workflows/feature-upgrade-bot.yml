@@ -1,6 +1,10 @@
 name: Feature Upgrade Bot — Daily Feature Proposal (Silent)
 on:
-  schedule: [{cron: "0 9 * * *"}]  # 09:00 UTC daily — one new feature proposal
+  push: {branches: [main]}
+  pull_request: {types: [opened, synchronize]}
+  schedule: [{cron:
+  push: {branches: [main]}
+  pull_request: {types: [opened, synchronize]} "0 9 * * *"}]  # 09:00 UTC daily — one new feature proposal
   workflow_dispatch: {}
 
 permissions:
@@ -9,11 +13,15 @@ permissions:
 
 jobs:
   propose:
-    runs-on: ubuntu-latest
+    runs-on:
+  push: {branches: [main]}
+  pull_request: {types: [opened, synchronize]} ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
+        with: {python-version:
+  push: {branches: [main]}
+  pull_request: {types: [opened, synchronize]} "3.12"}
       - name: Read queued roadmap tasks
         id: queued
         run: |

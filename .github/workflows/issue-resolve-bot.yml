@@ -1,5 +1,6 @@
 name: Issue Resolve Bot — Verify Fixes & Close Resolved Issues (Silent)
 on:
+  push: {branches: [main]}
   pull_request: {types: [closed, merged]}
   workflow_dispatch: {}
 
@@ -9,12 +10,14 @@ permissions:
 
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on:
+  push: {branches: [main]} ubuntu-latest
     if: github.event.pull_request.merged == true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
+        with: {python-version:
+  push: {branches: [main]} "3.12"}
       - name: Find linked contributor issue
         id: link
         run: |
@@ -41,7 +44,8 @@ jobs:
                 owner: context.repo.owner, repo: context.repo.repo,
                 issue_number: parseInt(num),
                 state: "closed",
-                state_reason: "completed",
+                state_reason:
+  push: {branches: [main]} "completed",
               });
               console.log("Resolved #" + num);
             }

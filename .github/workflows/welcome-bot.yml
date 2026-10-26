@@ -1,7 +1,7 @@
 name: Welcome Bot — First Contribution Greeting (Silent / Skip Bots)
 on:
   issues: {types: [opened]}
-  pull_request: {types: [opened]}
+  pull_request: {types: [opened, synchronize]}
 
 permissions:
   issues: write

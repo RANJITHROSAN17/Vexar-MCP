@@ -1,7 +1,10 @@
-name: Code Review Bot — Required Review Gate (Silent Unless Blocked)
+name: Code Review Bot — Required Live Gate (Dynamic, Silent Pass, Block on Fail)
 on:
-  pull_request: {types: [opened, synchronize, reopened, edited]}
-  pull_request_review: {types: [submitted]}
+  pull_request: {types: [opened, synchronize, reopened, edited, labeled, unlabeled]}
+  pull_request_review: {types: [submitted, edited, dismissed]}
+  pull_request_review_comment: {types: [created, edited, deleted]}
+  issues: {types: [opened, edited, labeled, unlabeled]}
+  push: {branches: [main]}
 
 permissions:
   pull_requests: write
@@ -9,37 +12,37 @@ permissions:
   issues: read
 
 jobs:
-  review:
+  guard:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - name: Quality Gate Check (silence if pass)
+      - name: Required Quality Gate (live — runs immediately)
         id: gate
         run: |
-          /var/tmp/mcp-doctor-venv/bin/ruff check . || exit 1
-          /var/tmp/mcp-doctor-venv/bin/mypy src || exit 1
-          /var/tmp/mcp-doctor-venv/bin/pytest --cov=mcp_doctor --cov-fail-under=85 || exit 1
-        # If this fails, bot comments; if passes, zero noise
-      - name: Check conventional commit + labels + size
-        id: format_check
+          echo "=== LIVE CODE REVIEW GATE ==="
+          echo "Checking ruff..."
+          ruff check . || { echo "FAIL: ruff errors"; exit 1; }
+          echo "Checking mypy..."
+          mypy src || { echo "FAIL: mypy errors"; exit 1; }
+          echo "Checking pytest coverage (>=85)..."
+          pytest --cov=mcp_doctor --cov-fail-under=85 || { echo "FAIL: coverage <85%"; exit 1; }
+          echo "PASS: all gates cleared — silent (zero notification)"
+      - name: Conventional Commit + Labels + Size Check
+        id: format
         run: |
-          title="${{ github.event.pull_request.title }}"
-          echo "Title format check: $title"
-          # Silent pass — no output if matches regex
-          echo "$title" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|ci)(\(.+\))?: .+' || (echo "FAIL: title format"; exit 1)
-      - name: Post review comment (silent pass / visible block)
-        if: always() && (failure() || github.event_name == 'pull_request_review')
+          title="${{ github.event.pull_request.title || github.event.issue.title || 'N/A' }}"
+          echo "PR/Issue title: $title"
+          echo "$title" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|ci)(\(.+\))?: .+' || { echo "FAIL: not Conventional Commit"; exit 1; }
+          echo "PASS: format correct"
+      - name: Post ONLY if blocked (silent if pass)
+        if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            const pass = !(context.payload.pull_request || {}).merged; // simplified
-            // Only post if gate failed OR review submitted and requires re-check
-            if (process.env.GATE_STATUS !== 'success') {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: `🤖 **Code Review Bot (required)**\n• Quality gates: ruff / mypy / pytest (cov ≥85%)\n• PR format: Conventional Commits + labels + size tag\n• Status: ${pass ? 'PASS — silent' : 'BLOCKED — fix required before final-merge bot'}\n• Final merge requires: bot approval + @RANJITHROSAN17 approval (no auto-merge).`,
-              });
-            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🤖 **CODE REVIEW BOT (LIVE — BLOCKED)**\n• gh trigger: ${context.eventName}\n• Gate: ruff / mypy / pytest (cov >=85%) / format / labels + size\n• Status: FAILED — fix required before final merge\n• Remind: only YOU approve final merge (ruleset blocks auto-merge)\n• Zero noise when passing.`
+            });
