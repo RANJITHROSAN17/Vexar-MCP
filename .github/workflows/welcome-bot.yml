@@ -1,0 +1,21 @@
+name: Welcome Bot — First Contribution Greeting (Silent / Skip Bots)
+on:
+  issues: {types: [opened]}
+  pull_request: {types: [opened]}
+
+permissions:
+  issues: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    if: github.event.issue.user.login != 'RANJITHROSAN17' && github.event.issue.user.login != 'github-actions[bot]'
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `👋 **Welcome Bot (silent)**\n• Thanks for contributing to RANJITHROSAN17/mcp-doctor.\n• Read \`CONTRIBUTOR_RULES.md\` → \`ENTREPRISE_REPLICATION_GUIDE.md\`.\n• Pick an open contributor issue (#1–#8) or propose a new one via Issue Raise Bot.\n• Only 4 notifications will ever reach you: PR review (if needed), Feature Upgrade (if selected), Issue Raise (if your issue is opened), Final Merge (only if you submit PR). No spam.`,
+            });

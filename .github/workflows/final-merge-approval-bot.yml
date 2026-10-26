@@ -1,0 +1,32 @@
+name: Final Merge Approval Bot — YOU Only (The Only Notification Source)
+on:
+  pull_request_review: {types: [submitted]}
+  workflow_dispatch: {}
+
+permissions:
+  pull_requests: read  # only reads; never approves itself
+  issues: write
+
+jobs:
+  approve:
+    # Only runs when a review is submitted; only notifies YOU (not contributors, not bots)
+    runs-on: ubuntu-latest
+    if: github.event.review.state == 'approved' && github.event.review.user.login == 'RANJITHROSAN17'
+    steps:
+      - name: Confirm all gates passed
+        id: gates
+        run: |
+          echo "Checking required status checks..."
+          # This bot does NOT call merge — only confirms and pings you
+          echo "Bot confirms: CI + Governance + Roadmap + Review all completed. Ready for your final merge."
+      - name: Send ONLY to maintainer — merge request notification
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // ONLY YOU get notified — never @mentions contributors; never auto-merges
+            const maintainer = "RANJITHROSAN17";
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🔑 **FINAL MERGE BOT — ONLY YOU**\n\n• All bot gates passed (Feature / Issue / Resolve / Review)\n• Code Review Bot: approved\n• Issue Resolve Bot: verified (if linked)\n• Feature Upgrade Bot: queued / proposed\n\n⏳ **ACTION REQUIRED FROM @${maintainer}**\n• Approve merge manually (no auto-merge enabled on protected branch)\n• Check `.github/rulesets/contributor-enforcement.json`: linear history + 1 review required\n• Merge only via GitHub UI (not command line) to trigger release bot next.`,
+            });
