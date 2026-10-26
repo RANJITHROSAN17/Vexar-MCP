@@ -288,6 +288,55 @@ def _extract_suppressions(lines: list[str], start_line: int, end_line: int) -> f
     return frozenset(suppressed)
 
 
+def _build_base_index(tree: ast.AST) -> dict[str, list[dict]]:
+    """Index module-level BaseModel / TypedDict classes and their fields."""
+    index: dict[str, list[dict]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        is_model = False
+        for base in node.bases:
+            if isinstance(base, ast.Name) and base.id in ("BaseModel", "TypedDict"):
+                is_model = True
+            elif isinstance(base, ast.Attribute) and base.attr in ("BaseModel", "TypedDict"):
+                is_model = True
+        if not is_model:
+            continue
+        fields: list[dict] = []
+        for item in node.body:
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                name = item.target.id
+                ann_str = ast.unparse(item.annotation) if item.annotation else None
+                desc = ""
+                bounds = False
+                if isinstance(item.value, ast.Call):
+                    call_func = item.value.func
+                    is_field = False
+                    if isinstance(call_func, ast.Name) and call_func.id == "Field":
+                        is_field = True
+                    elif isinstance(call_func, ast.Attribute) and call_func.attr == "Field":
+                        is_field = True
+                    if is_field:
+                        for kw in item.value.keywords:
+                            if kw.arg == "description" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                                desc = kw.value.value
+                            if kw.arg in ("le", "lt", "ge", "gt", "max_length", "min_length"):
+                                bounds = True
+                if ann_str and any(tok in ann_str for tok in ("max_length", "le=", "lt=", "ge=", "gt=", "Literal[", "MaxLen")):
+                    bounds = True
+                fields.append({
+                    "name": name,
+                    "type_str": ann_str,
+                    "description": desc,
+                    "required": item.value is None,
+                    "has_bounds": bounds,
+                    "line": item.lineno,
+                })
+        if fields:
+            index[node.name] = fields
+    return index
+
+
 def load_python_file(path: Path) -> list[ToolSpec]:
     """Parse a Python source file and return all discovered MCP / agent ToolSpecs."""
     source = path.read_text(encoding="utf-8")
@@ -296,6 +345,7 @@ def load_python_file(path: Path) -> list[ToolSpec]:
         tree = ast.parse(source, filename=str(path))
     except SyntaxError:
         return []
+    base_index = _build_base_index(tree)
 
     tools: list[ToolSpec] = []
 
@@ -344,16 +394,34 @@ def load_python_file(path: Path) -> list[ToolSpec]:
                         and node.args.kw_defaults[kw_idx] is not None
                     )
                 clamped = ann_bounded or _body_clamps_param(node, arg.arg)
-                params.append(
-                    ParameterSpec(
-                        name=arg.arg,
-                        type_name=type_str,
-                        description=param_docs.get(arg.arg, ""),
-                        required=not has_default,
-                        has_bounds=clamped,
-                        line=arg.lineno,
+                matched_class = None
+                if type_str:
+                    base_name = type_str.split(".")[-1].split("[")[0].split("]")[0]
+                    if base_name in base_index:
+                        matched_class = base_name
+                if matched_class:
+                    for fld in base_index[matched_class]:
+                        params.append(
+                            ParameterSpec(
+                                name=f"{arg.arg}.{fld['name']}",
+                                type_name=fld.get("type_str"),
+                                description=fld.get("description", "") or param_docs.get(arg.arg, ""),
+                                required=fld["required"] if not has_default else False,
+                                has_bounds=fld["has_bounds"] or clamped,
+                                line=fld.get("line", arg.lineno),
+                            )
+                        )
+                else:
+                    params.append(
+                        ParameterSpec(
+                            name=arg.arg,
+                            type_name=type_str,
+                            description=param_docs.get(arg.arg, ""),
+                            required=not has_default,
+                            has_bounds=clamped,
+                            line=arg.lineno,
+                        )
                     )
-                )
 
             sinks = _extract_sinks(node, user_param_names)
             end_lineno = getattr(node, "end_lineno", node.lineno) or node.lineno

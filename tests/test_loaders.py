@@ -92,3 +92,33 @@ def test_json_loader_supports_mcp_openai_and_anthropic_formats(tmp_path: Path) -
     pkg_json = tmp_path / "package.json"
     pkg_json.write_text('{"name": "my-app", "version": "1.0.0"}', encoding="utf-8")
     assert load_json_manifest(pkg_json) == []
+
+
+def test_python_ast_expands_basemodel_and_typeddict(tmp_path: Path) -> None:
+    src = tmp_path / "basemodel_server.py"
+    src.write_text('''
+from pydantic import BaseModel, Field
+from typing import TypedDict
+
+class SearchRequest(BaseModel):
+    query: str = Field(..., description="Search term")
+    limit: int = Field(default=10, le=100, description="Max results")
+
+class SearchResp(TypedDict):
+    items: list[str]
+    total: int
+
+@mcp.tool(name="search")
+def search(req: SearchRequest, resp: SearchResp = None) -> list[str]:
+    """Search."""
+    return []
+''')
+    from mcp_doctor.loaders import load_python_file
+    tools = load_python_file(src)
+    assert len(tools) == 1
+    names = [p.name for p in tools[0].parameters]
+    assert "req.query" in names
+    assert "req.limit" in names
+    # TypedDict fields expanded
+    assert "resp.items" in names
+    assert "resp.total" in names
