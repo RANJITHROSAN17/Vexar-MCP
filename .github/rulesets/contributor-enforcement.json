@@ -25,7 +25,7 @@
         "require_last_push_approval": false,
         "required_approving_review_count": 1,
         "required_review_thread_resolution": true,
-        "bypass_actor_ids": [100000000]\
+        "bypass_actor_ids": [100000000]
       }
     },
     {
