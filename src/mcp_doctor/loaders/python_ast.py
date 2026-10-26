@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from typing import TypedDict
 
 from mcp_doctor.models import CodeSink, ParameterSpec, ToolSpec
 from mcp_doctor.tokens import estimate_tool_tokens
@@ -297,21 +298,33 @@ def _extract_suppressions(lines: list[str], start_line: int, end_line: int) -> f
     return frozenset(suppressed)
 
 
-def _build_base_index(tree: ast.AST) -> dict[str, list[dict]]:
+class _ModelField(TypedDict):
+    name: str
+    type_str: str | None
+    description: str
+    required: bool
+    has_bounds: bool
+    line: int
+
+
+def _build_base_index(tree: ast.AST) -> dict[str, list[_ModelField]]:
     """Index module-level BaseModel / TypedDict classes and their fields."""
-    index: dict[str, list[dict]] = {}
+    index: dict[str, list[_ModelField]] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
             continue
         is_model = False
         for base in node.bases:
-            if isinstance(base, ast.Name) and base.id in ("BaseModel", "TypedDict"):
-                is_model = True
-            elif isinstance(base, ast.Attribute) and base.attr in ("BaseModel", "TypedDict"):
+            if (
+                isinstance(base, ast.Name)
+                and base.id in ("BaseModel", "TypedDict")
+                or isinstance(base, ast.Attribute)
+                and base.attr in ("BaseModel", "TypedDict")
+            ):
                 is_model = True
         if not is_model:
             continue
-        fields: list[dict] = []
+        fields: list[_ModelField] = []
         for item in node.body:
             if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                 name = item.target.id
@@ -321,26 +334,38 @@ def _build_base_index(tree: ast.AST) -> dict[str, list[dict]]:
                 if isinstance(item.value, ast.Call):
                     call_func = item.value.func
                     is_field = False
-                    if isinstance(call_func, ast.Name) and call_func.id == "Field":
-                        is_field = True
-                    elif isinstance(call_func, ast.Attribute) and call_func.attr == "Field":
+                    if (
+                        isinstance(call_func, ast.Name)
+                        and call_func.id == "Field"
+                        or isinstance(call_func, ast.Attribute)
+                        and call_func.attr == "Field"
+                    ):
                         is_field = True
                     if is_field:
                         for kw in item.value.keywords:
-                            if kw.arg == "description" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                            if (
+                                kw.arg == "description"
+                                and isinstance(kw.value, ast.Constant)
+                                and isinstance(kw.value.value, str)
+                            ):
                                 desc = kw.value.value
                             if kw.arg in ("le", "lt", "ge", "gt", "max_length", "min_length"):
                                 bounds = True
-                if ann_str and any(tok in ann_str for tok in ("max_length", "le=", "lt=", "ge=", "gt=", "Literal[", "MaxLen")):
+                if ann_str and any(
+                    tok in ann_str
+                    for tok in ("max_length", "le=", "lt=", "ge=", "gt=", "Literal[", "MaxLen")
+                ):
                     bounds = True
-                fields.append({
-                    "name": name,
-                    "type_str": ann_str,
-                    "description": desc,
-                    "required": item.value is None,
-                    "has_bounds": bounds,
-                    "line": item.lineno,
-                })
+                fields.append(
+                    {
+                        "name": name,
+                        "type_str": ann_str,
+                        "description": desc,
+                        "required": item.value is None,
+                        "has_bounds": bounds,
+                        "line": item.lineno,
+                    }
+                )
         if fields:
             index[node.name] = fields
     return index
@@ -414,7 +439,8 @@ def load_python_file(path: Path) -> list[ToolSpec]:
                             ParameterSpec(
                                 name=f"{arg.arg}.{fld['name']}",
                                 type_name=fld.get("type_str"),
-                                description=fld.get("description", "") or param_docs.get(arg.arg, ""),
+                                description=fld.get("description", "")
+                                or param_docs.get(arg.arg, ""),
                                 required=fld["required"] if not has_default else False,
                                 has_bounds=fld["has_bounds"] or clamped,
                                 line=fld.get("line", arg.lineno),

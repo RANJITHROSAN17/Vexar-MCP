@@ -68,7 +68,7 @@ def second_sync(record_id: str) -> str:  # noqa: MCP005
 def test_unsafe_deserialization_detection(tmp_path: Path) -> None:
     srv = tmp_path / "deser_server.py"
     srv.write_text(
-        """
+        '''
 import pickle
 import yaml
 
@@ -92,18 +92,19 @@ def load_yaml_unsafe(data: str) -> object:
 def load_yaml_safe(data: str) -> object:
     """Load YAML safely."""
     return yaml.safe_load(data)
-""",
+''',
         encoding="utf-8",
     )
-    report = scan_paths([str(srv)])
+    report = scan_paths([srv])
     codes = [d.rule_id for d in report.diagnostics]
     messages = [d.message for d in report.diagnostics]
     assert "MCP013" in codes
     assert any("pickle.loads" in m for m in messages)
     assert any("yaml.load" in m for m in messages)
     # Safe loaders should NOT trigger MCP013
-    assert not any("safe_load" in m.lower() and "MCP013" in str(d) for d in report.diagnostics)
-
+    assert not any(
+        "safe_load" in d.message.lower() and d.rule_id == "MCP013" for d in report.diagnostics
+    )
 
 
 def test_mcp010_missing_timeout_flagged(tmp_path: Path) -> None:
@@ -117,6 +118,7 @@ def fetch(url: str) -> str:
     return requests.get(url).text
 ''')
     from mcp_doctor.engine import scan_paths
+
     report = scan_paths([srv])
     triggered = {d.rule_id for d in report.diagnostics}
     assert "MCP010" in triggered
@@ -133,6 +135,7 @@ def fetch(url: str) -> str:
     return requests.get(url, timeout=10).text
 ''')
     from mcp_doctor.engine import scan_paths
+
     report = scan_paths([srv])
     triggered = {d.rule_id for d in report.diagnostics}
     assert "MCP010" not in triggered
