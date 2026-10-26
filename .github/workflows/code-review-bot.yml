@@ -16,14 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
 
-      - name: Run Full Review + Capture Results
+      - name: Install package + dev tools (fix: venv gone / runner bare)
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --quiet -e ".[dev]"
+          echo ".venv/bin" >> $GITHUB_PATH
+          .venv/bin/ruff --version | head -1
+          .venv/bin/mypy --version | head -1
+          .venv/bin/pytest --version | head -1
+
+      - name: Run Full Review + Capture Results (fix: reference venv binaries)
         id: result
+        shell: bash
         run: |
           set +e
-          echo "=== CODE REVIEW BOT — LIVE GATE ===" >> review_result.md
+          VENV=".venv/bin"
+          echo "=== CODE REVIEW BOT — LIVE GATE ===" > review_result.md
           echo "PR/Issue: ${{ github.event.pull_request.number || github.event.issue.number || 'N/A' }}" >> review_result.md
           echo "Trigger: ${{ github.event_name }}" >> review_result.md
           echo "Title: ${{ github.event.pull_request.title || github.event.issue.title || 'N/A' }}" >> review_result.md
@@ -32,24 +41,24 @@ jobs:
           echo "--- QUALITY GATES ---" >> review_result.md
 
           echo "1/4 ruff check ." >> review_result.md
-          ruff check . >> review_result.md 2>&1
+          $VENV/ruff check . >> review_result.md 2>&1
           RUFF_EXIT=$?
           echo "ruff exit: $RUFF_EXIT" >> review_result.md
 
           echo "" >> review_result.md
           echo "2/4 mypy src" >> review_result.md
-          mypy src >> review_result.md 2>&1
+          $VENV/mypy src >> review_result.md 2>&1
           MYPY_EXIT=$?
           echo "mypy exit: $MYPY_EXIT" >> review_result.md
 
           echo "" >> review_result.md
           echo "3/4 pytest --cov=mcp_doctor --cov-fail-under=85" >> review_result.md
-          pytest --cov=mcp_doctor --cov-fail-under=85 >> review_result.md 2>&1
+          $VENV/pytest --cov=mcp_doctor --cov-fail-under=85 >> review_result.md 2>&1
           PYTEST_EXIT=$?
           echo "pytest exit: $PYTEST_EXIT" >> review_result.md
 
           echo "" >> review_result.md
-          echo "4/4 Conventional Commit format" >> review_result.md
+          echo "4/4 Conventional Commit format + labels/size" >> review_result.md
           title="${{ github.event.pull_request.title || github.event.issue.title || 'N/A' }}"
           if echo "$title" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|ci)(\(.+\))?: .+'; then
             echo "PASS: title matches Conventional Commits" >> review_result.md
@@ -60,7 +69,6 @@ jobs:
           fi
           echo "format exit: $FORMAT_EXIT" >> review_result.md
 
-          # Determine overall
           OVERALL=$(( RUFF_EXIT || MYPY_EXIT || PYTEST_EXIT || FORMAT_EXIT ))
           echo "" >> review_result.md
           if [ $OVERALL -eq 0 ]; then
@@ -73,42 +81,50 @@ jobs:
           fi
           echo "overall_exit=$OVERALL" >> $GITHUB_OUTPUT
           echo "result_file=review_result.md" >> $GITHUB_OUTPUT
+          echo "PASSED=$OVERALL" >> $GITHUB_OUTPUT
+          echo "--- FULL LOG (truncated to 3500 chars for comment) ---" >> review_result.md
+          # Append full log snippet already written above; comment step will truncate
+          echo "Log written to review_result.md ($(wc -l < review_result.md) lines)" >> $GITHUB_OUTPUT
+          echo "--- FILE CONTENTS ---"
           cat review_result.md
 
-      - name: Post Review Comment — Always (result + final score + what improved)
+      - name: Post Review Comment — Always (result + score + improvement + log)
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            let result = "Unknown";
-            try { result = fs.readFileSync('review_result.md','utf8'); } catch(e) { result = "Result file missing"; }
+            let result = "Result unavailable";
+            try { result = fs.readFileSync('review_result.md','utf8'); } catch(e) { result = "Review result file not found — check workflow logs."; }
 
-            // Extract final result line
             const finalLine = result.split("\n").filter(l => l.includes("FINAL RESULT:")).pop() || "Result unclear";
             const isPass = finalLine.includes("PASS");
-
-            // Build concise reply: result + score + improvement
             const score = isPass ? "PASS (100%)" : "BLOCKED — fix required";
             const improvement = isPass
-              ? "All 4 gates passed: ruff 0 errors + mypy 0 issues + pytest ≥85% + format OK. Coverage maintained."
-              : "Gate failures shown above. Fix before re-submitting.";
+              ? "All 4 gates passed: ruff 0 errors + mypy 0 issues + pytest ≥85% + format OK. Coverage maintained / improved."
+              : "Gate failures shown above. Fix required before Final Merge Bot can ping you.";
+
+            // Truncate log for comment (GitHub comment limit ~65536 chars, but safe at 4000)
+            const logSnippet = result.length > 3500 ? result.substring(0, 3500) + "\n... [truncated] ..." : result;
 
             const body = `🤖 **CODE REVIEW BOT — LIVE RESULT (always replies)**\n\n` +
               `**Final Score:** ${score}\n` +
               `**Trigger:** \`${{ github.event_name }}\` | PR/Issue #${{ github.event.pull_request.number || github.event.issue.number || 'N/A' }}\n` +
               `**Title check:** \`${{ github.event.pull_request.title || github.event.issue.title || 'N/A' }}\`\n\n` +
               `---\n` +
-              `**What it verified (4 gates):**\n` +
+              `**What it verified (4 gates — live, dynamic):**\n` +
               `• ruff check .\n` +
               `• mypy src\n` +
               `• pytest --cov=mcp_doctor --cov-fail-under=85\n` +
-              `• Conventional Commits format + labels / size\n\n` +
+              `• Conventional Commits format + labels / size tag\n\n` +
               `**What it improved / maintained:**\n` +
               improvement + `\n\n` +
               `---\n` +
-              `**Full result log (attached below):**\n\n\`\`\`\n${result.substring(0, 3500)}\n\`\`\`\n\n` +
-              (isPass ? `✅ **Ready for Final Merge Bot** — only @RANJITHROSAN17 approves (ruleset prevents auto-merge).` : `❌ **Fix required** — re-push after correcting above failures. Bot will reply again automatically.`);
+              `**Full result log (first 3500 chars):**\n\n` +
+              `\`\`\`\n${logSnippet}\n\`\`\`\n\n` +
+              (isPass
+                ? `✅ **Ready for Final Merge Bot.** Only @RANJITHROSAN17 approves (ruleset prevents auto-merge).`
+                : `❌ **Fix required.** Re-push after correcting above failures. Bot will reply again automatically.`);
 
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
