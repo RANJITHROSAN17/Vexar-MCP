@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/mcp-doctor
+      url: https://pypi.org/p/vexar-mcp
     permissions:
       id-token: write
     steps:

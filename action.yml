@@ -1,4 +1,4 @@
-name: "MCP Doctor — Lint & Security Scan"
+name: "Vexar-MCP — Lint & Security Scan"
 description: "Audit Model Context Protocol (MCP) servers and AI agent tool schemas for security sinks, schema defects, and token bloat."
 author: "Ranjith Rosan"
 branding:
@@ -46,11 +46,11 @@ runs:
       with:
         python-version: "3.12"
 
-    - name: Install mcp-doctor
+    - name: Install Vexar-MCP
       shell: bash
       run: python -m pip install --quiet "${{ github.action_path }}"
 
-    - name: Run mcp-doctor scan
+    - name: Run vexar-mcp scan
       id: run_scan
       shell: bash
       env:
@@ -67,7 +67,7 @@ runs:
         fi
 
         if [[ -n "${INPUT_SARIF_OUTPUT}" ]]; then
-          mcp-doctor scan "${INPUT_PATH}" \
+          vexar-mcp scan "${INPUT_PATH}" \
             --format sarif \
             --fail-on never \
             --max-tokens "${INPUT_MAX_TOKENS}" \
@@ -75,7 +75,7 @@ runs:
         fi
 
         JSON_REPORT="$(mktemp)"
-        mcp-doctor scan "${INPUT_PATH}" \
+        vexar-mcp scan "${INPUT_PATH}" \
           --format json \
           --fail-on never \
           --max-tokens "${INPUT_MAX_TOKENS}" \
@@ -91,14 +91,14 @@ runs:
         PY
 
         if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-          mcp-doctor scan "${INPUT_PATH}" \
+          vexar-mcp scan "${INPUT_PATH}" \
             --format markdown \
             --fail-on never \
             --max-tokens "${INPUT_MAX_TOKENS}" \
             "${EXTRA_ARGS[@]}" >> "${GITHUB_STEP_SUMMARY}"
         fi
 
-        mcp-doctor scan "${INPUT_PATH}" \
+        vexar-mcp scan "${INPUT_PATH}" \
           --format terminal \
           --fail-on "${INPUT_FAIL_ON}" \
           --max-tokens "${INPUT_MAX_TOKENS}" \

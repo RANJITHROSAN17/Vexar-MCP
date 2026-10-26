@@ -1,4 +1,4 @@
-"""mcp-doctor: Static analyzer, security scanner, and token auditor for MCP servers."""
+"""vexar-mcp: Static analyzer, security scanner, and token auditor for MCP servers."""
 
 from mcp_doctor.engine import scan_paths
 from mcp_doctor.models import (

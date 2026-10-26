@@ -1,23 +1,23 @@
-<!-- https://github.com/RANJITHROSAN17/mcp-doctor -->
+<!-- https://github.com/RANJITHROSAN17/Vexar-MCP -->
 <p align="center">
-  <img src="assets/banner.svg" alt="mcp-doctor" width="100%" style="max-width:1100px; border-radius:12px;">
+  <img src="assets/banner.svg" alt="vexar-mcp" width="100%" style="max-width:1100px; border-radius:12px;">
 </p>
 
 <p align="center">
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/RANJITHROSAN17/mcp-doctor/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/releases"><img alt="Release" src="https://img.shields.io/github/release/RANJITHROSAN17/mcp-doctor.svg?color=00d4aa"></a>
-  <a href="https://pypi.org/pypi/mcp-doctor"><img alt="PyPI" src="https://img.shields.io/pypi/v/mcp-doctor.svg?color=6366f1"></a>
+  <a href="https://github.com/RANJITHROSAN17/Vexar-MCP/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/RANJITHROSAN17/Vexar-MCP/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/RANJITHROSAN17/Vexar-MCP/releases"><img alt="Release" src="https://img.shields.io/github/release/RANJITHROSAN17/Vexar-MCP.svg?color=00d4aa"></a>
+  <a href="https://pypi.org/pypi/vexar-mcp"><img alt="PyPI" src="https://img.shields.io/pypi/v/vexar-mcp.svg?color=6366f1"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-3776ab?logo=python&logoColor=white">
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/blob/main/LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-111"></a>
+  <a href="https://github.com/RANJITHROSAN17/Vexar-MCP/blob/main/LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-111"></a>
   <a href="CODE_OF_CONDUCT.md"><img alt="Code of Conduct" src="https://img.shields.io/badge/conduct-CoC-10b981"></a>
   <br>
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"><img alt="Good First Issue" src="https://img.shields.io/github/issues/RANJITHROSAN17/mcp-doctor/good%20first%20issue?color=7057ff&label=good+first+issues"></a>
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22"><img alt="Help Wanted" src="https://img.shields.io/github/issues/RANJITHROSAN17/mcp-doctor/help%20wanted?color=008672"></a>
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/pulls"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-10b981"></a>
-  <a href="https://github.com/RANJITHROSAN17/mcp-doctor/actions"><img alt="GitHub Actions" src="https://img.shields.io/badge/actions-11%20workflows-555"></a>
+  <a href="https://github.com/RANJITHROSAN17/Vexar-MCP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"><img alt="Good First Issue" src="https://img.shields.io/github/issues/RANJITHROSAN17/Vexar-MCP/good%20first%20issue?color=7057ff&label=good+first+issues"></a>
+  <a href="https://github.com/RANJITHROSAN17/Vexar-MCP/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22"><img alt="Help Wanted" src="https://img.shields.io/github/issues/RANJITHROSAN17/Vexar-MCP/help%20wanted?color=008672"></a>
+  <a href="https://github.com/RANJITHROSAN17/Vexar-MCP/pulls"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-10b981"></a>
+  <a href="https://github.com/RANJITHROSAN17/Vexar-MCP/actions"><img alt="GitHub Actions" src="https://img.shields.io/badge/actions-11%20workflows-555"></a>
 </p>
 
-<h1 align="center">mcp-doctor</h1>
+<h1 align="center">vexar-mcp</h1>
 <p align="center"><b>Static Security Scanner · Schema Linter · Token-Budget Auditor for MCP Servers</b></p>
 <p align="center">Enterprise-grade GitHub Actions bot stack. Zero external runtime dependencies. 90.77% test coverage.</p>
 
@@ -27,7 +27,7 @@
 
 Every MCP server exposes two invisible failure surfaces:
 
-| Failure Surface | How `mcp-doctor` Handles It |
+| Failure Surface | How `vexar-mcp` Handles It |
 |---|---|
 | **Security sinks** — `subprocess.run(shell=True)`, unvalidated `urlopen`, unconfined `open(path)` | 8 modular rules (`MCP001`–`MCP008`) detect at AST level; never executes untrusted code |
 | **Schema / token tax** — missing descriptions, `Any` params, unbounded pagination, bloated docstrings | Token-budget calculator + schema validator + 4 reporters (terminal / JSON / SARIF / GitHub) |
@@ -42,12 +42,12 @@ Every MCP server exposes two invisible failure surfaces:
 |---|---|---|
 | **Test Coverage** | `90.77%` (pytest, `--cov-fail-under=85`) | [`tests/`](tests/) |
 | **Quality Gates** | 0 `ruff` / 0 `mypy` errors | `CI` (3.10 / 3.11 / 3.12) |
-| **Contributor Issues** | `8` open (`#1`–`#8`) — `good first issue` + `help wanted` | [`issues/`](https://github.com/RANJITHROSAN17/mcp-doctor/issues) |
+| **Contributor Issues** | `8` open (`#1`–`#8`) — `good first issue` + `help wanted` | [`issues/`](https://github.com/RANJITHROSAN17/Vexar-MCP/issues) |
 | **Queued Roadmap** | `15` tasks (`RM-001` → `RM-015`) | [`.github/roadmap.json`](.github/roadmap.json) |
 | **Labels** | `23` color-coded | Bot-curated |
 | **Bot Workflows** | `11` (7 new + CI / governance / release / dusty / welcome) | [`.github/workflows/`](.github/workflows/) |
 | **Community Health** | `100%` | GitHub Insights |
-| **Release** | `v0.1.0` (`.whl` + `.tar.gz`) | [`releases/v0.1.0`](https://github.com/RANJITHROSAN17/mcp-doctor/releases/tag/v0.1.0) |
+| **Release** | `v0.1.0` (`.whl` + `.tar.gz`) | [`releases/v0.1.0`](https://github.com/RANJITHROSAN17/Vexar-MCP/releases/tag/v0.1.0) |
 
 ---
 
@@ -55,16 +55,16 @@ Every MCP server exposes two invisible failure surfaces:
 
 ```bash
 # Install (direct from repo — no PyPI dependency conflicts)
-pip install git+https://github.com/RANJITHROSAN17/mcp-doctor.git@main
+pip install git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main
 
 # Or with uv / pipx
-uvx --from git+https://github.com/RANJITHROSAN17/mcp-doctor.git mcp-doctor --help
+uvx --from git+https://github.com/RANJITHROSAN17/Vexar-MCP.git vexar-mcp --help
 
 # Run on a server
-mcp-doctor audit examples/clean_server.py
+vexar-mcp audit examples/clean_server.py
 
 # Use as reusable GitHub Action (composite)
-uses: RANJITHROSAN17/mcp-doctor@main
+uses: RANJITHROSAN17/Vexar-MCP@main
 ```
 
 **Output formats:** terminal scorecard (`A+` → `F`, token leaderboards), JSON, SARIF v2.1.0 (GitHub Security tab), GitHub Markdown (`$GITHUB_STEP_SUMMARY`).
@@ -118,7 +118,7 @@ Reporters — terminal · JSON · SARIF · GitHub Markdown
 Output — scorecard + token leaderboard + inline PR annotations
 ```
 
-**Composite GitHub Action (`action.yml`):** consumable by any repo (`uses: RANJITHROSAN17/mcp-doctor@main`). Pre-commit hook (`.pre-commit-hooks.yaml`) included.
+**Composite GitHub Action (`action.yml`):** consumable by any repo (`uses: RANJITHROSAN17/Vexar-MCP@main`). Pre-commit hook (`.pre-commit-hooks.yaml`) included.
 
 ---
 
@@ -126,13 +126,13 @@ Output — scorecard + token leaderboard + inline PR annotations
 
 ```python
 # Direct install (always current)
-pip install git+https://github.com/RANJITHROSAN17/mcp-doctor.git@main
+pip install git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main
 
 # Use CLI
 python -m mcp_doctor audit examples/clean_server.py --format sarif --output report.sarif
 
 # Composite action (in your CI)
-- uses: RANJITHROSAN17/mcp-doctor@main
+- uses: RANJITHROSAN17/Vexar-MCP@main
 ```
 
 ---
@@ -152,10 +152,10 @@ python -m mcp_doctor audit examples/clean_server.py --format sarif --output repo
 
 | Resource | Link |
 |---|---|
-| Repository | [`github.com/RANJITHROSAN17/mcp-doctor`](https://github.com/RANJITHROSAN17/mcp-doctor) |
-| Release | [`v0.1.0`](https://github.com/RANJITHROSAN17/mcp-doctor/releases/tag/v0.1.0) |
+| Repository | [`github.com/RANJITHROSAN17/Vexar-MCP`](https://github.com/RANJITHROSAN17/Vexar-MCP) |
+| Release | [`v0.1.0`](https://github.com/RANJITHROSAN17/Vexar-MCP/releases/tag/v0.1.0) |
 | Live Dashboard | [`assets/dashboard.html`](assets/dashboard.html) (interactive status) |
-| Contributor Issues | [`#1` – `#8`](https://github.com/RANJITHROSAN17/mcp-doctor/issues) |
+| Contributor Issues | [`#1` – `#8`](https://github.com/RANJITHROSAN17/Vexar-MCP/issues) |
 | Roadmap (15 queued) | [`.github/roadmap.json`](.github/roadmap.json) |
 | Architecture | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Bot Replication Guide | [`ENTREPRISE_REPLICATION_GUIDE.md`](ENTREPRISE_REPLICATION_GUIDE.md) |
@@ -163,5 +163,5 @@ python -m mcp_doctor audit examples/clean_server.py --format sarif --output repo
 
 ---
 
-<p align="center"><img src="assets/banner.svg" alt="mcp-doctor" width="60%" style="max-width:700px; border-radius:12px;"></p>
+<p align="center"><img src="assets/banner.svg" alt="vexar-mcp" width="60%" style="max-width:700px; border-radius:12px;"></p>
 <p align="center"><sub>Enterprise-grade bot stack · 11 workflows · 100% Community Health · Only 3 notification sources · Zero auto-merge</sub></p>

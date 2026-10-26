@@ -1,4 +1,4 @@
-"""Command-line interface for mcp-doctor."""
+"""Command-line interface for vexar-mcp."""
 
 from __future__ import annotations
 

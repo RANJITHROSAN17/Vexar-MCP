@@ -1,7 +1,7 @@
-- id: mcp-doctor
-  name: mcp-doctor (MCP Server & Agent Tool Auditor)
+- id: vexar-mcp
+  name: Vexar-MCP (MCP Server & Agent Tool Auditor)
   description: Lint MCP server Python modules and tool manifests for security sinks, schema gaps, and token bloat.
-  entry: mcp-doctor scan
+  entry: vexar-mcp scan
   language: python
   types_or: [python, json]
   pass_filenames: true
