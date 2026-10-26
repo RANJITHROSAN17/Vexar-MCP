@@ -1,35 +1,134 @@
 {
   "max_open_roadmap_issues": 8,
   "labels": [
-    {"name": "good first issue", "color": "7057ff", "description": "Self-contained, well-scoped task ideal for first-time contributors"},
-    {"name": "help wanted", "color": "008672", "description": "Open for community pull requests"},
-    {"name": "roadmap", "color": "1d76db", "description": "Curated engineering task managed by the MCP Doctor Roadmap Bot"},
-    {"name": "difficulty/easy", "color": "0e8a16", "description": "Focused change (~30-80 LOC) with clear test cases"},
-    {"name": "difficulty/medium", "color": "fbca04", "description": "Moderate feature (~80-200 LOC) spanning 2-3 modules"},
-    {"name": "difficulty/hard", "color": "d93f0b", "description": "Deep architectural or static-analysis enhancement"},
-    {"name": "area/rules", "color": "5319e7", "description": "Lint and security rules under src/mcp_doctor/rules/"},
-    {"name": "area/parsers", "color": "0052cc", "description": "AST and manifest loaders under src/mcp_doctor/loaders/"},
-    {"name": "area/reporters", "color": "006b75", "description": "Output formatters (terminal, JSON, SARIF, Markdown, HTML)"},
-    {"name": "area/cli", "color": "c2e0c6", "description": "CLI subcommands, flags, and configuration loading"},
-    {"name": "area/ci", "color": "bfdadc", "description": "GitHub Actions workflows, bots, and release automation"},
-    {"name": "area/docs", "color": "0075ca", "description": "Documentation, examples, and contributor guides"},
-    {"name": "type/feature", "color": "a2eeef", "description": "New capability, rule, loader, or reporter"},
-    {"name": "type/security", "color": "ee0701", "description": "Security analysis rule or hardening improvement"},
-    {"name": "type/performance", "color": "f9d0c4", "description": "Performance, accuracy, or call-graph analysis improvement"},
-    {"name": "type/bug", "color": "d73a4a", "description": "Confirmed defect or false positive"},
-    {"name": "size/XS", "color": "ededed", "description": "Pull request touches < 25 lines"},
-    {"name": "size/S", "color": "c5def5", "description": "Pull request touches 25-99 lines"},
-    {"name": "size/M", "color": "fef2c0", "description": "Pull request touches 100-299 lines"},
-    {"name": "size/L", "color": "f9d0c4", "description": "Pull request touches 300-599 lines"},
-    {"name": "size/XL", "color": "e99695", "description": "Pull request touches 600+ lines"},
-    {"name": "dependencies", "color": "0366d6", "description": "Automated dependency updates"},
-    {"name": "pinned", "color": "b60205", "description": "Exempt from stale bot cleanup"}
+    {
+      "name": "good first issue",
+      "color": "7057ff",
+      "description": "Self-contained, well-scoped task ideal for first-time contributors"
+    },
+    {
+      "name": "help wanted",
+      "color": "008672",
+      "description": "Open for community pull requests"
+    },
+    {
+      "name": "roadmap",
+      "color": "1d76db",
+      "description": "Curated engineering task managed by the MCP Doctor Roadmap Bot"
+    },
+    {
+      "name": "difficulty/easy",
+      "color": "0e8a16",
+      "description": "Focused change (~30-80 LOC) with clear test cases"
+    },
+    {
+      "name": "difficulty/medium",
+      "color": "fbca04",
+      "description": "Moderate feature (~80-200 LOC) spanning 2-3 modules"
+    },
+    {
+      "name": "difficulty/hard",
+      "color": "d93f0b",
+      "description": "Deep architectural or static-analysis enhancement"
+    },
+    {
+      "name": "area/rules",
+      "color": "5319e7",
+      "description": "Lint and security rules under src/mcp_doctor/rules/"
+    },
+    {
+      "name": "area/parsers",
+      "color": "0052cc",
+      "description": "AST and manifest loaders under src/mcp_doctor/loaders/"
+    },
+    {
+      "name": "area/reporters",
+      "color": "006b75",
+      "description": "Output formatters (terminal, JSON, SARIF, Markdown, HTML)"
+    },
+    {
+      "name": "area/cli",
+      "color": "c2e0c6",
+      "description": "CLI subcommands, flags, and configuration loading"
+    },
+    {
+      "name": "area/ci",
+      "color": "bfdadc",
+      "description": "GitHub Actions workflows, bots, and release automation"
+    },
+    {
+      "name": "area/docs",
+      "color": "0075ca",
+      "description": "Documentation, examples, and contributor guides"
+    },
+    {
+      "name": "type/feature",
+      "color": "a2eeef",
+      "description": "New capability, rule, loader, or reporter"
+    },
+    {
+      "name": "type/security",
+      "color": "ee0701",
+      "description": "Security analysis rule or hardening improvement"
+    },
+    {
+      "name": "type/performance",
+      "color": "f9d0c4",
+      "description": "Performance, accuracy, or call-graph analysis improvement"
+    },
+    {
+      "name": "type/bug",
+      "color": "d73a4a",
+      "description": "Confirmed defect or false positive"
+    },
+    {
+      "name": "size/XS",
+      "color": "ededed",
+      "description": "Pull request touches < 25 lines"
+    },
+    {
+      "name": "size/S",
+      "color": "c5def5",
+      "description": "Pull request touches 25-99 lines"
+    },
+    {
+      "name": "size/M",
+      "color": "fef2c0",
+      "description": "Pull request touches 100-299 lines"
+    },
+    {
+      "name": "size/L",
+      "color": "f9d0c4",
+      "description": "Pull request touches 300-599 lines"
+    },
+    {
+      "name": "size/XL",
+      "color": "e99695",
+      "description": "Pull request touches 600+ lines"
+    },
+    {
+      "name": "dependencies",
+      "color": "0366d6",
+      "description": "Automated dependency updates"
+    },
+    {
+      "name": "pinned",
+      "color": "b60205",
+      "description": "Exempt from stale bot cleanup"
+    }
   ],
   "items": [
     {
       "id": "RM-001",
       "title": "feat(rules): add MCP009 rule to detect hardcoded API keys and secrets in tool handlers",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/rules", "type/security"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/rules",
+        "type/security"
+      ],
       "summary": "Detect hardcoded credentials (e.g., `sk-...`, `ghp_...`, `AKIA...`, `Bearer ...`, or assignments to `api_key` / `secret` string literals) inside `@mcp.tool()` functions.",
       "motivation": "Developers prototyping MCP servers frequently paste API keys directly into tool modules before publishing. Catching high-confidence secret patterns in `mcp-doctor scan` prevents accidental credential leaks.",
       "files": [
@@ -47,7 +146,14 @@
     {
       "id": "RM-002",
       "title": "feat(rules): add MCP010 rule flagging outbound HTTP calls missing explicit `timeout=`",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/rules", "type/feature"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/rules",
+        "type/feature"
+      ],
       "summary": "Flag `requests.get/post/...`, `httpx.get/post/...`, and `urllib.request.urlopen(...)` calls inside MCP tools when no `timeout` keyword argument is provided.",
       "motivation": "An MCP tool that hangs indefinitely on a stalled upstream socket blocks the entire LLM agent turn and stdio transport pipe.",
       "files": [
@@ -65,7 +171,14 @@
     {
       "id": "RM-003",
       "title": "feat(rules): add MCP011 rule for SQL string interpolation in `.execute(...)` calls",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/rules", "type/security"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/rules",
+        "type/security"
+      ],
       "summary": "Detect f-strings, `%` formatting, `.format(...)`, or `+` string concatenation inside `cursor.execute(...)` / `session.execute(...)` when referencing tool parameters.",
       "motivation": "Database MCP servers are one of the most common MCP server types, and LLM-generated arguments can trivially trigger SQL injection if interpolated directly into SQL strings.",
       "files": [
@@ -83,7 +196,14 @@
     {
       "id": "RM-004",
       "title": "feat(reporters): add `--format github` reporter for inline GitHub Actions PR annotations",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/reporters", "type/feature"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/reporters",
+        "type/feature"
+      ],
       "summary": "Add a `--format github` output option to `mcp-doctor scan` that emits GitHub Actions workflow commands (`::error`, `::warning`, `::notice`).",
       "motivation": "Emitting `::error file=server.py,line=24,title=MCP005 (dangerous-shell-execution)::...` lets GitHub render inline annotations directly on changed lines in Pull Request diffs without requiring GitHub Advanced Security / SARIF upload.",
       "files": [
@@ -102,7 +222,14 @@
     {
       "id": "RM-005",
       "title": "feat(rules): add MCP012 rule when tool parameters have no description",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/rules", "type/feature"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/rules",
+        "type/feature"
+      ],
       "summary": "Emit an `INFO`-level diagnostic (`MCP012`, `undocumented-parameter`) when a tool parameter lacks a docstring `Args:` entry or JSON Schema `description`.",
       "motivation": "Even when a tool has a top-level description, undocumented parameters (like `mode: str` or `flags: int`) force agents to guess valid values and semantics.",
       "files": [
@@ -120,7 +247,13 @@
     {
       "id": "RM-006",
       "title": "feat(parsers): add TypeScript MCP SDK (`server.tool(...)`) static loader",
-      "labels": ["help wanted", "roadmap", "difficulty/medium", "area/parsers", "type/feature"],
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/parsers",
+        "type/feature"
+      ],
       "summary": "Support scanning `.ts` and `.js` MCP servers built with `@modelcontextprotocol/sdk` (`server.tool(name, description, zodSchema, handler)` and `registerTool(...)`).",
       "motivation": "Roughly half of public MCP servers are written in TypeScript. Supporting `.ts`/`.js` files without requiring a Node runtime makes `mcp-doctor` a universal cross-language MCP auditor.",
       "files": [
@@ -138,7 +271,13 @@
     {
       "id": "RM-007",
       "title": "feat(cli): add `mcp-doctor init` command to scaffold `.mcp-doctor.toml` and CI workflow",
-      "labels": ["help wanted", "roadmap", "difficulty/medium", "area/cli", "type/feature"],
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/cli",
+        "type/feature"
+      ],
       "summary": "Add an `mcp-doctor init [--github-action]` subcommand that generates a commented `.mcp-doctor.toml` config file and optional `.github/workflows/mcp-doctor.yml`.",
       "motivation": "One-command onboarding drastically lowers friction for maintainers adopting `mcp-doctor` in existing MCP server repositories.",
       "files": [
@@ -155,7 +294,14 @@
     {
       "id": "RM-008",
       "title": "feat(rules): add MCP013 rule for unsafe deserialization (`pickle.loads`, `yaml.load`)",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/rules", "type/security"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/rules",
+        "type/security"
+      ],
       "summary": "Detect `pickle.loads`, `pickle.load`, `marshal.loads`, `shelve.open`, and `yaml.load` (without `SafeLoader`) inside MCP tool functions.",
       "motivation": "Deserializing untrusted payloads inside an MCP tool leads directly to arbitrary code execution.",
       "files": [
@@ -172,7 +318,13 @@
     {
       "id": "RM-009",
       "title": "feat(parsers): expand Pydantic `BaseModel` and `TypedDict` parameter schemas in Python AST loader",
-      "labels": ["help wanted", "roadmap", "difficulty/medium", "area/parsers", "type/feature"],
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/parsers",
+        "type/feature"
+      ],
       "summary": "Resolve in-file `BaseModel` and `TypedDict` classes referenced by `@mcp.tool()` parameters so nested fields are audited for types, bounds, and token footprint.",
       "motivation": "Many FastMCP servers group tool arguments into a Pydantic `BaseModel` (`def search(req: SearchRequest)`). Expanding its fields unlocks accurate `MCP002`/`MCP003`/`MCP004` diagnostics.",
       "files": [
@@ -188,7 +340,13 @@
     {
       "id": "RM-010",
       "title": "feat(cli): add `mcp-doctor inspect --stdio <cmd>` live MCP server introspection",
-      "labels": ["help wanted", "roadmap", "difficulty/medium", "area/cli", "type/feature"],
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/cli",
+        "type/feature"
+      ],
       "summary": "Spawn any MCP server command over JSON-RPC 2.0 stdio, perform handshake + `tools/list`, and run all schema/contract/token rules on the live advertised tools.",
       "motivation": "Dynamic MCP servers (written in Go, Rust, Java, or dynamically registered in Python) can be audited at runtime via standard MCP `tools/list` JSON-RPC without needing language-specific AST parsers.",
       "files": [
@@ -205,7 +363,14 @@
     {
       "id": "RM-011",
       "title": "feat(reporters): add standalone interactive HTML report (`--format html`)",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/reporters", "type/feature"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/reporters",
+        "type/feature"
+      ],
       "summary": "Generate a zero-external-asset HTML dashboard (`--format html`) displaying the health grade, per-tool token usage bars, and filterable diagnostics.",
       "motivation": "Teams running `mcp-doctor` in CI artifacts want a single shareable HTML report with zero CDN dependencies.",
       "files": [
@@ -222,7 +387,14 @@
     {
       "id": "RM-012",
       "title": "feat(cli): add `--baseline <path>` support to suppress pre-existing findings during incremental adoption",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/cli", "type/feature"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/cli",
+        "type/feature"
+      ],
       "summary": "Allow generating and passing a baseline JSON snapshot so CI only fails on newly introduced findings.",
       "motivation": "Large existing MCP servers (50+ tools) need a way to turn on `mcp-doctor` in CI immediately without fixing every historical warning on day one.",
       "files": [
@@ -239,7 +411,14 @@
     {
       "id": "RM-013",
       "title": "feat(rules): add server-wide token budget warning (`MCP014`) when total context tax exceeds `max-server-tokens`",
-      "labels": ["good first issue", "help wanted", "roadmap", "difficulty/easy", "area/rules", "type/feature"],
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "difficulty/easy",
+        "area/rules",
+        "type/feature"
+      ],
       "summary": "Emit `MCP014` (`excessive-server-tokens`) when the sum of all discovered tools' estimated tokens exceeds `ScanConfig.max_server_tokens` (default `4000`).",
       "motivation": "Even if each individual tool stays at 200 tokens, exposing 35 tools on a single MCP server silently burns 7,000+ tokens on every conversation turn.",
       "files": [
@@ -255,7 +434,13 @@
     {
       "id": "RM-014",
       "title": "feat(parsers): support YAML MCP / OpenAI tool manifests (`*.yaml`, `*.yml`)",
-      "labels": ["help wanted", "roadmap", "difficulty/medium", "area/parsers", "type/feature"],
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/medium",
+        "area/parsers",
+        "type/feature"
+      ],
       "summary": "Load tool definitions from YAML manifests when `PyYAML` is installed (gracefully skipping when absent).",
       "motivation": "Agent frameworks (CrewAI, AutoGen, declarative MCP gateways) frequently store tool schemas in `.yaml` files.",
       "files": [
@@ -272,7 +457,13 @@
     {
       "id": "RM-015",
       "title": "feat(parsers): intra-module helper function taint propagation for security rules (MCP005-MCP007)",
-      "labels": ["help wanted", "roadmap", "difficulty/hard", "area/parsers", "type/performance"],
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "difficulty/hard",
+        "area/parsers",
+        "type/performance"
+      ],
       "summary": "Follow 1-hop calls from `@mcp.tool()` functions to module-local helper functions (`_run_cmd(...)`, `_fetch(...)`) when extracting `CodeSink` entries.",
       "motivation": "Production MCP servers often delegate execution to private helper functions in the same file. Propagating tainted parameter flow across 1-hop helper calls significantly increases security recall.",
       "files": [
@@ -284,6 +475,55 @@
         "Avoid infinite recursion on mutually recursive helpers.",
         "Add unit tests verifying sinks inside `_helper(url)` are attributed to the calling `@mcp.tool()`."
       ]
+    },
+    {
+      "id": "RM-016",
+      "label": "feat(rules): add MCP009 protocol / transport validation",
+      "status": "queued",
+      "priority": "high",
+      "linked_issue": null
+    },
+    {
+      "id": "RM-017",
+      "label": "feat(engine): add runtime risk scoring (severity + exploitability + mitigation)",
+      "status": "queued",
+      "priority": "high",
+      "linked_issue": null
+    },
+    {
+      "id": "RM-018",
+      "label": "feat(engine): baseline comparison --current vs --previous scan",
+      "status": "queued",
+      "priority": "medium",
+      "linked_issue": null
+    },
+    {
+      "id": "RM-019",
+      "label": "feat(cli): add mcp-doctor simulate --model cost benchmark",
+      "status": "queued",
+      "priority": "medium",
+      "linked_issue": null
+    },
+    {
+      "id": "RM-020",
+      "label": "feat(policies): strict-prod + enterprise-gov policy templates",
+      "status": "queued",
+      "priority": "medium",
+      "linked_issue": null
+    },
+    {
+      "id": "RM-021",
+      "label": "feat(dashboard): live audit-report.json feed + trend analytics",
+      "status": "queued",
+      "priority": "low",
+      "linked_issue": null
+    },
+    {
+      "id": "RM-022",
+      "label": "feat(plugin): rule-pack marketplace (custom + community rules)",
+      "status": "queued",
+      "priority": "low",
+      "linked_issue": null
     }
   ]
 }
