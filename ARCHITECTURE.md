@@ -35,6 +35,7 @@
   │  • json_reporter.py     │  CI machine-readable report
   │  • sarif.py             │  SARIF v2.1.0 for GitHub Security tab
   │  • markdown.py          │  GitHub Step Summary & PR comment table
+  │  • github_actions.py    │  ::error/::warning/::notice inline PR annotations
   └─────────────────────────┘
 ```
 
