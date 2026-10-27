@@ -49,7 +49,7 @@ def test_cli_scan_json_sarif_and_markdown_formats(capsys: pytest.CaptureFixture[
     rc_md = main(["scan", vuln, "--format", "markdown", "--fail-on", "never"])
     md = capsys.readouterr().out
     assert rc_md == 0
-    assert "## 🩺 MCP Doctor Audit Summary" in md
+    assert "## Vexar-MCP Audit Summary" in md
     assert "| `MCP005` |" in md
 
 
@@ -71,7 +71,7 @@ def test_cli_rules_and_token_report_subcommands(capsys: pytest.CaptureFixture[st
 def test_toml_config_and_missing_target_error(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    cfg = tmp_path / ".mcp-doctor.toml"
+    cfg = tmp_path / "vexar-mcp.toml"
     cfg.write_text('max-tool-tokens = 500\nignore = ["MCP001", "MCP005"]\n', encoding="utf-8")
 
     vuln = str(ROOT / "examples" / "vulnerable_server.py")
@@ -285,3 +285,29 @@ def test_render_github_annotations_keeps_paths_outside_root_absolute(tmp_path: P
         f"::warning file={outside.as_posix()},line=5,"
         "title=MCP007 (unconfined-filesystem-access)::[write_file] Path traversal risk."
     )
+
+
+def test_legacy_config_filename_and_pyproject_table_still_resolve(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Projects configured before the Vexar-MCP rename must keep working.
+    legacy = tmp_path / ".mcp-doctor.toml"
+    legacy.write_text('ignore = ["MCP001"]\n', encoding="utf-8")
+    vuln = str(ROOT / "examples" / "vulnerable_server.py")
+
+    assert (
+        main(["scan", vuln, "--config", str(legacy), "--format", "json", "--fail-on", "never"]) == 0
+    )
+    emitted = {d["rule_id"] for d in json.loads(capsys.readouterr().out)["diagnostics"]}
+    assert "MCP001" not in emitted
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[tool.vexar-mcp]\nignore = ["MCP005"]\n', encoding="utf-8"
+    )
+    src = project / "server.py"
+    src.write_text((ROOT / "examples" / "vulnerable_server.py").read_text(encoding="utf-8"))
+    assert main(["scan", str(src), "--format", "json", "--fail-on", "never"]) == 0
+    emitted = {d["rule_id"] for d in json.loads(capsys.readouterr().out)["diagnostics"]}
+    assert "MCP005" not in emitted

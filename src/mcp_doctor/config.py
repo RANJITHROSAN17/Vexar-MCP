@@ -1,4 +1,9 @@
-"""TOML configuration loader supporting `.mcp-doctor.toml` and `pyproject.toml`."""
+"""TOML configuration loader supporting `vexar-mcp.toml` and `pyproject.toml`.
+
+The legacy `.mcp-doctor.toml` filename and `[tool.mcp-doctor]` pyproject table are
+still honoured so projects configured before the Vexar-MCP rename keep working;
+new configuration files should use `vexar-mcp.toml` / `[tool.vexar-mcp]`.
+"""
 
 from __future__ import annotations
 
@@ -13,11 +18,27 @@ if sys.version_info >= (3, 11):
 else:  # pragma: no cover
     import tomli as tomllib
 
+# Preferred name first, then the pre-rename name for backward compatibility.
+CONFIG_FILENAMES = ("vexar-mcp.toml", ".mcp-doctor.toml")
+PYPROJECT_TABLES = ("vexar-mcp", "mcp-doctor")
+
 
 def _read_toml(path: Path) -> dict[str, Any]:
     with path.open("rb") as fh:
         data = tomllib.load(fh)
     return data if isinstance(data, dict) else {}
+
+
+def _select_pyproject_table(doc: dict[str, Any]) -> dict[str, Any]:
+    """Return the first recognised ``[tool.<name>]`` table from a pyproject file."""
+    tool_tbl = doc.get("tool", {})
+    if not isinstance(tool_tbl, dict):
+        return {}
+    for table in PYPROJECT_TABLES:
+        candidate = tool_tbl.get(table)
+        if isinstance(candidate, dict):
+            return candidate
+    return {}
 
 
 def load_config(
@@ -27,7 +48,20 @@ def load_config(
     max_tokens_override: int | None = None,
     extra_ignored_rules: set[str] | None = None,
 ) -> ScanConfig:
-    """Resolve effective ScanConfig from TOML files and CLI overrides."""
+    """Resolve effective ScanConfig from TOML files and CLI overrides.
+
+    Args:
+        config_path: Explicit configuration file to read. When omitted the loader
+            searches ``start_dir`` for ``vexar-mcp.toml``, then ``.mcp-doctor.toml``,
+            then a ``[tool.vexar-mcp]`` / ``[tool.mcp-doctor]`` pyproject table.
+        start_dir: Directory (or file) used as the root of the configuration search.
+        max_tokens_override: CLI ``--max-tokens`` value, which wins over file values.
+        extra_ignored_rules: Rule IDs supplied through ``--ignore`` and merged with
+            any ``ignore = [...]`` entries from the configuration file.
+
+    Returns:
+        The effective :class:`ScanConfig` for the scan.
+    """
     raw_cfg: dict[str, Any] = {}
     search_root = (start_dir or Path.cwd()).resolve()
     if search_root.is_file():
@@ -36,17 +70,17 @@ def load_config(
     if config_path is not None:
         raw_cfg = _read_toml(config_path)
         if "tool" in raw_cfg and isinstance(raw_cfg["tool"], dict):
-            raw_cfg = raw_cfg["tool"].get("mcp-doctor", raw_cfg)
+            raw_cfg = _select_pyproject_table(raw_cfg) or raw_cfg
     else:
-        dedicated = search_root / ".mcp-doctor.toml"
+        dedicated = next(
+            (search_root / name for name in CONFIG_FILENAMES if (search_root / name).is_file()),
+            None,
+        )
         pyproject = search_root / "pyproject.toml"
-        if dedicated.is_file():
+        if dedicated is not None:
             raw_cfg = _read_toml(dedicated)
         elif pyproject.is_file():
-            doc = _read_toml(pyproject)
-            tool_tbl = doc.get("tool", {})
-            if isinstance(tool_tbl, dict) and isinstance(tool_tbl.get("mcp-doctor"), dict):
-                raw_cfg = tool_tbl["mcp-doctor"]
+            raw_cfg = _select_pyproject_table(_read_toml(pyproject))
 
     max_tool_tokens = int(raw_cfg.get("max-tool-tokens", 250))
     if max_tokens_override is not None:

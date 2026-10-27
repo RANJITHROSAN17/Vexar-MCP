@@ -15,7 +15,7 @@ def render_markdown(report: ScanReport) -> str:
     """Format a ScanReport as GitHub-Flavored Markdown."""
     s = report.summary
     lines: list[str] = [
-        "## 🩺 MCP Doctor Audit Summary",
+        "## Vexar-MCP Audit Summary",
         "",
         "| Health Score | Grade | Tools Audited | Est. Context Tax | Errors | Warnings | Info |",
         "| :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
