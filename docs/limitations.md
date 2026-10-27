@@ -31,6 +31,7 @@ Known sources of false positives:
 | `MCP007` | Path confinement enforced by a framework or decorator upstream |
 | `MCP009` | Test fixtures and placeholder strings shaped like real keys |
 | `MCP010` | Timeout configured on a shared session/transport object |
+| `MCP011` | `.execute()` on a non-SQL client (GraphQL, RPC, job runner) whose statement happens to contain a SQL keyword |
 | `MCP013` | `yaml.load` on data that is trusted by construction |
 
 Suppress individual findings with [`noqa` or `ignore`](usage.md#suppressing-a-finding). If a suppression keeps recurring across projects, open an issue — false-negative and false-positive tuning is in scope for the project.
@@ -41,6 +42,7 @@ The Python loader reads the AST of each file **independently**:
 
 - **No cross-module data flow.** A parameter passed through three helper modules before reaching a sink is not traced.
 - **No interprocedural taint.** Helpers that validate in a different function may not be recognised, which inflates `MCP006` / `MCP007` false positives.
+- **`MCP011` needs the interpolation at the call site.** A statement assigned to a variable first (`q = f"SELECT ... {x}"`, then `cur.execute(q)`) is not traced, so this rule under-reports rather than over-reports.
 - **No execution, no imports.** This is deliberate: scanned code cannot run during a scan. It also means dynamic constructs (`getattr`, decorators applied at runtime, factory-built tool registries, `exec`-generated handlers) are invisible.
 - **Framework coverage is pattern-based.** FastMCP, the official `mcp` SDK `@server.tool()` style, and `Tool(...)` objects are recognised. Unusual registration helpers may not be detected — a file that yields zero tools is silently skipped, so check that the tool count in the summary looks right.
 

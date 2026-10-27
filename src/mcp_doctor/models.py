@@ -45,7 +45,7 @@ class ParameterSpec:
 class CodeSink:
     """Potentially sensitive operation discovered inside a Python tool body."""
 
-    kind: str  # "shell", "ssrf", "filesystem"
+    kind: str  # "shell", "ssrf", "filesystem", "deserialization", "sql"
     call_name: str
     line: int
     uses_param: str | None = None

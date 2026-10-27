@@ -218,3 +218,60 @@ def check_hardcoded_secrets(tools: Sequence[ToolSpec], config: ScanConfig) -> li
         for tool in tools
         for literal in tool.secret_literals
     ]
+
+
+@register_rule(
+    rule_id="MCP011",
+    slug="sql-string-interpolation",
+    severity=Severity.ERROR,
+    category=Category.SECURITY,
+    summary=(
+        "Tool handler interpolates tool input into a SQL statement passed to `.execute(...)` / "
+        "`.executemany(...)`, allowing SQL injection."
+    ),
+    remediation=(
+        'Bind values instead of formatting them: `cursor.execute("SELECT * FROM users WHERE id = ?", '
+        "(user_id,))`. Identifiers that cannot be bound must come from a fixed allowlist."
+    ),
+)
+def check_sql_string_interpolation(
+    tools: Sequence[ToolSpec], config: ScanConfig
+) -> list[Diagnostic]:
+    """Report SQL statements built by interpolating a tool parameter into ``.execute()``.
+
+    The loader only records a ``sql`` sink when the first argument is an f-string,
+    ``%``/``+`` concatenation or ``.format(...)`` call that references a tool parameter and
+    reads like a SQL statement. Parameterized queries such as
+    ``cursor.execute("... WHERE id = ?", (user_id,))`` pass a plain literal and are never
+    flagged.
+
+    Args:
+        tools: Statically extracted tool definitions and their sensitive calls.
+        config: Scan configuration; rule suppression is applied by the engine.
+
+    Returns:
+        Error diagnostics for each interpolated SQL statement.
+    """
+    del config
+    return [
+        Diagnostic(
+            rule_id="MCP011",
+            rule_slug="sql-string-interpolation",
+            severity=Severity.ERROR,
+            category=Category.SECURITY,
+            message=(
+                f"Tool '{tool.name}' interpolates parameter '{sink.uses_param}' into SQL passed "
+                f"to `{sink.call_name}` (SQL injection risk)."
+            ),
+            source_file=tool.source_file,
+            line=sink.line,
+            tool_name=tool.name,
+            remediation=(
+                "Use bound parameters: pass the statement with placeholders and the values as the "
+                'second argument, e.g. `cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))`.'
+            ),
+        )
+        for tool in tools
+        for sink in tool.sinks
+        if sink.kind == "sql"
+    ]

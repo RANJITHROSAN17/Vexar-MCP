@@ -67,6 +67,41 @@ _DESERIALIZATION_CALLS = frozenset(
         "yaml.unsafe_load_all",
     }
 )
+# MCP011: DB-API / SQLAlchemy execution entry points. Matched on the method name so
+# cursors, sessions, connections and async variants are covered alike.
+_SQL_EXECUTE_METHODS = frozenset({"execute", "executemany"})
+
+# The statement must read like SQL before we call it SQL injection. Without this,
+# `graphql_client.execute(f"query {name}")` and RPC/job `.execute()` calls would be
+# reported as SQL injection false positives. Documented in docs/limitations.md.
+_SQL_KEYWORDS = (
+    "select",
+    "insert",
+    "update",
+    "delete",
+    "replace",
+    "merge",
+    "alter",
+    "drop",
+    "truncate",
+    "create",
+)
+
+# Fallback for statements whose constant fragments carry no SQL keyword (for example a
+# query assembled from a prefix variable): a database-shaped receiver is enough.
+_SQL_RECEIVER_HINTS = (
+    "cursor",
+    "conn",
+    "db",
+    "engine",
+    "session",
+    "sql",
+    "psycopg",
+    "asyncpg",
+    "sqlite",
+    "alembic",
+)
+
 _SAFE_YAML_LOADERS = frozenset(
     {
         "yaml.SafeLoader",
@@ -280,6 +315,57 @@ def _referenced_names(node: ast.AST) -> set[str]:
     return {sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name)}
 
 
+def _is_sql_execute_call(node: ast.Call) -> bool:
+    """Return True when the call is a `.execute(...)`/`.executemany(...)` method call."""
+    return isinstance(node.func, ast.Attribute) and node.func.attr in _SQL_EXECUTE_METHODS
+
+
+def _interpolated_statement(node: ast.Call) -> ast.expr | None:
+    """Return the first argument when it is built by interpolation instead of being literal.
+
+    Covers f-strings (``ast.JoinedStr``), ``%``/``+`` concatenation (``ast.BinOp``) and
+    ``"...".format(...)`` calls. A plain string literal, or a bare variable whose origin
+    is unknown, returns None: parameters cannot be proven to reach the statement.
+    """
+    if not node.args:
+        return None
+    first = node.args[0]
+    if isinstance(first, ast.JoinedStr):
+        return first
+    if isinstance(first, ast.BinOp) and isinstance(first.op, (ast.Add, ast.Mod)):
+        return first
+    if (
+        isinstance(first, ast.Call)
+        and isinstance(first.func, ast.Attribute)
+        and first.func.attr == "format"
+    ):
+        return first
+    return None
+
+
+def _statement_literal_text(node: ast.AST) -> str:
+    """Join the constant fragments of an interpolated statement for keyword sniffing."""
+    return " ".join(
+        sub.value
+        for sub in ast.walk(node)
+        if isinstance(sub, ast.Constant) and isinstance(sub.value, str)
+    )
+
+
+def _is_sql_statement(expression: ast.expr, call_qualname: str) -> bool:
+    """Decide whether an interpolated `.execute()` argument is really a SQL statement.
+
+    Reported as SQL only when the literal fragments contain a SQL keyword or the receiver
+    is database-shaped. This keeps ``graphql_client.execute(f"query {name}")`` and generic
+    job/RPC ``.execute()`` calls out of MCP011, which is an error-severity rule.
+    """
+    lowered = _statement_literal_text(expression).lower()
+    if any(re.search(rf"\b{keyword}\b", lowered) for keyword in _SQL_KEYWORDS):
+        return True
+    receiver = call_qualname.rsplit(".", 1)[0].lower()
+    return any(hint in receiver for hint in _SQL_RECEIVER_HINTS)
+
+
 def _body_has_url_validation(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     src = ast.unparse(func)
     return any(
@@ -482,6 +568,19 @@ def _extract_sinks(
                     uses_param=first_param,
                 )
             )
+        elif _is_sql_execute_call(node):
+            statement = _interpolated_statement(node)
+            if statement is not None:
+                tainted = sorted(_referenced_names(statement) & param_names)
+                if tainted and _is_sql_statement(statement, qual):
+                    sinks.append(
+                        CodeSink(
+                            kind="sql",
+                            call_name=qual,
+                            line=node.lineno,
+                            uses_param=tainted[0],
+                        )
+                    )
         elif qual in _SHELL_CALLS:
             sinks.append(
                 CodeSink(
