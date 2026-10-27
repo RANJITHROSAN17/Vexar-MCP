@@ -395,3 +395,131 @@ def test_mcp009_reports_each_distinct_literal_once(tmp_path: Path) -> None:
     assert [d.line for d in findings] == [4, 5]
     assert len(report.tools[0].secret_literals) == 2
     assert all(d.severity.value == "error" for d in findings)
+
+
+def test_sql_string_interpolation_flags_dynamic_statements(tmp_path: Path) -> None:
+    """MCP011 fires on f-string, ``%``, ``+`` and ``.format`` SQL, and only those."""
+    srv = tmp_path / "sql_server.py"
+    srv.write_text(
+        '''
+import sqlite3
+
+class MCP:
+    def tool(self, name=None):
+        return lambda f: f
+
+mcp = MCP()
+conn = sqlite3.connect("app.db")
+
+@mcp.tool()
+def lookup_fstring(user_id: str) -> str:
+    """Look up a user by id."""
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM users WHERE id = '{user_id}'")
+    return "ok"
+
+@mcp.tool()
+def lookup_percent(user_id: str) -> str:
+    """Look up a user by id with percent formatting."""
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE id = '%s'" % user_id)
+    return "ok"
+
+@mcp.tool()
+def lookup_concat(order_id: str) -> str:
+    """Append an audit row."""
+    cur = conn.cursor()
+    cur.executemany("INSERT INTO audit VALUES ('" + order_id + "')", [])
+    return "ok"
+
+@mcp.tool()
+def lookup_format(table: str) -> str:
+    """Read one row from a caller-chosen table."""
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM {t} LIMIT 1".format(t=table))
+    return "ok"
+
+@mcp.tool()
+def lookup_hint(prefix: str, user_id: str) -> str:
+    """Assemble a statement from a caller-supplied fragment."""
+    db.execute(f"{prefix} {user_id}")
+    return "ok"
+''',
+        encoding="utf-8",
+    )
+
+    report = scan_paths([srv])
+    flagged = {d.tool_name for d in report.diagnostics if d.rule_id == "MCP011"}
+    assert flagged == {
+        "lookup_fstring",
+        "lookup_percent",
+        "lookup_concat",
+        "lookup_format",
+        "lookup_hint",
+    }
+    errors = [d for d in report.diagnostics if d.rule_id == "MCP011"]
+    assert all(d.severity.value == "error" for d in errors)
+    assert all(d.rule_slug == "sql-string-interpolation" for d in errors)
+    assert any("user_id" in d.message for d in errors)
+
+
+def test_sql_parameterized_queries_and_non_sql_execute_are_not_flagged(tmp_path: Path) -> None:
+    """Parameterized SQL, literals, and non-SQL ``.execute()`` calls stay clean."""
+    srv = tmp_path / "sql_safe_server.py"
+    srv.write_text(
+        '''
+import sqlite3
+
+class MCP:
+    def tool(self, name=None):
+        return lambda f: f
+
+mcp = MCP()
+conn = sqlite3.connect("app.db")
+
+@mcp.tool()
+def lookup_parameterized(user_id: str) -> str:
+    """Look up a user with a bound parameter."""
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    return "ok"
+
+@mcp.tool()
+def lookup_named_binding(user_id: str) -> str:
+    """Look up a user with named bindings."""
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE id = :user_id", {"user_id": user_id})
+    return "ok"
+
+@mcp.tool()
+def literal_only() -> str:
+    """Return a constant count."""
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM users")
+    return "ok"
+
+@mcp.tool()
+def graphql_proxy(query_text: str) -> str:
+    """Proxy a GraphQL query through a non-SQL client."""
+    client.execute(f"query {query_text} {{ viewer {{ id }} }}")
+    return "ok"
+
+@mcp.tool()
+def opaque_statement(statement: str) -> str:
+    """Execute a statement that arrives already assembled."""
+    cur = conn.cursor()
+    cur.execute(statement)
+    return "ok"
+
+@mcp.tool()
+def no_arguments() -> str:
+    """Drive an argument-less execute call."""
+    cur = conn.cursor()
+    cur.execute()
+    return "ok"
+''',
+        encoding="utf-8",
+    )
+
+    report = scan_paths([srv])
+    assert [d for d in report.diagnostics if d.rule_id == "MCP011"] == []

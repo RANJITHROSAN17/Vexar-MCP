@@ -138,6 +138,7 @@ Eleven rules across four categories. Run `vexar-mcp rules` to list them, or `vex
 | `MCP008` | error | contract | Duplicate, generic, or non-conforming tool name |
 | `MCP009` | error | security | Hardcoded credential literal inside a tool handler (provider token prefixes, bearer headers) |
 | `MCP010` | warning | security | Outbound HTTP call with no explicit `timeout=` |
+| `MCP011` | error | security | SQL statement built by interpolating tool input into `.execute(...)` / `.executemany(...)` |
 | `MCP013` | error | security | `pickle.loads`, `yaml.load` without `SafeLoader`, and similar unsafe deserialization |
 
 Rules are static pattern and data-flow heuristics, not a proof of exploitability — [read the limitations](docs/limitations.md) before treating a finding as a confirmed vulnerability. Per-rule detail and remediation examples: [`docs/rules.md`](docs/rules.md).
@@ -275,10 +276,10 @@ The repository publishes this viewer to GitHub Pages on every push to `main`: `d
 
 | Verified signal | Value | How it is measured |
 | :--- | :--- | :--- |
-| Diagnostic rules | **11** (`MCP001`–`MCP010`, `MCP013`) | `vexar-mcp rules` against the current source |
+| Diagnostic rules | **12** (`MCP001`–`MCP011`, `MCP013`) | `vexar-mcp rules` against the current source |
 | Report formats | **5** | `docs/usage.md`, reporter modules |
-| Test suite | **151 tests passing** | `pytest` on Python 3.13 (CI covers 3.10–3.12) |
-| Statement coverage | **92.87%** | `pytest --cov=mcp_doctor` |
+| Test suite | **153 tests passing** | `pytest` on Python 3.13 (CI covers 3.10–3.12) |
+| Statement coverage | **93.05%** | `pytest --cov=mcp_doctor` |
 | Coverage gate | **85% required** | `--cov-fail-under=85` in `ci.yml` (a threshold, not a result) |
 | Quality gates | `ruff` and `mypy --strict` clean | CI matrix on Python 3.10 / 3.11 / 3.12 |
 | Runtime dependencies | **0** on Python 3.11+ | `pyproject.toml` (`tomli` only on 3.10) |

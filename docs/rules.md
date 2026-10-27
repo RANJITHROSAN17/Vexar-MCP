@@ -1,6 +1,6 @@
 # Rules
 
-All eleven built-in diagnostics. Run `vexar-mcp rules` for this list from the CLI, or `vexar-mcp rules --format json` for machine-readable output.
+All twelve built-in diagnostics. Run `vexar-mcp rules` for this list from the CLI, or `vexar-mcp rules --format json` for machine-readable output.
 
 | ID | Severity | Category | Slug |
 | :--- | :--- | :--- | :--- |
@@ -14,11 +14,12 @@ All eleven built-in diagnostics. Run `vexar-mcp rules` for this list from the CL
 | [`MCP008`](#mcp008) | error | contract | `ambiguous-or-duplicate-tool-name` |
 | [`MCP009`](#mcp009) | error | security | `hardcoded-secret-in-tool` |
 | [`MCP010`](#mcp010) | warning | security | `missing-network-timeout` |
+| [`MCP011`](#mcp011) | error | security | `sql-string-interpolation` |
 | [`MCP013`](#mcp013) | error | security | `unsafe-deserialization` |
 
 Severity affects the health score (error −15, warning −6, info −2) and the `--fail-on` gate.
 
-`MCP011` and `MCP012` are not implemented. The IDs are reserved by roadmap items and skipped so existing ignore lists and SARIF results stay stable if they land later.
+`MCP012` is not implemented. The ID is reserved by a roadmap item and skipped so existing ignore lists and SARIF results stay stable if it lands later.
 
 ---
 
@@ -172,6 +173,29 @@ if not candidate.is_relative_to(BASE_DIR):
 **Why it matters:** a slow upstream holds the agent turn open indefinitely.
 
 **Fix:** pass an explicit timeout to every outbound call.
+
+---
+
+## MCP011 — sql-string-interpolation
+
+**error** · security
+
+**Detects:** a `.execute(...)` / `.executemany(...)` call whose statement is built by interpolating a tool parameter — an f-string, `%` formatting, `+` concatenation, or `.format(...)`.
+
+```python
+cur.execute(f"SELECT * FROM users WHERE id = '{user_id}'")  # flagged
+cur.execute("SELECT * FROM users WHERE id = '%s'" % user_id)  # flagged
+cur.execute("SELECT * FROM {t} LIMIT 1".format(t=table))  # flagged
+cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))  # clean
+```
+
+**Why it matters:** database-backed MCP servers are among the most common kinds, and model-generated arguments reach the query text directly. Interpolation lets a tool argument terminate the string and append SQL — the classic injection primitive, with the agent as the delivery mechanism.
+
+**Heuristics, stated plainly:** a finding requires all three of — an interpolated first argument, a reference to a tool parameter, and a statement that either contains a SQL keyword or is executed on a database-shaped receiver (`cursor`, `conn`, `session`, `db`, `engine`, and similar). That last condition is what keeps `graphql_client.execute(f"query {q}")` and generic job/RPC `.execute()` calls out of this error-level rule.
+
+**Known gap:** the statement must be interpolated *at the call*. A query assembled into a variable on an earlier line and then passed to `.execute(sql, params)` is not followed — see [Limitations](limitations.md).
+
+**Fix:** bind values instead of formatting them, and take identifiers that cannot be bound from a fixed allowlist.
 
 ---
 
