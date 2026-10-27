@@ -13,6 +13,7 @@ from mcp_doctor.config import load_config
 from mcp_doctor.engine import scan_paths
 from mcp_doctor.models import Severity
 from mcp_doctor.reporters import (
+    render_github_annotations,
     render_json,
     render_markdown,
     render_rules_table,
@@ -38,9 +39,12 @@ def _build_parser() -> argparse.ArgumentParser:
     scan_p.add_argument("paths", nargs="*", default=["."], help="Files or directories to scan.")
     scan_p.add_argument(
         "--format",
-        choices=("terminal", "json", "sarif", "markdown"),
+        choices=("terminal", "json", "sarif", "markdown", "github"),
         default="terminal",
-        help="Output format (default: terminal).",
+        help=(
+            "Output format (default: terminal). 'github' emits Actions workflow commands "
+            "for inline Pull Request annotations."
+        ),
     )
     scan_p.add_argument(
         "--fail-on",
@@ -136,6 +140,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(render_sarif(report))
     elif args.format == "markdown":
         print(render_markdown(report))
+    elif args.format == "github":
+        print(render_github_annotations(report))
     else:
         print(render_terminal(report))
 

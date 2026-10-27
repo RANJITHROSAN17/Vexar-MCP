@@ -30,7 +30,7 @@ Every MCP server exposes two invisible failure surfaces:
 | Failure Surface | How `vexar-mcp` Handles It |
 |---|---|
 | **Security sinks + leaked keys** — `subprocess.run(shell=True)`, unvalidated `urlopen`, unconfined `open(path)`, hardcoded `ghp_` / `sk-` / `AKIA` tokens | 11 modular rules detect issues at AST level; `MCP009` (`hardcoded-secret-in-tool`, `ERROR`) stops credential leaks; never executes untrusted code |
-| **Schema / token tax** — missing descriptions, `Any` params, unbounded pagination, bloated docstrings | Token-budget calculator + schema validator + 4 reporters (terminal / JSON / SARIF / GitHub) |
+| **Schema / token tax** — missing descriptions, `Any` params, unbounded pagination, bloated docstrings | Token-budget calculator + schema validator + 5 reporters (terminal / JSON / SARIF / Markdown / GitHub Actions annotations) |
 
 **Target:** Python MCP servers (`FastMCP`, official `mcp` SDK, `@tool` decorators) + JSON manifests (OpenAI, Anthropic, `tools/list`).
 
@@ -65,9 +65,12 @@ vexar-mcp audit examples/clean_server.py
 
 # Use as reusable GitHub Action (composite)
 uses: RANJITHROSAN17/Vexar-MCP@main
+
+# Emit inline annotations on the changed PR lines (no SARIF upload required)
+vexar-mcp scan . --format github
 ```
 
-**Output formats:** terminal scorecard (`A+` → `F`, token leaderboards), JSON, SARIF v2.1.0 (GitHub Security tab), GitHub Markdown (`$GITHUB_STEP_SUMMARY`).
+**Output formats:** terminal scorecard (`A+` → `F`, token leaderboards), JSON, SARIF v2.1.0 (GitHub Security tab), GitHub Markdown (`$GITHUB_STEP_SUMMARY`), and GitHub Actions workflow commands for inline PR annotations.
 
 ---
 
@@ -79,7 +82,7 @@ uses: RANJITHROSAN17/Vexar-MCP@main
 - **JSON Loaders** (`loaders/`) — MCP `tools/list`, OpenAI manifest, Anthropic schema
 - **Rules** (`rules/`) — 11 modular diagnostics: security sinks (shell, SSRF, path traversal), `MCP009` hardcoded-secret detection (provider token prefixes, bearer credentials, sensitive assignments), schema drift (`Any`, missing descriptions), token overflow, pagination, duplicates
 - **Engine** (`engine.py`) — scan → diagnose → score (`0`–`100`) → report; fixed `SIM110` / `SIM102`
-- **Reporters** (`reporters/`) — 4 output formats (terminal / JSON / SARIF / GitHub Markdown)
+- **Reporters** (`reporters/`) — 5 output formats (terminal / JSON / SARIF / GitHub Markdown / GitHub Actions annotations)
 - **CLI** (`cli.py`) — `audit`, `init`, `--format`, `--baseline`, `--stdio`
 
 ### Enterprise Bot Stack (7 Flow Suites — All Dynamic / Live)
@@ -112,7 +115,7 @@ Parser (ast.parse — zero execution of untrusted code)
 Engine — scan → diagnose (MCP001–MCP008) → score (0–100)
     │
     ▼
-Reporters — terminal · JSON · SARIF · GitHub Markdown
+Reporters — terminal · JSON · SARIF · Markdown · Actions annotations
     │
     ▼
 Output — scorecard + token leaderboard + inline PR annotations
