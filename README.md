@@ -247,7 +247,9 @@ vexar-mcp scan examples/ --format json > assets/audit-report.json
 python -m http.server 8000    # then open http://localhost:8000/assets/dashboard.html
 ```
 
-It has explicit states for loading, empty results, missing report, malformed report, and fetch failure — and it will never display invented data as if it were a live scan. Details: [`docs/dashboard.md`](docs/dashboard.md).
+It has explicit states for loading, empty results, missing report, malformed report, and fetch failure — and it will never display invented data as if it were a live scan.
+
+The repository publishes this viewer to GitHub Pages on every push to `main`: `dashboard-deploy.yml` builds an artifact containing `index.html` (the viewer), `dashboard.html` (same file, alias), and `audit-report.json` — a real scan of `examples/` produced during the build. Details: [`docs/dashboard.md`](docs/dashboard.md).
 
 ---
 

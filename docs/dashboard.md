@@ -65,8 +65,20 @@ In every fallback the badge reads **Sample preview** (or **Invalid report**) and
 
 ## Hosting
 
-The page is designed to work when served from a conventional static host, including a subpath such as `https://user.github.io/repo/`. Because the report URL is relative (`./audit-report.json`), it resolves against whatever directory the page is served from.
+`dashboard-deploy.yml` publishes the viewer to GitHub Pages on every push to `main` that touches the viewer, the examples, or the scanner. Once Pages is enabled in repository settings, the site is served at:
 
-The repository's `dashboard-deploy.yml` workflow publishes `assets/` to GitHub Pages on push to `main`. It is only useful once Pages is enabled in repository settings and a report has been committed or generated into `assets/`. Until then, treat the dashboard as a local tool — there is no hosted instance, and this documentation does not claim one exists.
+```text
+https://ranjithrosan17.github.io/Vexar-MCP/              -> the viewer (index.html)
+https://ranjithrosan17.github.io/Vexar-MCP/dashboard.html -> same file, legacy alias
+https://ranjithrosan17.github.io/Vexar-MCP/audit-report.json -> scan of examples/, built at deploy time
+```
 
-If you publish a report publicly, remember it contains file paths and line numbers from the scanned codebase.
+Three details matter if you fork this:
+
+1. **`index.html` is required.** GitHub Pages serves `index.html` for a directory request. Publishing only `dashboard.html` leaves the site root returning a 404 with the file still reachable by its full name — which is exactly what happened before this was fixed.
+2. **The report is generated, not committed.** The workflow runs `vexar-mcp scan examples/ --format json --fail-on never` and writes the result into the artifact, so the public page shows real tool output rather than the bundled sample. It scans the repository's intentionally flawed fixtures, which is why the demo page reports a low score — it is a demo of what findings look like, not a health claim about the project.
+3. **The artifact is a directory.** `upload-pages-artifact` must point at a folder (`_site`); pointing it at a single file publishes a site with one unrooted document.
+
+Everything else stays local: `audit-report.json` is git-ignored, so a report produced on your machine never becomes a commit, and a fork's Pages site only ever shows data generated inside its own workflow.
+
+If you publish a report yourself, remember it contains file paths and line numbers from the scanned codebase.
