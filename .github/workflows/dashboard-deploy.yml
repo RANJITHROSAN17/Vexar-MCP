@@ -1,17 +1,23 @@
 name: Dashboard (GitHub Pages)
 
-# Publishes the static report viewer in assets/dashboard.html.
+# Publishes the static report viewer.
 #
-# This workflow publishes the *page*, not scan results. The dashboard reads
-# `audit-report.json` from its own directory at runtime; commit a report into
-# assets/ (or generate one in a preceding step) if you want a live-data deploy.
-# See docs/dashboard.md.
+# The published site is a directory artifact with three entries:
+#   index.html          the viewer (Pages serves this for the site root)
+#   dashboard.html      same file, kept so existing /dashboard.html links work
+#   audit-report.json   a real scan of examples/, generated here at deploy time
+#
+# That last file is what turns the page from a labelled sample into real data:
+# the viewer reads it over HTTP and reports where it came from. Nothing is
+# committed; the report is rebuilt on every deploy.
 on:
   push:
     branches: [main]
     paths:
       - "assets/dashboard.html"
-      - "assets/audit-report.json"
+      - "assets/banner.svg"
+      - "examples/**"
+      - "src/mcp_doctor/**"
       - ".github/workflows/dashboard-deploy.yml"
   workflow_dispatch:
 
@@ -33,16 +39,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Vexar-MCP
+        run: python -m pip install --quiet "$GITHUB_WORKSPACE"
+
       - name: Assemble static site
         run: |
           set -euo pipefail
-          # The Pages artifact must be a directory; serving a single HTML file
-          # would publish it at an unpredictable path.
           mkdir -p _site
-          cp -R assets/. _site/
-          # Keep Pages lean: the wiki PNGs are documentation screenshots, not
-          # dashboard assets.
-          rm -f _site/wiki_*.png
+
+          # The viewer itself. Pages serves index.html for "/", and without it the
+          # site root returns 404, so publish it under both names.
+          cp assets/dashboard.html _site/index.html
+          cp assets/dashboard.html _site/dashboard.html
+
+          # Real report data for the demo. `--fail-on never` because the example
+          # fixtures are intentionally vulnerable and this step must not fail the
+          # deploy; the findings are the point.
+          vexar-mcp scan examples/ --format json --fail-on never > _site/audit-report.json
+
+      - name: Verify artifact
+        run: |
+          set -euo pipefail
+          test -s _site/index.html
+          test -s _site/dashboard.html
+          test -s _site/audit-report.json
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path("_site/audit-report.json").read_text(encoding="utf-8"))
+          summary = report["summary"]
+          assert isinstance(summary["score"], int), "report is missing a numeric score"
+          n = len(report.get("diagnostics", []))
+          print(f"dashboard report: score={summary['score']} grade={summary['grade']} diagnostics={n}")
+          PY
 
       - uses: actions/configure-pages@v5
 
