@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
-from mcp_doctor.models import CodeSink, ParameterSpec, ToolSpec
+from mcp_doctor.models import CodeSink, ParameterSpec, SecretLiteral, ToolSpec
 from mcp_doctor.tokens import estimate_tool_tokens
 
 _NOQA_RE = re.compile(r"#\s*noqa\s*:\s*([A-Za-z0-9_,\s]+)", re.IGNORECASE)
@@ -74,6 +74,76 @@ _SAFE_YAML_LOADERS = frozenset(
         "yaml.loader.SafeLoader",
         "yaml.cyaml.CSafeLoader",
     }
+)
+
+# ---------------------------------------------------------------------------
+# MCP009: hardcoded credential extraction.
+#
+# Only high-confidence provider prefixes and literals assigned to sensitive names
+# are collected. The literal itself is never copied into ToolSpec (see the
+# SecretLiteral model), so a scan report cannot leak the credential it flags.
+# ---------------------------------------------------------------------------
+_SECRET_TOKEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("GitHub personal access token ('ghp_')", re.compile(r"ghp_[A-Za-z0-9]+")),
+    ("GitHub fine-grained token ('github_pat_')", re.compile(r"github_pat_[A-Za-z0-9_]+")),
+    ("OpenAI/Stripe-style key ('sk-')", re.compile(r"\bsk-[A-Za-z0-9_-]+")),
+    ("AWS access key ID ('AKIA')", re.compile(r"\bAKIA[0-9A-Z]+")),
+    ("Slack token ('xoxb-')", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]+")),
+    ("Google API key ('AIza')", re.compile(r"\bAIza[0-9A-Za-z_-]{10,}")),
+    ("GitLab personal access token ('glpat-')", re.compile(r"\bglpat-[A-Za-z0-9_-]+")),
+    ("Bearer credential", re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{8,}")),
+    ("PEM private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+)
+
+# Whole-value placeholders ("YOUR_API_KEY", "example", "<token>", "${TOKEN}") and
+# explicit env/secret-manager references must never be reported as leaked keys.
+_PLACEHOLDER_RE = re.compile(
+    r"(?i)(\byour\b|\byours\b|\bexample\b|\bplaceholder\b|\bdummy\b|\bchangeme\b|"
+    r"\breplace[_-]?me\b|\bredacted\b|\bsample\b|\bfake\b|\btest\b|\btodo\b|\bnone\b|"
+    r"\bnull\b|\bundefined\b|<[^>]*>|\$\{[^}]*\}|\{\{[^}]*\}\}|\{[a-z_]+\})"
+)
+_COMPACT_PLACEHOLDER_MARKERS = (
+    "yourapikey",
+    "yourkey",
+    "yoursecret",
+    "yourtoken",
+    "yourpassword",
+    "skexample",
+    "ghpexample",
+    "akiaexample",
+    "xoxbexample",
+    "bearerexample",
+    "notareal",
+    "insertkey",
+    "sometoken",
+    "testtoken",
+    "testkey",
+    "replacewith",
+    "changeme",
+    "redacted",
+    "placeholder",
+    "secretmanager",
+    "fromenv",
+    "getenv",
+    "osenviron",
+    "processenv",
+)
+_ENV_REFERENCE_RE = re.compile(
+    r"(?i)(os\.environ|os\.getenv|getenv|process\.env|environ\b|vault:|"
+    r"secretmanager|from[_-]?env|env[_-]?var)"
+)
+_SECRET_TARGET_SUFFIXES = (
+    "apikey",
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "credential",
+    "accesskey",
+    "privatekey",
+    "clientsecret",
+    "authtoken",
+    "authorization",
 )
 
 
@@ -243,6 +313,145 @@ def _body_clamps_param(func: ast.FunctionDef | ast.AsyncFunctionDef, param_name:
         if isinstance(node, ast.Compare) and param_name in _referenced_names(node):
             return True
     return False
+
+
+def _is_placeholder(value: str) -> bool:
+    """Return True for documentation placeholders, templates and env references.
+
+    Placeholder filtering is applied before a provider prefix is reported, so
+    examples such as `sk-example123` or `Bearer YOUR_API_KEY` stay clean.
+    """
+    text = value.strip()
+    if not text:
+        return True
+    compact = re.sub(r"[^a-z0-9]", "", text.lower())
+    return bool(
+        _PLACEHOLDER_RE.search(text)
+        or _ENV_REFERENCE_RE.search(text)
+        or any(marker in compact for marker in _COMPACT_PLACEHOLDER_MARKERS)
+    )
+
+
+def _looks_like_credential(value: str) -> bool:
+    """Guard against flagging config values (paths, URLs, env-var names) as secrets."""
+    text = value.strip()
+    if len(text) < 8 or _is_placeholder(text):
+        return False
+    if text.startswith(("http://", "https://", "/", "./", "os.", "$", "{", "<", "env:")):
+        return False
+    if "{" in text or "}" in text:
+        return False
+    # ALL_CAPS_WITH_UNDERSCORES is an env-var *name*, not a credential value.
+    return not ("_" in text and text.upper() == text and text.replace("_", "").isalnum())
+
+
+def _is_sensitive_target(name: str) -> bool:
+    """Match `api_key`, `client_secret`, `auth_token`, `Authorization`, etc."""
+    normalized = re.sub(r"[^a-z0-9]", "", name.lower())
+    return normalized == "key" or normalized.endswith(_SECRET_TARGET_SUFFIXES)
+
+
+def _assignment_target_name(node: ast.expr) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Subscript):
+        return _assignment_target_name(node.value)
+    return ""
+
+
+def _remember_secret_value(value: ast.expr, target: str, found: dict[int, str]) -> None:
+    if (
+        _is_sensitive_target(target)
+        and isinstance(value, ast.Constant)
+        and isinstance(value.value, str)
+    ):
+        found[id(value)] = target
+
+
+def _sensitive_value_targets(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> dict[int, str]:
+    """Map string-literal node ids to the sensitive name that receives them."""
+    found: dict[int, str] = {}
+    for statement in func.body:
+        for node in ast.walk(statement):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    _remember_secret_value(node.value, _assignment_target_name(target), found)
+            elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+                value = node.value
+                if value is not None:
+                    _remember_secret_value(value, _assignment_target_name(node.target), found)
+            elif isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg:
+                        _remember_secret_value(keyword.value, keyword.arg, found)
+            elif isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values, strict=False):
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        _remember_secret_value(value, key.value, found)
+    return found
+
+
+def _docstring_constants(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[int]:
+    """Docstrings often document auth schemes; they are not credential literals."""
+    ids: set[int] = set()
+    for candidate in ast.walk(func):
+        if not isinstance(candidate, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if not candidate.body:
+            continue
+        first = candidate.body[0]
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            ids.add(id(first.value))
+    return ids
+
+
+def _extract_secret_literals(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[SecretLiteral, ...]:
+    """Collect high-confidence hardcoded credentials from a decorated tool body.
+
+    Two signals are used: known provider token prefixes anywhere in a string
+    constant, and string literals handed to a secret-ish name. Decorators and
+    docstrings are excluded because they commonly contain documentation examples.
+    """
+    docstrings = _docstring_constants(func)
+    targets = _sensitive_value_targets(func)
+    findings: list[SecretLiteral] = []
+    seen: set[tuple[int, str, str]] = set()
+
+    for statement in func.body:
+        for node in ast.walk(statement):
+            if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                continue
+            if id(node) in docstrings:
+                continue
+            value = node.value
+            label = next(
+                (name for name, regex in _SECRET_TOKEN_PATTERNS if regex.search(value)), ""
+            )
+            if label and _is_placeholder(value):
+                label = ""
+            target = targets.get(id(node), "")
+            if not label:
+                if not target or not _looks_like_credential(value):
+                    continue
+                label = "credential-like string literal"
+            key = (node.lineno, label, target)
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append(SecretLiteral(pattern=label, target=target, line=node.lineno))
+
+    findings.sort(key=lambda item: (item.line, item.pattern, item.target))
+    return tuple(findings)
 
 
 def _extract_sinks(
@@ -532,6 +741,8 @@ def load_python_file(path: Path) -> list[ToolSpec]:
                     )
 
             sinks = _extract_sinks(node, user_param_names, module_aliases)
+            # MCP009: scan the same tool body for hardcoded credential literals.
+            secret_literals = _extract_secret_literals(node)
             end_lineno = getattr(node, "end_lineno", node.lineno) or node.lineno
             suppressed = _extract_suppressions(lines, node.lineno, end_lineno)
             param_tuple = tuple(params)
@@ -545,6 +756,7 @@ def load_python_file(path: Path) -> list[ToolSpec]:
                     line=node.lineno,
                     parameters=param_tuple,
                     sinks=sinks,
+                    secret_literals=secret_literals,
                     suppressed_rules=suppressed,
                     estimated_tokens=est_tokens,
                 )

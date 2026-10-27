@@ -213,3 +213,185 @@ def suppressed(data):  # noqa: MCP013
     report = scan_paths([source])
     findings = [d for d in report.diagnostics if d.rule_id == "MCP013"]
     assert [(d.tool_name, d.line) for d in findings] == [("unsafe", 5)]
+
+
+# ---------------------------------------------------------------------------
+# MCP009 — hardcoded-secret-in-tool (issue #1)
+# ---------------------------------------------------------------------------
+def _write_secret_server(tmp_path: Path, body: str, filename: str = "secret_server.py") -> Path:
+    """Write a one-tool server; `body` lines start on source line 4."""
+    source = tmp_path / filename
+    source.write_text(
+        "@mcp.tool()\n"
+        "def call_api(query: str) -> str:\n"
+        '    """Call an upstream API for the supplied query."""\n' + body + "\n",
+        encoding="utf-8",
+    )
+    return source
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "ghp_A1b2C3d4E5f6G7h8I9j0",
+        "ghp_VaUlT9x8Y7z6Q5w4R3t2",  # "vault" in a real key must not be treated as a reference
+        "github_pat_11ABCDEFG0abcdefghijk",
+        "sk-live-9f8e7d6c5b4a3210",
+        "sk-a1",  # short keys still match a distinctive provider prefix
+        "AKIAIOSFODNN7Q7Z4KLQ",
+        "xoxb-1234567890-abcdefghijk",
+        "AIzaSyD-1234567890abcdefghijklmnopqrstuv",
+        "glpat-AbCdEfGh12345678",
+        "Bearer 9f8e7d6c5b4a3210",
+        "-----BEGIN RSA PRIVATE KEY-----",
+    ],
+)
+def test_mcp009_detects_known_token_prefixes(tmp_path: Path, secret: str) -> None:
+    from mcp_doctor.models import Category, Severity
+
+    source = _write_secret_server(tmp_path, f'    api_key = "{secret}"\n    return query')
+    report = scan_paths([source])
+
+    findings = [d for d in report.diagnostics if d.rule_id == "MCP009"]
+    assert len(findings) == 1
+    diagnostic = findings[0]
+    assert diagnostic.rule_slug == "hardcoded-secret-in-tool"
+    assert diagnostic.severity is Severity.ERROR
+    assert diagnostic.category is Category.SECURITY
+    assert diagnostic.line == 4
+    assert diagnostic.tool_name == "call_api"
+    assert diagnostic.source_file == str(source)
+    # Reports must never become a second copy of the leaked credential.
+    assert secret not in diagnostic.message
+    assert "`api_key`" in diagnostic.message
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        'api_key = "YOUR_API_KEY"',
+        'api_key = "example"',
+        'api_key = "sk-example123"',
+        'headers = {"Authorization": "Bearer <token>"}',
+        'api_key = ""',
+        'api_key = os.environ["OPENAI_API_KEY"]',
+        'api_key = os.getenv("MY_SECRET_NAME", "")',
+        'api_key = "${OPENAI_API_KEY}"',
+        'api_key = "OPENAI_API_KEY"',
+        'token = "Bearer " + os.environ["TOKEN"]',
+        "api_key = None",
+    ],
+)
+def test_mcp009_ignores_placeholders_and_env_lookups(tmp_path: Path, statement: str) -> None:
+    source = _write_secret_server(tmp_path, f"    {statement}\n    return query")
+    report = scan_paths([source])
+    assert not [d for d in report.diagnostics if d.rule_id == "MCP009"]
+
+
+@pytest.mark.parametrize(
+    "statement, target",
+    [
+        ('api_key = "aB3dE5gH7jK9mN1"', "api_key"),
+        ('client_secret: str = "9z8y7x6w5v4u3t2"', "client_secret"),
+        ('config = {"auth_token": "q1w2e3r4t5y6u7"}', "auth_token"),
+        ('client = Client(password="hunter2longpass")', "password"),
+        ('self.api_key = "abc123XYZ789def"', "api_key"),
+    ],
+)
+def test_mcp009_detects_sensitive_string_assignments(
+    tmp_path: Path, statement: str, target: str
+) -> None:
+    source = _write_secret_server(tmp_path, f"    {statement}\n    return query")
+    report = scan_paths([source])
+    findings = [d for d in report.diagnostics if d.rule_id == "MCP009"]
+    assert [(d.line, d.tool_name) for d in findings] == [(4, "call_api")]
+    assert f"`{target}`" in findings[0].message
+
+
+def test_mcp009_scopes_detection_to_tool_bodies_and_skips_docstrings(tmp_path: Path) -> None:
+    source = tmp_path / "scoped_server.py"
+    source.write_text(
+        '''
+MODULE_KEY = "sk-live-ABCDEF1234567890"  # module scope -> outside a tool handler
+
+
+def helper():
+    """Docs may mention sk-example without being a credential."""
+    return "ghp_ZZZZ9999AAAA"  # plain function -> outside a tool handler
+
+
+@mcp.tool()
+def call_api(query: str) -> str:
+    """Docs may show sk-DOCS123456 here without triggering MCP009."""
+    return query
+''',
+        encoding="utf-8",
+    )
+    report = scan_paths([source])
+    assert not [d for d in report.diagnostics if d.rule_id == "MCP009"]
+
+
+def test_mcp009_respects_inline_noqa_suppression(tmp_path: Path) -> None:
+    source = tmp_path / "suppressed_server.py"
+    source.write_text(
+        '''@mcp.tool()
+def call_api(query: str) -> str:  # noqa: MCP009
+    """Call an upstream API."""
+    api_key = "ghp_A1b2C3d4E5f6G7h8I9j0"
+    return query
+''',
+        encoding="utf-8",
+    )
+    report = scan_paths([source])
+    # The loader still records the literal; the engine suppresses its diagnostic.
+    assert len(report.tools[0].secret_literals) == 1
+    assert not [d for d in report.diagnostics if d.rule_id == "MCP009"]
+
+
+def test_mcp009_toolspec_never_stores_the_raw_secret(tmp_path: Path) -> None:
+    secret = "sk-live-NEVERSTORE1234567890"
+    source = _write_secret_server(tmp_path, f'    api_key = "{secret}"\n    return query')
+    literals = scan_paths([source]).tools[0].secret_literals
+    assert len(literals) == 1
+    assert secret not in repr(literals)
+    assert literals[0].line == 4
+    assert literals[0].target == "api_key"
+
+
+def test_mcp009_is_registered_once_as_error_security_rule() -> None:
+    from mcp_doctor.models import Category, Severity
+    from mcp_doctor.rules.base import get_all_rules
+
+    matches = [rule for rule in get_all_rules() if rule.rule_id == "MCP009"]
+    assert len(matches) == 1
+    assert matches[0].slug == "hardcoded-secret-in-tool"
+    assert matches[0].severity is Severity.ERROR
+    assert matches[0].category is Category.SECURITY
+
+
+def test_mcp009_ignores_documentation_examples_in_decorators(tmp_path: Path) -> None:
+    source = tmp_path / "decorator_server.py"
+    source.write_text(
+        '''@mcp.tool(description="Pass a token such as sk-DOCS123456 to authenticate")
+def call_api(query: str) -> str:
+    """Call an upstream API for the supplied query."""
+    return query
+''',
+        encoding="utf-8",
+    )
+    report = scan_paths([source])
+    assert not [d for d in report.diagnostics if d.rule_id == "MCP009"]
+
+
+def test_mcp009_reports_each_distinct_literal_once(tmp_path: Path) -> None:
+    source = _write_secret_server(
+        tmp_path,
+        '    api_key = "ghp_A1b2C3d4E5f6G7h8I9j0"\n'
+        '    headers = {"Authorization": "Bearer 9f8e7d6c5b4a3210"}\n'
+        "    return query",
+    )
+    report = scan_paths([source])
+    findings = [d for d in report.diagnostics if d.rule_id == "MCP009"]
+    assert [d.line for d in findings] == [4, 5]
+    assert len(report.tools[0].secret_literals) == 2
+    assert all(d.severity.value == "error" for d in findings)

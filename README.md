@@ -29,7 +29,7 @@ Every MCP server exposes two invisible failure surfaces:
 
 | Failure Surface | How `vexar-mcp` Handles It |
 |---|---|
-| **Security sinks** — `subprocess.run(shell=True)`, unvalidated `urlopen`, unconfined `open(path)` | 8 modular rules (`MCP001`–`MCP008`) detect at AST level; never executes untrusted code |
+| **Security sinks + leaked keys** — `subprocess.run(shell=True)`, unvalidated `urlopen`, unconfined `open(path)`, hardcoded `ghp_` / `sk-` / `AKIA` tokens | 11 modular rules detect issues at AST level; `MCP009` (`hardcoded-secret-in-tool`, `ERROR`) stops credential leaks; never executes untrusted code |
 | **Schema / token tax** — missing descriptions, `Any` params, unbounded pagination, bloated docstrings | Token-budget calculator + schema validator + 4 reporters (terminal / JSON / SARIF / GitHub) |
 
 **Target:** Python MCP servers (`FastMCP`, official `mcp` SDK, `@tool` decorators) + JSON manifests (OpenAI, Anthropic, `tools/list`).
@@ -77,7 +77,7 @@ uses: RANJITHROSAN17/Vexar-MCP@main
 
 - **AST Parser** (`python_ast.py`) — `ast.parse` only; never executes untrusted code
 - **JSON Loaders** (`loaders/`) — MCP `tools/list`, OpenAI manifest, Anthropic schema
-- **Rules** (`rules/`) — 8 modular diagnostics (`MCP001`–`MCP008`): security sinks (shell, SSRF, path traversal), schema drift (`Any`, missing descriptions), token overflow, pagination, duplicates
+- **Rules** (`rules/`) — 11 modular diagnostics: security sinks (shell, SSRF, path traversal), `MCP009` hardcoded-secret detection (provider token prefixes, bearer credentials, sensitive assignments), schema drift (`Any`, missing descriptions), token overflow, pagination, duplicates
 - **Engine** (`engine.py`) — scan → diagnose → score (`0`–`100`) → report; fixed `SIM110` / `SIM102`
 - **Reporters** (`reporters/`) — 4 output formats (terminal / JSON / SARIF / GitHub Markdown)
 - **CLI** (`cli.py`) — `audit`, `init`, `--format`, `--baseline`, `--stdio`

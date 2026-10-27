@@ -54,6 +54,20 @@ class CodeSink:
 
 
 @dataclass(frozen=True)
+class SecretLiteral:
+    """Metadata about a hardcoded credential literal found in a Python tool body.
+
+    MCP009 keeps only the *shape* of the finding (matched pattern, receiving name,
+    source line). The raw secret value is deliberately never stored, so diagnostics,
+    JSON reports and SARIF uploads cannot become a second copy of the leaked key.
+    """
+
+    pattern: str
+    target: str
+    line: int
+
+
+@dataclass(frozen=True)
 class ToolSpec:
     """Normalized representation of an MCP or AI agent tool definition."""
 
@@ -63,6 +77,8 @@ class ToolSpec:
     line: int
     parameters: tuple[ParameterSpec, ...] = ()
     sinks: tuple[CodeSink, ...] = ()
+    # MCP009: credential literals extracted from a Python tool body; empty for other loaders.
+    secret_literals: tuple[SecretLiteral, ...] = ()
     suppressed_rules: frozenset[str] = field(default_factory=frozenset)
     raw_schema: dict[str, Any] = field(default_factory=dict)
     estimated_tokens: int = 0
