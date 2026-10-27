@@ -1,4 +1,4 @@
-"""Security static-analysis rules for MCP server tool handlers (MCP005, MCP006, MCP007)."""
+"""Security static-analysis rules (MCP005-MCP007, MCP009, MCP010, MCP013)."""
 
 from __future__ import annotations
 
@@ -175,4 +175,46 @@ def check_unsafe_deserialization(tools: Sequence[ToolSpec], config: ScanConfig) 
         for tool in tools
         for sink in tool.sinks
         if sink.kind == "deserialization"
+    ]
+
+
+@register_rule(
+    rule_id="MCP009",
+    slug="hardcoded-secret-in-tool",
+    severity=Severity.ERROR,
+    category=Category.SECURITY,
+    summary="Tool handler embeds a hardcoded API key, token, or bearer secret in a string literal.",
+    remediation="Load credentials from `os.environ` or a secret manager at runtime; rotate any exposed key.",
+)
+def check_hardcoded_secrets(tools: Sequence[ToolSpec], config: ScanConfig) -> list[Diagnostic]:
+    """Report high-confidence credential literals collected from Python tool bodies.
+
+    Args:
+        tools: Statically extracted tool definitions and their secret literals.
+        config: Scan configuration; rule suppression is applied by the engine.
+
+    Returns:
+        Error diagnostics for every hardcoded credential found in a tool handler.
+    """
+    del config
+    # ToolSpec.secret_literals stores pattern/target metadata only. Never echo the
+    # raw value here: diagnostic text is serialized to JSON, Markdown and SARIF.
+    return [
+        Diagnostic(
+            rule_id="MCP009",
+            rule_slug="hardcoded-secret-in-tool",
+            severity=Severity.ERROR,
+            category=Category.SECURITY,
+            message=(
+                f"Tool '{tool.name}' hardcodes a credential ({literal.pattern})"
+                + (f" in `{literal.target}`" if literal.target else "")
+                + f" on line {literal.line}."
+            ),
+            source_file=tool.source_file,
+            line=literal.line,
+            tool_name=tool.name,
+            remediation="Read the value from `os.environ` / a secret manager and rotate the exposed key.",
+        )
+        for tool in tools
+        for literal in tool.secret_literals
     ]
