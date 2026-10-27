@@ -130,7 +130,7 @@
         "type/security"
       ],
       "summary": "Detect hardcoded credentials (e.g., `sk-...`, `ghp_...`, `AKIA...`, `Bearer ...`, or assignments to `api_key` / `secret` string literals) inside `@mcp.tool()` functions.",
-      "motivation": "Developers prototyping MCP servers frequently paste API keys directly into tool modules before publishing. Catching high-confidence secret patterns in `mcp-doctor scan` prevents accidental credential leaks.",
+      "motivation": "Developers prototyping MCP servers frequently paste API keys directly into tool modules before publishing. Catching high-confidence secret patterns in `vexar-mcp scan` prevents accidental credential leaks.",
       "files": [
         "src/mcp_doctor/loaders/python_ast.py",
         "src/mcp_doctor/rules/security_rules.py",
@@ -204,7 +204,7 @@
         "area/reporters",
         "type/feature"
       ],
-      "summary": "Add a `--format github` output option to `mcp-doctor scan` that emits GitHub Actions workflow commands (`::error`, `::warning`, `::notice`).",
+      "summary": "Add a `--format github` output option to `vexar-mcp scan` that emits GitHub Actions workflow commands (`::error`, `::warning`, `::notice`).",
       "motivation": "Emitting `::error file=server.py,line=24,title=MCP005 (dangerous-shell-execution)::...` lets GitHub render inline annotations directly on changed lines in Pull Request diffs without requiring GitHub Advanced Security / SARIF upload.",
       "files": [
         "src/mcp_doctor/reporters/github_actions.py",
@@ -215,7 +215,7 @@
       "acceptance_criteria": [
         "Implement `render_github_annotations(report: ScanReport) -> str` mapping `ERROR -> ::error`, `WARNING -> ::warning`, `INFO -> ::notice`.",
         "Properly escape `%`, `\\r`, and `\\n` in workflow command messages per GitHub Actions spec.",
-        "Wire `--format github` into `mcp-doctor scan` CLI choices.",
+        "Wire `--format github` into `vexar-mcp scan` CLI choices.",
         "Add CLI tests verifying exact annotation lines."
       ]
     },
@@ -255,7 +255,7 @@
         "type/feature"
       ],
       "summary": "Support scanning `.ts` and `.js` MCP servers built with `@modelcontextprotocol/sdk` (`server.tool(name, description, zodSchema, handler)` and `registerTool(...)`).",
-      "motivation": "Roughly half of public MCP servers are written in TypeScript. Supporting `.ts`/`.js` files without requiring a Node runtime makes `mcp-doctor` a universal cross-language MCP auditor.",
+      "motivation": "Roughly half of public MCP servers are written in TypeScript. Supporting `.ts`/`.js` files without requiring a Node runtime makes `vexar-mcp` a universal cross-language MCP auditor.",
       "files": [
         "src/mcp_doctor/loaders/typescript_loader.py",
         "src/mcp_doctor/engine.py",
@@ -270,7 +270,7 @@
     },
     {
       "id": "RM-007",
-      "title": "feat(cli): add `mcp-doctor init` command to scaffold `.mcp-doctor.toml` and CI workflow",
+      "title": "feat(cli): add `vexar-mcp init` command to scaffold `vexar-mcp.toml` and CI workflow",
       "labels": [
         "help wanted",
         "roadmap",
@@ -278,16 +278,16 @@
         "area/cli",
         "type/feature"
       ],
-      "summary": "Add an `mcp-doctor init [--github-action]` subcommand that generates a commented `.mcp-doctor.toml` config file and optional `.github/workflows/mcp-doctor.yml`.",
-      "motivation": "One-command onboarding drastically lowers friction for maintainers adopting `mcp-doctor` in existing MCP server repositories.",
+      "summary": "Add an `vexar-mcp init [--github-action]` subcommand that generates a commented `vexar-mcp.toml` config file and optional `.github/workflows/mcp-doctor.yml`.",
+      "motivation": "One-command onboarding drastically lowers friction for maintainers adopting `vexar-mcp` in existing MCP server repositories.",
       "files": [
         "src/mcp_doctor/cli.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
-        "Create `.mcp-doctor.toml` with documented defaults (`max-tool-tokens`, `max-server-tokens`, `ignore`, `exclude`).",
+        "Create `vexar-mcp.toml` with documented defaults (`max-tool-tokens`, `max-server-tokens`, `ignore`, `exclude`).",
         "Refuse to overwrite existing files unless `--force` is passed.",
-        "When `--github-action` is passed, write `.github/workflows/mcp-doctor.yml` referencing `RANJITHROSAN17/mcp-doctor@main`.",
+        "When `--github-action` is passed, write `.github/workflows/mcp-doctor.yml` referencing `RANJITHROSAN17/Vexar-MCP@main`.",
         "Add unit tests covering fresh creation, existing-file protection, and `--force`."
       ]
     },
@@ -339,7 +339,7 @@
     },
     {
       "id": "RM-010",
-      "title": "feat(cli): add `mcp-doctor inspect --stdio <cmd>` live MCP server introspection",
+      "title": "feat(cli): add `vexar-mcp inspect --stdio <cmd>` live MCP server introspection",
       "labels": [
         "help wanted",
         "roadmap",
@@ -372,7 +372,7 @@
         "type/feature"
       ],
       "summary": "Generate a zero-external-asset HTML dashboard (`--format html`) displaying the health grade, per-tool token usage bars, and filterable diagnostics.",
-      "motivation": "Teams running `mcp-doctor` in CI artifacts want a single shareable HTML report with zero CDN dependencies.",
+      "motivation": "Teams running `vexar-mcp` in CI artifacts want a single shareable HTML report with zero CDN dependencies.",
       "files": [
         "src/mcp_doctor/reporters/html_reporter.py",
         "src/mcp_doctor/cli.py",
@@ -396,7 +396,7 @@
         "type/feature"
       ],
       "summary": "Allow generating and passing a baseline JSON snapshot so CI only fails on newly introduced findings.",
-      "motivation": "Large existing MCP servers (50+ tools) need a way to turn on `mcp-doctor` in CI immediately without fixing every historical warning on day one.",
+      "motivation": "Large existing MCP servers (50+ tools) need a way to turn on `vexar-mcp` in CI immediately without fixing every historical warning on day one.",
       "files": [
         "src/mcp_doctor/cli.py",
         "src/mcp_doctor/engine.py",
@@ -555,7 +555,7 @@
       "status": "queued",
       "priority": "medium",
       "linked_issue": null,
-      "title": "feat(cli): add mcp-doctor simulate --model cost benchmark",
+      "title": "feat(cli): add vexar-mcp simulate --model cost benchmark",
       "labels": [
         "help wanted",
         "roadmap",
@@ -563,7 +563,7 @@
         "area/cli",
         "type/feature"
       ],
-      "summary": "Integrate model-specific token-cost estimates into the mcp-doctor simulate command.",
+      "summary": "Integrate model-specific token-cost estimates into the vexar-mcp simulate command.",
       "motivation": "Operators need transparent estimates of tool-schema context costs.",
       "files": [
         "src/mcp_doctor/cli_simulate.py",

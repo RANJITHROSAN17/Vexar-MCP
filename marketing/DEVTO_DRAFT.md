@@ -1,38 +1,58 @@
 ---
-title: "Building an Enterprise-Grade MCP Security Scanner with Auto-Bots"
-published: true
-description: "How I built mcp-doctor — a zero-dependency static analyzer for MCP servers with 7 live bot flows, 100% CI health, and contributor automation."
+title: "Static analysis for MCP servers: finding risky patterns before they ship"
+published: false
+description: "How Vexar-MCP checks MCP servers for dangerous Python patterns, schema drift, and context-token cost — without executing the code it inspects."
 tags: python, mcp, ai, open-source, github-actions
 ---
 
-# Building mcp-doctor: From Zero to Enterprise Bot Stack
+> **Draft.** Not published. Re-verify every number below against the target commit before posting.
 
-## The Problem
-MCP servers expose security sinks (`shell=True`, SSRF, unconfined paths) and schema drift that standard linters miss. Existing tools either execute untrusted code or ignore AI-agent-specific patterns.
+# Vexar-MCP: static analysis for MCP servers
 
-## The Solution: mcp-doctor
-- **AST-only analysis** (`ast.parse`) — never runs untrusted code.
-- **8 rules** (`MCP001`–`MCP009`) — security + schema + token budget.
-- **4 reporters** — terminal, JSON, SARIF, GitHub Markdown.
-- **Enterprise bot stack** — 11 workflows governing PRs, roadmap, releases, and contributor onboarding.
+## The problem
 
-## What's New (This Upgrade)
-- `MCP009`: Protocol / unbounded pagination detection (Feature 1 from audit)
-- `simulate --model`: Token-cost benchmark framework (Feature 2)
-- Interactive dashboard (`assets/dashboard.html`) with live audit fetch
-- AI Controller Prompt (`.github/prompts/AGENTS.md`) for autonomous improvement
+MCP servers hand a model a set of tools and the authority to call them. Two failure surfaces follow:
 
-## How the Bot Stack Works
-Only 3 notification sources: your merge approval, review failure (only if blocked), weekly issue-raise. No spam.
+1. **Tool handlers reach privileged operations.** `subprocess.run(cmd, shell=True)`, an unvalidated `urlopen`, a path built from model input.
+2. **Tool definitions are expensive and vague.** Every description and schema is re-sent on every turn, and a tool called `run` with an untyped `Any` parameter invites the model to guess.
 
-## Metrics
-- 90.77% pytest coverage (`--cov-fail-under=85`)
-- 0 `ruff` / `mypy` errors across 21 files
-- 100% GitHub Community Health
-- 8 contributor issues open (+ 15 queued)
+Standard linters do not model these patterns, and dynamic scanners have to run the server — which is exactly what you do not want to do with untrusted code in CI.
 
-## Try It
-```bash
-pip install git+https://github.com/RANJITHROSAN17/mcp-doctor.git@main
-mcp-doctor audit examples/clean_server.py
+## The approach
+
+Vexar-MCP parses Python with `ast.parse` and reads JSON manifests with the standard library. The scanned file is never imported, so a scan cannot execute attacker-controlled code. Analysis is offline and has no runtime dependencies on Python 3.11+.
+
+Eleven rules map to the two surfaces:
+
+- **Security:** shell execution, SSRF sinks, unconfined filesystem access, hardcoded credentials, missing network timeouts, unsafe deserialization.
+- **Contract and schema:** missing tool descriptions, generic or duplicate names, untyped parameters, unbounded pagination.
+- **Tokens:** per-tool context budget.
+
+## What you get back
+
+Five output formats from the same report object: terminal scorecard, JSON, SARIF v2.1.0, GitHub Markdown for the job summary, and GitHub Actions workflow commands for inline PR annotations.
+
+```console
+$ vexar-mcp scan examples/vulnerable_server.py
+==============================================================================
+Vexar-MCP  |  Health Score: 8/100 (F)  |  Tools: 2 across 1 file(s)
+Context Footprint: ~105 tokens  |  Errors: 4  Warnings: 5  Info: 1
+==============================================================================
+
+[ERROR] MCP005 (dangerous-shell-execution) at examples/vulnerable_server.py:25 [run]
+        Tool 'run' invokes dangerous execution sink `subprocess.run(shell=True)` with parameter 'cmd'.
+        Fix: Use `subprocess.run([cmd, arg], shell=False, check=True)` with validated arguments.
 ```
+
+## What it deliberately does not do
+
+It is not a security review. It does not trace data flow across modules, it cannot see tools registered dynamically at runtime, and its token counts are a fast offline estimate rather than a tokenizer round-trip. False positives happen; every finding is actionable and suppressible.
+
+## Try it
+
+```bash
+pip install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main"
+vexar-mcp scan path/to/your_mcp_server
+```
+
+Repository: https://github.com/RANJITHROSAN17/Vexar-MCP

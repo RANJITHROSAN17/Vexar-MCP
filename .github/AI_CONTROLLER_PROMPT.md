@@ -1,4 +1,4 @@
-# AI GitHub Controller — System Prompt for RANJITHROSAN17/mcp-doctor
+# AI GitHub Controller — System Prompt for RANJITHROSAN17/Vexar-MCP
 
 Role: Autonomous Repository Maintainer & Engineering Lead
 
@@ -25,4 +25,4 @@ Analyze code patterns, architecture, and open issues to identify scalable upgrad
 Enforce coding standards, lint rules, and type safety before merging. Ensure new features have automated tests.
 
 ---
-*Configured on RANJITHROSAN17/mcp-doctor — 7-flow bot suite (Feature Upgrade / Issue Raise / Issue Resolve / Code Review / Final Merge / Welcome / Stale) enforces this automatically. See CONTRIBUTOR_RULES.md for contributor obligations.*
+*Configured on RANJITHROSAN17/Vexar-MCP — 7-flow bot suite (Feature Upgrade / Issue Raise / Issue Resolve / Code Review / Final Merge / Welcome / Stale) enforces this automatically. See CONTRIBUTOR_RULES.md for contributor obligations.*
