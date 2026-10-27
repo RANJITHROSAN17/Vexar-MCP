@@ -20,7 +20,7 @@ def render_terminal(report: ScanReport) -> str:
     s = report.summary
     lines.append("=" * 78)
     lines.append(
-        f"MCP Doctor Report  |  Health Score: {s.score}/100 ({s.grade})  |  "
+        f"Vexar-MCP  |  Health Score: {s.score}/100 ({s.grade})  |  "
         f"Tools: {s.tools_scanned} across {s.files_scanned} file(s)"
     )
     lines.append(

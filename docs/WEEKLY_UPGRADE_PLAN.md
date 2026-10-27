@@ -1,4 +1,6 @@
-# mcp-doctor Weekly Upgrade Plan — 90-Day Roadmap (Automated)
+# Historical: weekly upgrade plan (2025 bot-driven roadmap)
+
+> **Status: historical.** This document records an early 90-day automation plan and is kept for context only. Some items are shipped (for example the `--format github` reporter, rules `MCP010` and `MCP013`, and the TypeScript loader); others remain queued in [`.github/roadmap.json`](../.github/roadmap.json). Commands now use the `vexar-mcp` executable.
 
 Source: audit comparison against leading MCP/security repos + user request.
 Method: Bot-driven (Feature Upgrade Bot + Issue Curator Bot + Code Review Bot).

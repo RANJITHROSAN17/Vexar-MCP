@@ -1,9 +1,9 @@
 # 4-File Replication Guide — Apply To Any RANJITHROSAN17 Repo For Top-Tier Governance
 
-## Method (No Duplicate Bot Overhead — Uses `mcp-doctor` Source)
+## Method (No Duplicate Bot Overhead — Uses Vexar-MCP Source)
 
 Instead of copying all 6 workflow files into every repo (creates noise + maintenance), 
-use this **4-file minimal enforceable layer** that references `mcp-doctor`'s bot logic.
+use this **4-file minimal enforceable layer** that references Vexar-MCP's bot logic.
 
 ---
 
@@ -28,7 +28,7 @@ README.md @RANJITHROSAN17
 
 ## File 2: `.github/rulesets/contributor-enforcement.json` (Required — hard enforcement)
 
-Copy from `mcp-doctor/.github/rulesets/contributor-enforcement.json`. Key settings:
+Copy from `Vexar-MCP/.github/rulesets/contributor-enforcement.json`. Key settings:
 - `restrict-updates`: `main` protected
 - `required-linear-history`: yes
 - `pull-request`: 1 approving review, dismiss stale reviews on push, require code owner review
@@ -65,7 +65,7 @@ Effect: **Maximum 4 PRs per month total** (2 action groups + 2 python groups), n
 
 ## File 4: `.github/workflows/tenant-bot.yml` (NEW — single entry-point bot — only 3 notifications)
 
-This replaces `welcome-bot.yml` + `stale.yml` + separate `pr-governance.yml` + `roadmap-issue-bot.yml` for repos that don't need full `mcp-doctor` source.
+This replaces `welcome-bot.yml` + `stale.yml` + separate `pr-governance.yml` + `roadmap-issue-bot.yml` for repos that don't need the full Vexar-MCP source.
 
 ```yaml
 name: Tenant Bot — Governance + Curator (3-notification max)
@@ -79,9 +79,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply PR Governance (from mcp-doctor source)
+      - name: Apply PR Governance (from Vexar-MCP source)
         run: |
-          # Reference mcp-doctor bot logic — copy only the LABEL + CHECK logic
+          # Reference Vexar-MCP bot logic — copy only the LABEL + CHECK logic
           # No new notifications unless PR fails rules
           echo "Checking conventional-commit + labels..."
       - name: Replenish contributor issues (from .github/roadmap.json if present)
@@ -105,17 +105,17 @@ jobs:
 **Why this is better:**
 - 1 workflow file instead of 6 → less maintenance, less CI minutes
 - Only 1 bot sends notifications per event (merge / PR edit / Monday check)
-- References `mcp-doctor` rules via copy-paste of 20-line logic blocks rather than duplicating full source
+- References Vexar-MCP rules via copy-paste of 20-line logic blocks rather than duplicating full source
 
 ---
 
 ## Application Order
 
-For each of your 11 repos (`dsa-mastery-plan-2026`, `GroundingDino`, `career-forge`, `cardiolens-3d-risk`, `mern-frontend`, `musicgenre`, `linear-regression-machine-learning`, `rock-paper-scissors`, `yolov3`, `RANJITHROSAN17`, `mcp-doctor`):
+For each of your 11 repos (`dsa-mastery-plan-2026`, `GroundingDino`, `career-forge`, `cardiolens-3d-risk`, `mern-frontend`, `musicgenre`, `linear-regression-machine-learning`, `rock-paper-scissors`, `yolov3`, `RANJITHROSAN17`, `Vexar-MCP`):
 
 1. Add `.github/CODEOWNERS`
 2. Import `.github/rulesets/contributor-enforcement.json`
 3. Replace existing `.github/dependabot.yml` with grouped version above
-4. Add `.github/workflows/tenant-bot.yml` (or keep `mcp-doctor`'s full 3-bot set for the flagship only)
-5. Add `CONTRIBUTOR_RULES.md` at repo root (copy from `mcp-doctor`)
+4. Add `.github/workflows/tenant-bot.yml` (or keep Vexar-MCP's full 3-bot set for the flagship only)
+5. Add `CONTRIBUTOR_RULES.md` at repo root (copy from `Vexar-MCP`)
 6. Verify with one PR — bot should label + enforce + stay silent on pass

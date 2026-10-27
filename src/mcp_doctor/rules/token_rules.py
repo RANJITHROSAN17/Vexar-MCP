@@ -14,7 +14,7 @@ from mcp_doctor.rules.base import register_rule
     severity=Severity.WARNING,
     category=Category.TOKENS,
     summary="Tool definition exceeds per-tool token budget, inflating system prompt cost on every turn.",
-    remediation="Trim verbose examples/prose in tool description or adjust `max-tool-tokens` in `.mcp-doctor.toml`.",
+    remediation="Trim verbose examples/prose in tool description or adjust `max-tool-tokens` in `vexar-mcp.toml`.",
 )
 def check_excessive_tokens(tools: Sequence[ToolSpec], config: ScanConfig) -> list[Diagnostic]:
     out: list[Diagnostic] = []

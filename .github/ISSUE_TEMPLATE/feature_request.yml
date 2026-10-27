@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         ### Value Proposition
-        Why does this feature matter for mcp-doctor users? What failure surface does it address?
+        Why does this feature matter for Vexar-MCP users? What failure surface does it address?
 
   - type: textarea
     id: proposal

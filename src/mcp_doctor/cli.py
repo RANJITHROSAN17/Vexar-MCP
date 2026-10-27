@@ -26,10 +26,10 @@ from mcp_doctor.rules import get_all_rules
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mcp-doctor",
+        prog="vexar-mcp",
         description="Static analyzer, security scanner, and token-budget auditor for MCP servers.",
     )
-    parser.add_argument("--version", action="version", version=f"mcp-doctor {__version__}")
+    parser.add_argument("--version", action="version", version=f"vexar-mcp {__version__}")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -67,7 +67,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--config",
         type=Path,
         default=None,
-        help="Explicit path to `.mcp-doctor.toml` configuration file.",
+        help="Explicit path to a `vexar-mcp.toml` configuration file.",
     )
 
     tok_p = subparsers.add_parser(
@@ -127,7 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         report = scan_paths(targets, cfg)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        print(f"mcp-doctor: error: {exc}", file=sys.stderr)
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
         return 2
 
     if args.command == "token-report":

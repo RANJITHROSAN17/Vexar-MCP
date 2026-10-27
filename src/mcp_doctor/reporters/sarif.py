@@ -53,9 +53,9 @@ def render_sarif(report: ScanReport) -> str:
             {
                 "tool": {
                     "driver": {
-                        "name": "mcp-doctor",
+                        "name": "Vexar-MCP",
                         "version": __version__,
-                        "informationUri": "https://github.com/RANJITHROSAN17/mcp-doctor",
+                        "informationUri": "https://github.com/RANJITHROSAN17/Vexar-MCP",
                         "rules": rules_meta,
                     }
                 },
