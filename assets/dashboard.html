@@ -1,109 +1,1280 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>mcp-doctor Live Enterprise Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: { dark: '#070b14', card: '#0f1322', surface: '#141a2e', accent: '#00d4aa', accent2: '#6366f1', warn: '#f59e0b', danger: '#ef4444', success: '#22c55e' },
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body class="bg-[#070b14] text-[#e8ecf1] font-sans antialiased min-h-screen flex flex-col justify-between">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Vexar-MCP — Audit Report</title>
+<meta name="description" content="Static report viewer for Vexar-MCP audit results: security findings, schema diagnostics and token-budget data for a Model Context Protocol server.">
+<style>
+  :root {
+    --bg: #070d12;
+    --surface: #0d1720;
+    --surface-2: #111f2b;
+    --border: #1e2b38;
+    --border-strong: #2a3b4d;
+    --text: #e6edf3;
+    --text-muted: #9aabbd;
+    --text-dim: #7d8ea3;
+    --accent: #2dd4bf;
+    --accent-ink: #04231f;
+    --accent-soft: rgba(45, 212, 191, 0.12);
+    --error: #f87171;
+    --error-soft: rgba(248, 113, 113, 0.1);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.1);
+    --info: #60a5fa;
+    --info-soft: rgba(96, 165, 250, 0.1);
+    --ok: #34d399;
+    --ok-soft: rgba(52, 211, 153, 0.1);
 
-<header class="border-b border-[#1e2a45] bg-[#0f1322]/80 backdrop-blur sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-        <div class="flex items-center space-x-3">
-            <span class="text-2xl">🩺</span>
-            <h1 class="text-xl font-bold tracking-tight text-white">mcp-doctor <span class="text-[#00d4aa] font-mono text-sm px-2 py-0.5 bg-[#00d4aa]/10 rounded-full border border-[#00d4aa]/20">Live Dashboard</span></h1>
-        </div>
-        <div class="flex items-center space-x-4">
-            <span id="dashboard-status" class="text-xs font-mono text-[#8b96a8]">Syncing with GitHub Actions...</span>
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">● Active Scan Live</span>
-        </div>
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --step-1: 4px;
+    --step-2: 8px;
+    --step-3: 12px;
+    --step-4: 16px;
+    --step-5: 24px;
+    --step-6: 32px;
+    --step-7: 48px;
+
+    --maxw: 1080px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: var(--step-2);
+    z-index: 100;
+    padding: var(--step-2) var(--step-4);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+  }
+  .skip-link:focus { left: var(--step-4); }
+
+  .shell { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--step-5); }
+
+  /* ---------- Header ---------- */
+  .site-header {
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #0b141c 0%, var(--bg) 100%);
+  }
+  .site-header__inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--step-3) var(--step-5);
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--step-5) 0;
+  }
+  .brand { display: flex; align-items: center; gap: var(--step-3); min-width: 0; }
+  .brand__mark { flex: none; width: 40px; height: 40px; }
+  .brand__text { min-width: 0; }
+  .brand__name {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .brand__name span { color: var(--accent); }
+  .brand__tag {
+    margin: 2px 0 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--step-2);
+    padding: 6px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    max-width: 100%;
+  }
+  .status__dot {
+    flex: none;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .status[data-state="loaded"] { border-color: rgba(52, 211, 153, 0.4); color: #a7f3d0; }
+  .status[data-state="loaded"] .status__dot { background: var(--ok); }
+  .status[data-state="sample"] { border-color: rgba(251, 191, 36, 0.4); color: #fde68a; }
+  .status[data-state="sample"] .status__dot { background: var(--warning); }
+  .status[data-state="error"] { border-color: rgba(248, 113, 113, 0.4); color: #fecaca; }
+  .status[data-state="error"] .status__dot { background: var(--error); }
+  .status[data-state="loading"] .status__dot { animation: pulse 1.4s ease-in-out infinite; }
+
+  @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+  /* ---------- Layout ---------- */
+  main { padding: var(--step-6) 0 var(--step-7); }
+  .stack { display: grid; gap: var(--step-5); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--step-5);
+  }
+
+  .section-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--step-2) var(--step-4);
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 var(--step-4);
+  }
+  .section-head h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .section-head p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* ---------- Notice ---------- */
+  .notice {
+    display: flex;
+    gap: var(--step-3);
+    align-items: flex-start;
+    padding: var(--step-4);
+    border: 1px solid var(--border-strong);
+    border-left-width: 3px;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    font-size: 14px;
+  }
+  .notice[hidden] { display: none; }
+  .notice--sample { border-left-color: var(--warning); }
+  .notice--error { border-left-color: var(--error); }
+  .notice--ok { border-left-color: var(--ok); }
+  .notice__icon { flex: none; font-family: var(--mono); font-size: 13px; padding-top: 2px; }
+  .notice--sample .notice__icon { color: var(--warning); }
+  .notice--error .notice__icon { color: var(--error); }
+  .notice--ok .notice__icon { color: var(--ok); }
+  .notice__body { min-width: 0; }
+  .notice__title { margin: 0 0 2px; font-weight: 600; font-size: 14px; }
+  .notice__text { margin: 0; color: var(--text-muted); }
+  .notice__text code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    overflow-wrap: anywhere;
+  }
+  .notice__actions { margin-top: var(--step-3); display: flex; flex-wrap: wrap; gap: var(--step-2); }
+
+  /* ---------- Summary ---------- */
+  .summary {
+    display: grid;
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    gap: var(--step-5);
+    align-items: start;
+  }
+  @media (max-width: 820px) { .summary { grid-template-columns: minmax(0, 1fr); } }
+
+  .score {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: var(--step-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--step-3);
+  }
+  .score__label {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .score__value { display: flex; align-items: baseline; gap: var(--step-2); }
+  .score__number {
+    font-family: var(--mono);
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+  .score__denom { font-family: var(--mono); font-size: 15px; color: var(--text-dim); }
+  .score__grade {
+    align-self: flex-start;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .score__grade[data-grade^="A"] { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.45); background: var(--ok-soft); }
+  .score__grade[data-grade^="B"] { color: #7dd3fc; border-color: rgba(96, 165, 250, 0.45); background: var(--info-soft); }
+  .score__grade[data-grade^="C"] { color: #fcd34d; border-color: rgba(251, 191, 36, 0.45); background: var(--warning-soft); }
+  .score__grade[data-grade^="D"],
+  .score__grade[data-grade^="F"] { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); background: var(--error-soft); }
+
+  .meter {
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+  .meter__fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 320ms ease;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--step-3);
+    margin: 0;
+  }
+  @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stat {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: var(--step-4);
+  }
+  .stat dt {
+    margin: 0 0 var(--step-1);
+    font-size: 11.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .stat dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  .stat dd small { font-size: 12px; font-weight: 500; color: var(--text-dim); letter-spacing: 0; }
+  .stat--error dd { color: #fca5a5; }
+  .stat--warning dd { color: #fcd34d; }
+  .stat--info dd { color: #93c5fd; }
+
+  /* ---------- Filters ---------- */
+  .filters { display: flex; flex-wrap: wrap; gap: var(--step-2); margin-bottom: var(--step-4); }
+  .chip-btn {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+  .chip-btn:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+  .chip-btn[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: rgba(45, 212, 191, 0.5);
+    color: #9ff5e6;
+  }
+
+  /* ---------- Findings ---------- */
+  .findings { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--step-3); }
+  .finding {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    padding: var(--step-4);
+    display: grid;
+    gap: var(--step-2);
+  }
+  .finding[data-severity="error"] { border-left: 3px solid var(--error); }
+  .finding[data-severity="warning"] { border-left: 3px solid var(--warning); }
+  .finding[data-severity="info"] { border-left: 3px solid var(--info); }
+
+  .finding__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--step-2) var(--step-3);
+  }
+  .severity {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+  }
+  .severity::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: currentColor; }
+  .severity[data-severity="error"] { color: #fca5a5; background: var(--error-soft); border-color: rgba(248, 113, 113, 0.32); }
+  .severity[data-severity="warning"] { color: #fcd34d; background: var(--warning-soft); border-color: rgba(251, 191, 36, 0.32); }
+  .severity[data-severity="info"] { color: #93c5fd; background: var(--info-soft); border-color: rgba(96, 165, 250, 0.32); }
+
+  .rule {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .rule__slug { color: var(--text-muted); font-weight: 400; }
+
+  .loc {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
+  }
+  .finding__message { margin: 0; color: var(--text); font-size: 14px; }
+  .finding__fix {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--text-muted);
+    padding-top: var(--step-2);
+    border-top: 1px dashed var(--border);
+  }
+  .finding__fix strong { color: #9ff5e6; font-weight: 600; }
+
+  /* ---------- Empty / skeleton ---------- */
+  .empty {
+    margin: 0;
+    padding: var(--step-5);
+    text-align: center;
+    color: var(--text-muted);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.015);
+  }
+  .empty strong { display: block; color: var(--text); margin-bottom: var(--step-1); font-weight: 600; }
+
+  .skeleton { display: grid; gap: var(--step-3); }
+  .skeleton__row {
+    height: 72px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: linear-gradient(90deg, var(--surface-2) 0%, #16273533 50%, var(--surface-2) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* ---------- Tables ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  caption { text-align: left; color: var(--text-muted); font-size: 13px; padding: 0 0 var(--step-3); }
+  th, td { padding: var(--step-3) var(--step-4); text-align: left; white-space: nowrap; }
+  thead th {
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr + tr td { border-top: 1px solid var(--border); }
+  tbody tr:hover td { background: rgba(255, 255, 255, 0.025); }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  td.name { font-family: var(--mono); font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+  td.src { font-family: var(--mono); color: var(--text-dim); font-size: 12.5px; white-space: normal; overflow-wrap: anywhere; }
+  tfoot td { border-top: 1px solid var(--border-strong); font-weight: 600; background: rgba(255, 255, 255, 0.03); }
+
+  /* ---------- Meta ---------- */
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--step-4); margin: 0; }
+  .meta div { min-width: 0; }
+  .meta dt {
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .meta dd { margin: 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+
+  /* ---------- Footer ---------- */
+  .site-footer {
+    border-top: 1px solid var(--border);
+    padding: var(--step-5) 0 var(--step-6);
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .site-footer__inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--step-2) var(--step-4);
+    align-items: center;
+    justify-content: space-between;
+  }
+  .site-footer ul { display: flex; flex-wrap: wrap; gap: var(--step-4); list-style: none; margin: 0; padding: 0; }
+  .site-footer a { color: var(--text-muted); }
+  .site-footer a:hover { color: var(--accent); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn:hover { background: rgba(255, 255, 255, 0.09); text-decoration: none; }
+  .btn--accent { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn--accent:hover { background: #5eead4; }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  [hidden] { display: none !important; }
+
+  @media (max-width: 560px) {
+    .shell { padding: 0 var(--step-4); }
+    .card { padding: var(--step-4); }
+    .score__number { font-size: 36px; }
+    th, td { padding: var(--step-2) var(--step-3); }
+    /* Keep data tables legible: scroll them instead of squeezing every column. */
+    #tokens-section table th,
+    #tokens-section table td,
+    #tokens-section td.name,
+    #tokens-section td.src { white-space: nowrap; }
+    .table-wrap { -webkit-overflow-scrolling: touch; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#report">Skip to report</a>
+
+<header class="site-header">
+  <div class="shell site-header__inner">
+    <div class="brand">
+      <svg class="brand__mark" viewBox="0 0 48 48" role="img" aria-label="Vexar-MCP">
+        <rect x="0.75" y="0.75" width="46.5" height="46.5" rx="11" fill="#0d1a22" stroke="#1f3a44" stroke-width="1.5"/>
+        <path d="M24 10 L36 15 V26 C36 34 30 39.5 24 42 C18 39.5 12 34 12 26 V15 Z"
+              fill="none" stroke="#2dd4bf" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M19 26 L22.6 29.6 L29.5 22.7" fill="none" stroke="#5eead4" stroke-width="2.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="brand__text">
+        <h1 class="brand__name">Vexar<span>-MCP</span></h1>
+        <p class="brand__tag">Audit report viewer</p>
+      </div>
     </div>
+    <p class="status" id="status" data-state="loading" role="status" aria-live="polite">
+      <span class="status__dot" aria-hidden="true"></span>
+      <span id="status-text">Loading report…</span>
+    </p>
+  </div>
 </header>
 
-<main class="max-w-7xl mx-auto px-6 py-8 w-full space-y-8 flex-grow">
+<main class="shell" id="report">
+  <div class="stack">
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between hover:border-[#00d4aa] transition">
-            <div><p class="text-sm font-medium text-[#8b96a8]">Codebase Health Score</p>
-                <div class="mt-4 flex items-baseline space-x-2"><span id="score-display" class="text-5xl font-extrabold tracking-tight text-white">--</span><span class="text-lg text-[#8b96a8]">/ 100</span></div>
-            </div>
-            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Target: &gt;85</span><span class="text-emerald-400 font-semibold">Passing Gates</span></div>
+    <div class="notice" id="notice" role="status" aria-live="polite" hidden>
+      <span class="notice__icon" id="notice-icon" aria-hidden="true">!</span>
+      <div class="notice__body">
+        <p class="notice__title" id="notice-title"></p>
+        <p class="notice__text" id="notice-text"></p>
+        <div class="notice__actions" id="notice-actions" hidden>
+          <button class="btn" type="button" id="retry">Load report again</button>
+          <a class="btn btn--accent" href="https://github.com/RANJITHROSAN17/Vexar-MCP#quick-start">How to generate a report</a>
         </div>
-        <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between hover:border-[#6366f1] transition">
-            <div><p class="text-sm font-medium text-[#8b96a8]">Test Coverage</p>
-                <div class="mt-4 flex items-baseline space-x-2"><span class="text-5xl font-extrabold tracking-tight text-[#22c55e]">90.77%</span><span class="text-sm font-mono text-[#8b96a8]">pytest</span></div>
-            </div>
-            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Threshold: 85%</span><span class="text-emerald-400 font-semibold">Strict Pass</span></div>
-        </div>
-        <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between hover:border-[#f59e0b] transition">
-            <div><p class="text-sm font-medium text-[#8b96a8]">AST Security Rules Active</p>
-                <div class="mt-4 flex items-baseline space-x-2"><span class="text-5xl font-extrabold tracking-tight text-[#6366f1]">9</span><span class="text-sm font-mono text-[#8b96a8]">MCP001–MCP009</span></div>
-            </div>
-            <div class="mt-4 pt-4 border-t border-[#1e2a45] text-xs text-[#8b96a8] flex justify-between"><span>Zero Runtime Execution</span><span class="text-[#6366f1] font-semibold">AST Safe</span></div>
-        </div>
+      </div>
     </div>
 
-    <div class="bg-[#0f1322] border border-[#1e2a45] rounded-xl p-6 shadow-xl">
-        <div class="flex justify-between items-center mb-4 pb-4 border-b border-[#1e2a45]">
-            <h2 class="text-lg font-semibold text-white">Live AST Scan Violations</h2>
-            <span class="text-xs text-[#8b96a8] font-mono">Last synced: <span id="last-updated">--</span></span>
+    <section class="card summary" aria-labelledby="summary-heading">
+      <h2 class="visually-hidden" id="summary-heading">Scan summary</h2>
+      <div class="score">
+        <p class="score__label">Health score</p>
+        <div class="score__value">
+          <span class="score__number" id="score">—</span>
+          <span class="score__denom">/ 100</span>
         </div>
-        <ul id="violation-list" class="space-y-3 font-mono text-sm">
-            <li class="p-4 bg-[#070b14] border border-[#1e2a45] rounded-lg text-[#8b96a8] flex items-center space-x-2 animate-pulse">
-                <span>⏳ Fetching live diagnostic data from CI report...</span>
-            </li>
-        </ul>
-    </div>
+        <span class="score__grade" id="grade" data-grade="">—</span>
+        <div class="meter" role="img" aria-label="Health score meter" id="meter-wrap">
+          <div class="meter__fill" id="meter"></div>
+        </div>
+        <p class="brand__tag" id="score-note">Waiting for report data</p>
+      </div>
+      <dl class="stats" id="stats">
+        <div class="stat stat--error"><dt>Errors</dt><dd id="stat-errors">—</dd></div>
+        <div class="stat stat--warning"><dt>Warnings</dt><dd id="stat-warnings">—</dd></div>
+        <div class="stat stat--info"><dt>Info</dt><dd id="stat-infos">—</dd></div>
+        <div class="stat"><dt>Tools</dt><dd id="stat-tools">—</dd></div>
+        <div class="stat"><dt>Files</dt><dd id="stat-files">—</dd></div>
+        <div class="stat"><dt>Context tokens</dt><dd id="stat-tokens">— <small>est.</small></dd></div>
+      </dl>
+    </section>
 
+    <section class="card" aria-labelledby="findings-heading">
+      <div class="section-head">
+        <h2 id="findings-heading">Findings</h2>
+        <p id="findings-count" aria-live="polite">—</p>
+      </div>
+
+      <div class="filters" role="group" aria-label="Filter findings by severity" id="filters" hidden>
+        <button class="chip-btn" type="button" data-filter="all" aria-pressed="true">All</button>
+        <button class="chip-btn" type="button" data-filter="error" aria-pressed="false">Errors</button>
+        <button class="chip-btn" type="button" data-filter="warning" aria-pressed="false">Warnings</button>
+        <button class="chip-btn" type="button" data-filter="info" aria-pressed="false">Info</button>
+      </div>
+
+      <div id="findings-loading" class="skeleton" aria-hidden="true">
+        <div class="skeleton__row"></div>
+        <div class="skeleton__row"></div>
+        <div class="skeleton__row"></div>
+      </div>
+
+      <ol class="findings" id="findings" hidden></ol>
+
+      <p class="empty" id="findings-empty" hidden>
+        <strong>No findings</strong>
+        This scan reported zero diagnostics.
+      </p>
+    </section>
+
+    <section class="card" aria-labelledby="tokens-heading" id="tokens-section" hidden>
+      <div class="section-head">
+        <h2 id="tokens-heading">Context-window cost per tool</h2>
+        <p>Estimated tokens each tool definition adds to every request</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <caption class="visually-hidden">Estimated tokens per tool</caption>
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col" class="num">Est. tokens</th>
+              <th scope="col" class="num">Params</th>
+              <th scope="col">Source</th>
+            </tr>
+          </thead>
+          <tbody id="tokens-body"></tbody>
+          <tfoot id="tokens-foot"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="meta-heading">
+      <div class="section-head">
+        <h2 id="meta-heading">Report metadata</h2>
+        <p>Where this data came from</p>
+      </div>
+      <dl class="meta">
+        <div><dt>Report source</dt><dd id="meta-source">—</dd></div>
+        <div><dt>Scanner version</dt><dd id="meta-version">—</dd></div>
+        <div><dt>Data state</dt><dd id="meta-state">—</dd></div>
+        <div><dt>Loaded at</dt><dd id="meta-loaded">—</dd></div>
+      </dl>
+    </section>
+
+  </div>
 </main>
 
-<footer class="border-t border-[#1e2a45] bg-[#0f1322]/55 py-6 text-center text-xs text-[#8b96a8]">
-    <p>mcp-doctor enterprise engine · Powered by GitHub Actions & Pages · <a href="https://github.com/RANJITHROSAN17/mcp-doctor" class="text-[#00d4aa] hover:underline">github.com/RANJITHROSAN17/mcp-doctor</a></p>
+<footer class="site-footer">
+  <div class="shell site-footer__inner">
+    <p style="margin:0">Vexar-MCP · static analysis for Model Context Protocol servers</p>
+    <ul>
+      <li><a href="https://github.com/RANJITHROSAN17/Vexar-MCP">Repository</a></li>
+      <li><a href="https://github.com/RANJITHROSAN17/Vexar-MCP/blob/main/docs/usage.md">Usage</a></li>
+      <li><a href="https://github.com/RANJITHROSAN17/Vexar-MCP/blob/main/docs/rules.md">Rules</a></li>
+      <li><a href="https://github.com/RANJITHROSAN17/Vexar-MCP/blob/main/LICENSE">MIT</a></li>
+    </ul>
+  </div>
 </footer>
 
 <script>
-async function loadAuditData() {
-    try {
-      const response = await fetch('./audit-report.json');
-      if (!response.ok) throw new Error('Status ' + response.status);
-      const report = await response.json();
-      if (report.score !== undefined) document.getElementById('score-display').textContent = report.score;
-      const list = document.getElementById('violation-list');
-      if (report.violations && Array.isArray(report.violations)) {
-        list.innerHTML = '';
-        if (report.violations.length === 0) {
-          list.innerHTML = '<li class="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-emerald-400 font-sans font-semibold">✨ No violations detected! Codebase is fully clean.</li>';
-        } else {
-          report.violations.forEach(v => {
-            const li = document.createElement('li');
-            li.className = 'p-3 bg-red-950/20 border border-red-500/30 rounded-lg text-red-300 flex flex-col space-y-1';
-            li.innerHTML = `<div class="flex items-center space-x-2 font-bold text-red-400"><span class="px-2 py-0.5 bg-red-500/20 rounded text-xs">[${v.code || 'MCP001'}]</span><span>Line ${v.line || '-'}</span><span class="text-xs uppercase px-1.5 py-0.5 bg-[#1e2a45] text-[#8b96a8] rounded">${v.severity || 'warning'}</span></div><p class="text-[#e8ecf1] font-sans text-sm">${v.message || 'Violation detected.'}</p>`;
-            list.appendChild(li);
-          });
+/*
+ * Vexar-MCP report viewer.
+ *
+ * Reads ./audit-report.json, which is the exact stdout of:
+ *     vexar-mcp scan <path> --format json
+ *
+ * Design rules for this file:
+ *  - Every value from the report is rendered with textContent, never innerHTML,
+ *    so a crafted finding message cannot inject markup.
+ *  - A missing or malformed report never shows data as if it were a real scan.
+ *  - No network calls other than the report fetch; no third-party scripts.
+ */
+(function () {
+  "use strict";
+
+  var REPORT_URL = "./audit-report.json";
+
+  /* Real `vexar-mcp scan examples/vulnerable_server.py --format json` output.
+     Used only when the live report cannot be loaded, and always labelled as a
+     sample so it can never be mistaken for a live scan. */
+  var SAMPLE_REPORT = {
+    "version": "0.1.0",
+    "summary": {
+      "files_scanned": 1,
+      "tools_scanned": 2,
+      "total_estimated_tokens": 105,
+      "errors": 4,
+      "warnings": 5,
+      "infos": 1,
+      "total_diagnostics": 10,
+      "score": 8,
+      "grade": "F"
+    },
+    "tools": [
+      {
+        "name": "run",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 23,
+        "estimated_tokens": 29,
+        "parameter_count": 2
+      },
+      {
+        "name": "fetch_and_save_remote_blob",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 31,
+        "estimated_tokens": 76,
+        "parameter_count": 3
+      }
+    ],
+    "diagnostics": [
+      {
+        "rule_id": "MCP001",
+        "rule_slug": "missing-tool-description",
+        "severity": "error",
+        "category": "contract",
+        "tool_name": "run",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 23,
+        "message": "Tool 'run' has an empty or overly brief description (0 chars; minimum 12 recommended).",
+        "remediation": "Document purpose, inputs, and side effects in the tool docstring or `description`."
+      },
+      {
+        "rule_id": "MCP008",
+        "rule_slug": "ambiguous-or-duplicate-tool-name",
+        "severity": "error",
+        "category": "contract",
+        "tool_name": "run",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 23,
+        "message": "Tool name 'run' is overly generic or violates `[a-z][a-z0-9_-]{2,63}`.",
+        "remediation": "Use specific `verb_noun` `snake_case` naming such as `fetch_invoice_summary`."
+      },
+      {
+        "rule_id": "MCP003",
+        "rule_slug": "untyped-or-any-parameter",
+        "severity": "warning",
+        "category": "schema",
+        "tool_name": "run",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 23,
+        "message": "Parameter 'cmd' in tool 'run' has no type annotation.",
+        "remediation": "Provide an explicit scalar, `Literal[...]`, `TypedDict`, or Pydantic `BaseModel` type."
+      },
+      {
+        "rule_id": "MCP004",
+        "rule_slug": "unbounded-collection-or-limit",
+        "severity": "info",
+        "category": "schema",
+        "tool_name": "run",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 23,
+        "message": "Parameter 'limit' in tool 'run' has no upper bound (`maximum` / `maxItems` / `Field(le=...)` / `min(...)`).",
+        "remediation": "Enforce a strict ceiling (e.g. `Field(default=50, le=200)` or `maxItems: 100`)."
+      },
+      {
+        "rule_id": "MCP005",
+        "rule_slug": "dangerous-shell-execution",
+        "severity": "error",
+        "category": "security",
+        "tool_name": "run",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 25,
+        "message": "Tool 'run' invokes dangerous execution sink `subprocess.run(shell=True)` with parameter 'cmd'.",
+        "remediation": "Use `subprocess.run([cmd, arg], shell=False, check=True)` with validated arguments."
+      },
+      {
+        "rule_id": "MCP005",
+        "rule_slug": "dangerous-shell-execution",
+        "severity": "error",
+        "category": "security",
+        "tool_name": "run",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 26,
+        "message": "Tool 'run' invokes dangerous execution sink `os.system` with parameter 'cmd'.",
+        "remediation": "Use `subprocess.run([cmd, arg], shell=False, check=True)` with validated arguments."
+      },
+      {
+        "rule_id": "MCP003",
+        "rule_slug": "untyped-or-any-parameter",
+        "severity": "warning",
+        "category": "schema",
+        "tool_name": "fetch_and_save_remote_blob",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 31,
+        "message": "Parameter 'payload' in tool 'fetch_and_save_remote_blob' uses unconstrained type 'Any'.",
+        "remediation": "Provide an explicit scalar, `Literal[...]`, `TypedDict`, or Pydantic `BaseModel` type."
+      },
+      {
+        "rule_id": "MCP006",
+        "rule_slug": "unvalidated-ssrf-sink",
+        "severity": "warning",
+        "category": "security",
+        "tool_name": "fetch_and_save_remote_blob",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 33,
+        "message": "Tool 'fetch_and_save_remote_blob' passes parameter 'target_url' into outbound request `urllib.request.urlopen` without visible URL/host validation (potential SSRF).",
+        "remediation": "Validate scheme/hostname with `urlparse` and reject RFC1918 / metadata IPs (`169.254.169.254`)."
+      },
+      {
+        "rule_id": "MCP010",
+        "rule_slug": "missing-network-timeout",
+        "severity": "warning",
+        "category": "security",
+        "tool_name": "fetch_and_save_remote_blob",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 33,
+        "message": "Tool 'fetch_and_save_remote_blob' performs HTTP sink `urllib.request.urlopen` with parameter 'target_url' without an explicit `timeout=` argument.",
+        "remediation": "Pass `timeout=<seconds>` to the HTTP call (e.g., `requests.get(url, timeout=10)`)."
+      },
+      {
+        "rule_id": "MCP007",
+        "rule_slug": "unconfined-filesystem-access",
+        "severity": "warning",
+        "category": "security",
+        "tool_name": "fetch_and_save_remote_blob",
+        "source_file": "examples/vulnerable_server.py",
+        "line": 35,
+        "message": "Tool 'fetch_and_save_remote_blob' passes parameter 'output_path' to `open(write)` without `.resolve()` / base-directory confinement (path traversal risk).",
+        "remediation": "Canonicalize paths via `.resolve()` and enforce `.is_relative_to(ALLOWED_ROOT)`."
+      }
+    ]
+  };
+
+  var el = {
+    status: document.getElementById("status"),
+    statusText: document.getElementById("status-text"),
+    notice: document.getElementById("notice"),
+    noticeIcon: document.getElementById("notice-icon"),
+    noticeTitle: document.getElementById("notice-title"),
+    noticeText: document.getElementById("notice-text"),
+    noticeActions: document.getElementById("notice-actions"),
+    retry: document.getElementById("retry"),
+    score: document.getElementById("score"),
+    grade: document.getElementById("grade"),
+    meter: document.getElementById("meter"),
+    scoreNote: document.getElementById("score-note"),
+    statErrors: document.getElementById("stat-errors"),
+    statWarnings: document.getElementById("stat-warnings"),
+    statInfos: document.getElementById("stat-infos"),
+    statTools: document.getElementById("stat-tools"),
+    statFiles: document.getElementById("stat-files"),
+    statTokens: document.getElementById("stat-tokens"),
+    findings: document.getElementById("findings"),
+    findingsEmpty: document.getElementById("findings-empty"),
+    findingsLoading: document.getElementById("findings-loading"),
+    findingsCount: document.getElementById("findings-count"),
+    filters: document.getElementById("filters"),
+    tokensSection: document.getElementById("tokens-section"),
+    tokensBody: document.getElementById("tokens-body"),
+    tokensFoot: document.getElementById("tokens-foot"),
+    metaSource: document.getElementById("meta-source"),
+    metaVersion: document.getElementById("meta-version"),
+    metaState: document.getElementById("meta-state"),
+    metaLoaded: document.getElementById("meta-loaded")
+  };
+
+  var state = { filter: "all", report: null };
+
+  /* ---------- helpers ---------- */
+
+  function text(value, fallback) {
+    if (value === null || value === undefined) return fallback === undefined ? "—" : fallback;
+    return String(value);
+  }
+
+  function num(value) {
+    return typeof value === "number" && isFinite(value) ? value : null;
+  }
+
+  function setStatus(kind, label) {
+    el.status.dataset.state = kind;
+    el.statusText.textContent = label;
+  }
+
+  function showNotice(kind, icon, title, message, withActions) {
+    el.notice.hidden = false;
+    el.notice.className = "notice notice--" + kind;
+    el.noticeIcon.textContent = icon;
+    el.noticeTitle.textContent = title;
+    el.noticeText.textContent = message;
+    el.noticeActions.hidden = !withActions;
+  }
+
+  function hideNotice() {
+    el.notice.hidden = true;
+  }
+
+  /* ---------- validation ---------- */
+
+  /**
+   * A report is usable when it has a summary object with numeric counters and
+   * an array of diagnostics. Anything else is reported as invalid rather than
+   * rendered as partial or invented data.
+   */
+  function validateReport(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return { ok: false, reason: "The report is not a JSON object." };
+    }
+    var summary = raw.summary;
+    if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+      return { ok: false, reason: "Missing `summary` object." };
+    }
+    if (num(summary.score) === null || num(summary.tools_scanned) === null) {
+      return { ok: false, reason: "`summary.score` or `summary.tools_scanned` is not a number." };
+    }
+    var diagnostics = raw.diagnostics;
+    if (diagnostics !== undefined && !Array.isArray(diagnostics)) {
+      return { ok: false, reason: "`diagnostics` is present but is not an array." };
+    }
+    if (Array.isArray(diagnostics)) {
+      for (var i = 0; i < diagnostics.length; i++) {
+        var d = diagnostics[i];
+        if (!d || typeof d !== "object" || typeof d.message !== "string") {
+          return { ok: false, reason: "Diagnostic #" + (i + 1) + " is malformed." };
         }
       }
-      document.getElementById('last-updated').textContent = new Date().toUTCString();
-      document.getElementById('dashboard-status').textContent = 'Live Data Synced';
-    } catch (error) {
-      console.warn('Audit load failed (offline/preview):', error);
-      document.getElementById('dashboard-status').textContent = 'Offline Preview Mode';
-      document.getElementById('violation-list').innerHTML = '<li class="p-4 bg-[#070b14] border border-[#1e2a45] rounded-lg text-[#8b96a8] font-sans">ℹ️ Running in static preview. audit-report.json will populate when deployed via GitHub Actions.</li>';
     }
-}
-document.addEventListener('DOMContentLoaded', loadAuditData);
+    var tools = raw.tools;
+    if (tools !== undefined && !Array.isArray(tools)) {
+      return { ok: false, reason: "`tools` is present but is not an array." };
+    }
+    return { ok: true };
+  }
+
+  /* ---------- rendering ---------- */
+
+  function renderSummary(report) {
+    var s = report.summary;
+    var score = Math.max(0, Math.min(100, Math.round(s.score)));
+    el.score.textContent = String(score);
+    el.grade.textContent = text(s.grade, "—");
+    el.grade.dataset.grade = text(s.grade, "");
+    el.meter.style.width = score + "%";
+    el.meter.parentElement.setAttribute("aria-label", "Health score " + score + " out of 100");
+
+    var total = num(s.total_diagnostics);
+    el.scoreNote.textContent = total === null
+      ? "Score computed by vexar-mcp"
+      : total + (total === 1 ? " diagnostic" : " diagnostics") + " across " +
+        text(s.tools_scanned, "0") + " tools";
+
+    el.statErrors.textContent = text(s.errors, "0");
+    el.statWarnings.textContent = text(s.warnings, "0");
+    el.statInfos.textContent = text(s.infos, "0");
+    el.statTools.textContent = text(s.tools_scanned, "0");
+    el.statFiles.textContent = text(s.files_scanned, "0");
+    el.statTokens.textContent = text(s.total_estimated_tokens, "0") + " ";
+    var small = document.createElement("small");
+    small.textContent = "est.";
+    el.statTokens.appendChild(small);
+  }
+
+  function severityLabel(severity) {
+    if (severity === "error") return "Error";
+    if (severity === "warning") return "Warning";
+    if (severity === "info") return "Info";
+    return "Finding";
+  }
+
+  function buildFinding(diagnostic) {
+    var severity = typeof diagnostic.severity === "string" ? diagnostic.severity : "info";
+    var item = document.createElement("li");
+    item.className = "finding";
+    item.dataset.severity = severity;
+
+    var top = document.createElement("div");
+    top.className = "finding__top";
+
+    var badge = document.createElement("span");
+    badge.className = "severity";
+    badge.dataset.severity = severity;
+    badge.textContent = severityLabel(severity);
+    top.appendChild(badge);
+
+    var rule = document.createElement("span");
+    rule.className = "rule";
+    rule.textContent = text(diagnostic.rule_id, "—");
+    if (diagnostic.rule_slug) {
+      var slug = document.createElement("span");
+      slug.className = "rule__slug";
+      slug.textContent = " " + diagnostic.rule_slug;
+      rule.appendChild(slug);
+    }
+    top.appendChild(rule);
+
+    var loc = document.createElement("span");
+    loc.className = "loc";
+    var file = text(diagnostic.source_file, "(unknown file)");
+    var line = num(diagnostic.line);
+    loc.textContent = file + (line === null ? "" : ":" + line);
+    if (diagnostic.tool_name) {
+      loc.textContent += " · " + diagnostic.tool_name;
+    }
+    top.appendChild(loc);
+
+    item.appendChild(top);
+
+    var message = document.createElement("p");
+    message.className = "finding__message";
+    message.textContent = text(diagnostic.message, "No message provided.");
+    item.appendChild(message);
+
+    if (diagnostic.remediation) {
+      var fix = document.createElement("p");
+      fix.className = "finding__fix";
+      var strong = document.createElement("strong");
+      strong.textContent = "Fix: ";
+      fix.appendChild(strong);
+      fix.appendChild(document.createTextNode(String(diagnostic.remediation)));
+      item.appendChild(fix);
+    }
+
+    item.dataset.severityKey = severity;
+    return item;
+  }
+
+  function renderFindings(report) {
+    var diagnostics = Array.isArray(report.diagnostics) ? report.diagnostics : [];
+    el.findingsLoading.hidden = true;
+    el.findings.textContent = "";
+
+    if (diagnostics.length === 0) {
+      el.findings.hidden = true;
+      el.filters.hidden = true;
+      el.findingsEmpty.hidden = false;
+      el.findingsCount.textContent = "0 findings";
+      return;
+    }
+
+    el.findingsEmpty.hidden = true;
+    el.findings.hidden = false;
+    el.filters.hidden = false;
+
+    var counts = { error: 0, warning: 0, info: 0 };
+    for (var i = 0; i < diagnostics.length; i++) {
+      var item = buildFinding(diagnostics[i]);
+      var key = item.dataset.severityKey;
+      if (counts[key] !== undefined) counts[key]++;
+      el.findings.appendChild(item);
+    }
+
+    el.findingsCount.textContent =
+      diagnostics.length + (diagnostics.length === 1 ? " finding · " : " findings · ") +
+      counts.error + " error, " + counts.warning + " warning, " + counts.info + " info";
+
+    applyFilter(state.filter);
+  }
+
+  function applyFilter(filter) {
+    state.filter = filter;
+    var items = el.findings.querySelectorAll(".finding");
+    var visible = 0;
+    for (var i = 0; i < items.length; i++) {
+      var show = filter === "all" || items[i].dataset.severity === filter;
+      items[i].hidden = !show;
+      if (show) visible++;
+    }
+    var buttons = el.filters.querySelectorAll(".chip-btn");
+    for (var b = 0; b < buttons.length; b++) {
+      buttons[b].setAttribute("aria-pressed", String(buttons[b].dataset.filter === filter));
+    }
+    if (visible === 0) {
+      el.findingsCount.textContent = "No findings match this filter";
+    } else if (state.report) {
+      var d = state.report.diagnostics || [];
+      var counts = { error: 0, warning: 0, info: 0 };
+      for (var k = 0; k < d.length; k++) {
+        var sev = d[k] && d[k].severity;
+        if (counts[sev] !== undefined) counts[sev]++;
+      }
+      el.findingsCount.textContent =
+        d.length + (d.length === 1 ? " finding · " : " findings · ") +
+        counts.error + " error, " + counts.warning + " warning, " + counts.info + " info";
+    }
+  }
+
+  function renderTokens(report) {
+    var tools = Array.isArray(report.tools) ? report.tools.slice() : [];
+    el.tokensBody.textContent = "";
+    el.tokensFoot.textContent = "";
+
+    if (tools.length === 0) {
+      el.tokensSection.hidden = true;
+      return;
+    }
+    el.tokensSection.hidden = false;
+
+    tools.sort(function (a, b) {
+      return (num(b.estimated_tokens) || 0) - (num(a.estimated_tokens) || 0);
+    });
+
+    var total = 0;
+    for (var i = 0; i < tools.length; i++) {
+      var tool = tools[i] || {};
+      var tokens = num(tool.estimated_tokens);
+      total += tokens || 0;
+
+      var tr = document.createElement("tr");
+
+      var name = document.createElement("td");
+      name.className = "name";
+      name.textContent = text(tool.name, "(unnamed tool)");
+
+      var tokensCell = document.createElement("td");
+      tokensCell.className = "num";
+      tokensCell.textContent = tokens === null ? "—" : String(tokens);
+
+      var params = document.createElement("td");
+      params.className = "num";
+      params.textContent = num(tool.parameter_count) === null ? "—" : String(tool.parameter_count);
+
+      var src = document.createElement("td");
+      src.className = "src";
+      var line = num(tool.line);
+      src.textContent = text(tool.source_file, "—") + (line === null ? "" : ":" + line);
+
+      tr.appendChild(name);
+      tr.appendChild(tokensCell);
+      tr.appendChild(params);
+      tr.appendChild(src);
+      el.tokensBody.appendChild(tr);
+    }
+
+    var footRow = document.createElement("tr");
+    var footLabel = document.createElement("td");
+    footLabel.textContent = "Total across " + tools.length + " tool" + (tools.length === 1 ? "" : "s");
+    var footTotal = document.createElement("td");
+    footTotal.className = "num";
+    footTotal.textContent = String(total);
+    var footBlankA = document.createElement("td");
+    var footBlankB = document.createElement("td");
+    footRow.appendChild(footLabel);
+    footRow.appendChild(footTotal);
+    footRow.appendChild(footBlankA);
+    footRow.appendChild(footBlankB);
+    el.tokensFoot.appendChild(footRow);
+  }
+
+  function renderMeta(report, source, dataState) {
+    el.metaSource.textContent = source;
+    el.metaVersion.textContent = text(report.version, "not reported");
+    el.metaState.textContent = dataState;
+    el.metaLoaded.textContent = new Date().toLocaleString();
+  }
+
+  function renderReport(report, options) {
+    var opts = options || {};
+    state.report = report;
+    hideNotice();
+    if (opts.notice) {
+      showNotice(opts.notice.kind, opts.notice.icon, opts.notice.title, opts.notice.message, true);
+    }
+    renderSummary(report);
+    renderFindings(report);
+    renderTokens(report);
+    renderMeta(report, opts.source || REPORT_URL, opts.dataState || "Live report");
+    setStatus(opts.statusKind || "loaded", opts.statusLabel || "Report loaded");
+  }
+
+  /* ---------- data loading ---------- */
+
+  function loadSample(kind, icon, title, message) {
+    renderReport(SAMPLE_REPORT, {
+      source: "Bundled sample (examples/vulnerable_server.py)",
+      dataState: "Sample data — not a live scan",
+      statusKind: "sample",
+      statusLabel: "Sample preview",
+      notice: { kind: kind, icon: icon, title: title, message: message }
+    });
+    el.noticeActions.hidden = false;
+    el.retry.textContent = "Try loading ./audit-report.json";
+  }
+
+  function loadReport() {
+    hideNotice();
+    setStatus("loading", "Loading report…");
+    el.findingsLoading.hidden = false;
+    el.findings.hidden = true;
+    el.findingsEmpty.hidden = true;
+    el.filters.hidden = true;
+
+    fetch(REPORT_URL, { cache: "no-store" })
+      .then(function (response) {
+        if (response.status === 404) {
+          var missing = new Error("missing");
+          missing.kind = "missing";
+          throw missing;
+        }
+        if (!response.ok) {
+          var httpErr = new Error("HTTP " + response.status);
+          httpErr.kind = "http";
+          throw httpErr;
+        }
+        return response.text();
+      })
+      .then(function (body) {
+        var parsed;
+        try {
+          parsed = JSON.parse(body);
+        } catch (parseError) {
+          var invalid = new Error("invalid JSON");
+          invalid.kind = "invalid";
+          throw invalid;
+        }
+        var check = validateReport(parsed);
+        if (!check.ok) {
+          var shapeErr = new Error(check.reason);
+          shapeErr.kind = "invalid";
+          throw shapeErr;
+        }
+        renderReport(parsed, {
+          source: REPORT_URL,
+          dataState: "Loaded from report file",
+          statusKind: "loaded",
+          statusLabel: "Report loaded"
+        });
+      })
+      .catch(function (error) {
+        var kind = error && error.kind;
+        if (kind === "missing") {
+          loadSample(
+            "sample",
+            "!",
+            "No audit-report.json found",
+            "This page reads ./audit-report.json next to it. The preview below is the bundled sample, not a live scan. " +
+            "Generate a real one with: vexar-mcp scan . --format json > assets/audit-report.json"
+          );
+        } else if (kind === "invalid") {
+          el.findingsLoading.hidden = true;
+          loadSample(
+            "error",
+            "×",
+            "The report could not be validated",
+            "audit-report.json exists but does not match the expected shape (" + error.message + "). " +
+            "Showing the bundled sample instead so nothing is mistaken for real scan data."
+          );
+          setStatus("error", "Invalid report");
+        } else if (kind === "http") {
+          el.findingsLoading.hidden = true;
+          loadSample(
+            "error",
+            "×",
+            "The report request failed",
+            "The server answered " + error.message + " for ./audit-report.json. " +
+            "Showing the bundled sample instead of live data."
+          );
+          setStatus("error", "Request failed");
+        } else {
+          el.findingsLoading.hidden = true;
+          loadSample(
+            "sample",
+            "i",
+            "Running as a static preview",
+            "The report file could not be read from the browser context — opening this file directly (file://) " +
+            "blocks local fetches in most browsers. Serve the folder over HTTP, for example: python -m http.server. " +
+            "The preview below is the bundled sample."
+          );
+        }
+      });
+  }
+
+  el.retry.addEventListener("click", loadReport);
+
+  var filterButtons = el.filters.querySelectorAll(".chip-btn");
+  for (var i = 0; i < filterButtons.length; i++) {
+    filterButtons[i].addEventListener("click", function (event) {
+      applyFilter(event.currentTarget.dataset.filter);
+    });
+  }
+
+  loadReport();
+})();
 </script>
 </body>
 </html>

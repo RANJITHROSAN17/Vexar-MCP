@@ -1,7 +1,18 @@
-name: Deploy Dashboard (GitHub Pages)
+name: Dashboard (GitHub Pages)
+
+# Publishes the static report viewer in assets/dashboard.html.
+#
+# This workflow publishes the *page*, not scan results. The dashboard reads
+# `audit-report.json` from its own directory at runtime; commit a report into
+# assets/ (or generate one in a preceding step) if you want a live-data deploy.
+# See docs/dashboard.md.
 on:
   push:
     branches: [main]
+    paths:
+      - "assets/dashboard.html"
+      - "assets/audit-report.json"
+      - ".github/workflows/dashboard-deploy.yml"
   workflow_dispatch:
 
 permissions:
@@ -18,14 +29,26 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: https://ranjithrosan17.github.io/mcp-doctor/
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+
+      - name: Assemble static site
+        run: |
+          set -euo pipefail
+          # The Pages artifact must be a directory; serving a single HTML file
+          # would publish it at an unpredictable path.
+          mkdir -p _site
+          cp -R assets/. _site/
+          # Keep Pages lean: the wiki PNGs are documentation screenshots, not
+          # dashboard assets.
+          rm -f _site/wiki_*.png
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: assets/dashboard.html
-      - name: Deploy to GitHub Pages
+          path: _site
+
+      - id: deployment
         uses: actions/deploy-pages@v4

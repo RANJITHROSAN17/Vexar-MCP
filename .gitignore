@@ -14,3 +14,6 @@ venv/
 coverage.xml
 htmlcov/
 .DS_Store
+
+# Generated audit reports (see docs/dashboard.md)
+audit-report.json
