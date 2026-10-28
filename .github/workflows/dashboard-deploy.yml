@@ -44,7 +44,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install Vexar-MCP
-        run: python -m pip install --quiet "$GITHUB_WORKSPACE"
+        # `[yaml]` for the same reason as the composite action: the deploy builds a demo
+        # report from `examples/`, which contains a YAML manifest. Without the extra the
+        # scan reports an unanalyzed input and exits 3, failing the deploy.
+        run: python -m pip install --quiet "$GITHUB_WORKSPACE[yaml]"
 
       - name: Assemble static site
         run: |
