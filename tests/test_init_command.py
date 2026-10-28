@@ -13,11 +13,17 @@ happy path. Three of them are load-bearing and each has a dedicated test:
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
-import tomllib
 import yaml
+
+# Python 3.10 ships no tomllib; the dev extra installs tomli for exactly this reason.
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - exercised on 3.10 only
+    import tomli as tomllib
 
 from mcp_doctor import __version__
 from mcp_doctor.cli import main
