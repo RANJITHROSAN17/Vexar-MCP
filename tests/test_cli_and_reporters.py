@@ -140,10 +140,14 @@ def test_render_github_annotations_maps_severities_and_escapes_messages() -> Non
         ),
     )
 
+    # Changed in 0.2.2: line endings are normalised (CRLF -> LF) by the output sanitiser
+    # before the reporter escapes them, so a CRLF message now escapes as %0A rather than
+    # %0D%0A. Both render as a line break in the annotation; normalising first is deliberate,
+    # because it makes annotations identical on Windows and Linux runners.
     assert render_github_annotations(report).splitlines() == [
         (
             "::error file=server.py,line=24,title=MCP005 (dangerous-shell-execution)::"
-            '[shell_exec] Sink "subprocess.run" used%0D%0Awith 100%25 of arguments '
+            '[shell_exec] Sink "subprocess.run" used%0Awith 100%25 of arguments '
             "Fix: Prefer shell=False."
         ),
         (

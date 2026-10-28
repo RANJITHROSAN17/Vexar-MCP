@@ -5,6 +5,7 @@ from __future__ import annotations
 from mcp_doctor.baseline import BaselineDelta
 from mcp_doctor.models import ScanReport, ScanStatus, Severity
 from mcp_doctor.risk import risk_band
+from mcp_doctor.sanitize import neutralize_markdown
 
 _SEV_ICON = {
     Severity.ERROR: "🔴 `error`",
@@ -60,7 +61,8 @@ def render_markdown(report: ScanReport, delta: BaselineDelta | None = None) -> s
         for issue in report.parse_issues[:_MAX_LISTED]:
             location = f":{issue.line}" if issue.line else ""
             lines.append(
-                f"- `{issue.kind.value}` — `{issue.source_file}{location}`: {issue.message}"
+                f"- `{issue.kind.value}` — `{neutralize_markdown(issue.source_file)}{location}`: "
+                f"{neutralize_markdown(issue.message)}"
             )
         if len(report.parse_issues) > _MAX_LISTED:
             lines.append(f"- _{len(report.parse_issues) - _MAX_LISTED} further file(s) omitted._")
@@ -115,10 +117,14 @@ def render_markdown(report: ScanReport, delta: BaselineDelta | None = None) -> s
         ]
     )
     for d in findings[:_MAX_LISTED]:
-        msg = d.message.replace("|", "\\|")
+        # Untrusted text must not be able to open a code fence, start a heading, or begin a
+        # CI workflow command inside a report that gets posted as a PR comment.
+        msg = neutralize_markdown(d.message).replace("|", "\\|")
+        tool = neutralize_markdown(d.tool_name)
+        location = neutralize_markdown(f"{d.source_file}:{d.line}")
         lines.append(
-            f"| {_SEV_ICON[d.severity]} | `{d.rule_id}` | `{d.tool_name}` "
-            f"| `{d.source_file}:{d.line}` | {msg} | {d.risk} |"
+            f"| {_SEV_ICON[d.severity]} | `{d.rule_id}` | `{tool}` "
+            f"| `{location}` | {msg} | {d.risk} |"
         )
     if len(findings) > _MAX_LISTED:
         lines.append("")

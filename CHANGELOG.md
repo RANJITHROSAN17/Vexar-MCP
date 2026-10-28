@@ -18,8 +18,60 @@ Versioning contract, so upgrades are predictable:
 
 ## [Unreleased]
 
-Contributor-onboarding and automation. No package behaviour changes, so the released version
-stays 0.2.1.
+(Reserved for the next release.)
+
+---
+
+## [0.2.2] - 2026-10-28
+
+The protocol-currency release, from a full audit against the MCP specification and the official
+security guidance. Two behavioural defects, both found by attacking the product rather than
+reading it. See [`docs/review-2026-10.md`](docs/review-2026-10.md) for the findings register,
+the compliance matrix and the release verdict.
+
+### Fixed
+
+- **The client could not audit any server on the current protocol revision (High).** The
+  `2026-07-28` revision removed the `initialize` handshake: the version travels per request in
+  `params._meta["io.modelcontextprotocol/protocolVersion"]` and capabilities come from the
+  mandatory `server/discover` RPC. Vexar-MCP sent `initialize` unconditionally, so every
+  spec-current server was un-auditable and the failure read as `server rejected 'initialize'`.
+  The client now tries the handshake and falls back to discovery, selecting the newest mutually
+  supported revision, and reports which mode it used. `SUPPORTED_PROTOCOL_VERSIONS` gains
+  `2025-11-25` (previously reported as unsupported) and `2026-07-28`.
+- **Untrusted text could rewrite the report (Medium).** Tool names and descriptions from a
+  scanned file — or from a remote server during a live audit — reached the output sinks
+  unsanitized. ANSI escapes and bells could corrupt a terminal and a CI log; Markdown fences,
+  headings and `::error::` workflow commands could be injected into a PR comment. Not code
+  execution: *content spoofing*, which for a security tool is the same failure. New
+  `mcp_doctor/sanitize.py` strips control and bidi characters everywhere and neutralises
+  structural markers where they matter; JSON and SARIF keep the original text because their
+  encoders already handle escaping.
+- CRLF in annotation messages is now normalised to LF before escaping, so GitHub annotations are
+  byte-identical on Windows and Linux runners (`%0A` rather than `%0D%0A`). An existing test
+  asserted the old form; the assertion was updated with the reason recorded in the test.
+
+### Added
+
+- `docs/compliance.md`: a standing per-requirement matrix with the evidence for each row, and an
+  explicit **not-applicable** section for server-side requirements (OAuth, RBAC, HTTP transport,
+  HITL, rate limiting) that this architecture does not have — including why each is N/A rather
+  than claimed.
+- `docs/review-2026-10.md`: executive assessment, findings register with reproduction, threat
+  model, verification table, deferred work, accepted risks and a release verdict.
+- `tests/fixtures/stateless_mcp_server.py`: a mock server implementing the stateless revision,
+  with flags for each failure mode (no discovery, pinned to one revision).
+- CI gates: "Audit a server on the current protocol revision" and the sanitizer regression suite.
+- `vexar-mcp audit-server` now reports `Live protocol: <revision> | negotiation: <mode>` in the
+  terminal and `"live": {"protocol_version", "negotiation"}` in JSON.
+- README: a `mermaid` pipeline diagram showing the untrusted-input path and the `ParseIssue`
+  branch, a per-revision protocol support table, and a "Where this is going" plan.
+- Roadmap: RM-032 (Streamable HTTP auditing), RM-033 (symlink confinement, review finding F-05),
+  RM-034 (automated compliance matrix).
+
+### Security
+
+- 45 new tests: 29 for sink hardening, 16 for protocol negotiation and report provenance.
 
 ### Fixed
 

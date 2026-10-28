@@ -908,6 +908,82 @@
         "Every command in the snippet is checked by a test or CI step, or is marked as illustrative.",
         "It states what happens on the second run when nothing changed."
       ]
+    },
+    {
+      "id": "RM-032",
+      "title": "feat(live): audit remote servers over Streamable HTTP",
+      "labels": [
+        "roadmap",
+        "help wanted",
+        "area/cli",
+        "type/feature",
+        "difficulty/hard",
+        "size/XL"
+      ],
+      "summary": "Add an HTTP transport for `audit-server` so remote MCP deployments can be audited, with the origin, header, caching and auth checks the specification requires.",
+      "motivation": "The audit path is stdio-only, which covers local servers and nothing else. The 2026-07-28 revision defines `MCP-Protocol-Version` routing headers, origin validation rules and cache scoping that a stdio-only client never has to think about.",
+      "files": [
+        "src/mcp_doctor/live.py",
+        "docs/live-audit.md",
+        "tests/fixtures/"
+      ],
+      "acceptance_criteria": [
+        "HTTPS only; plaintext HTTP refused unless explicitly allowed for loopback.",
+        "`MCP-Protocol-Version` sent and validated against the response.",
+        "`Origin` validated and reported as an MCP012 finding when missing or foreign.",
+        "Response bodies, redirects, and total duration bounded; no private-range requests unless opted in.",
+        "Private security results are never treated as publicly cacheable.",
+        "Two negotiation modes (handshake and stateless) work over HTTP as they do over stdio."
+      ]
+    },
+    {
+      "id": "RM-033",
+      "title": "fix(engine): refuse to read files whose realpath leaves the scan root",
+      "labels": [
+        "roadmap",
+        "good first issue",
+        "area/parsers",
+        "type/security",
+        "difficulty/medium",
+        "size/S"
+      ],
+      "summary": "Skip, or gate behind `--follow-symlinks`, any scanned file that resolves outside the requested target, and report the skip as a coverage note.",
+      "motivation": "Review finding F-05: a symlinked file inside a scanned tree is read even when it points at `/etc/passwd`. Content is never echoed, so the impact is small \u2014 but least privilege says a scanner should read what it was pointed at and nothing else, and it should say when it declines to read something.",
+      "files": [
+        "src/mcp_doctor/engine.py",
+        "src/mcp_doctor/cli.py",
+        "docs/scan-status.md"
+      ],
+      "acceptance_criteria": [
+        "A file whose resolved path is outside the target root is skipped by default and counted in coverage as skipped.",
+        "`--follow-symlinks` restores today's behaviour for monorepos that rely on it.",
+        "The skip is visible in terminal output, not silent: a scanner must not quietly read less.",
+        "Tests cover: symlinked file inside the tree, symlink escaping it, symlinked directory (already not followed), and a broken symlink."
+      ]
+    },
+    {
+      "id": "RM-034",
+      "title": "docs(spec): keep a per-revision compatibility matrix current",
+      "labels": [
+        "roadmap",
+        "good first issue",
+        "area/docs",
+        "type/feature",
+        "difficulty/easy",
+        "size/S"
+      ],
+      "summary": "Move the compliance matrix out of the review document into `docs/compliance.md`, and add a test that fails when a new MCP revision exists that Vexar-MCP does not support.",
+      "motivation": "F-01 happened because a protocol revision shipped and nothing in the repository noticed. A review document is a snapshot; this needs to be a standing artefact with a check attached.",
+      "files": [
+        "docs/compliance.md",
+        "src/mcp_doctor/live.py",
+        "tests/"
+      ],
+      "acceptance_criteria": [
+        "`docs/compliance.md` lists each supported revision with its negotiation mode and the fixture that proves it.",
+        "A test asserts every revision in `SUPPORTED_PROTOCOL_VERSIONS` has a fixture exercising it.",
+        "The README links the matrix next to the live-audit docs."
+      ]
     }
   ],
   "min_open_good_first_issues": 2

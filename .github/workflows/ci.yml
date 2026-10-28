@@ -253,6 +253,23 @@ jobs:
           print("server budget gate: OK")
           PY
 
+      - name: Audit a server on the current protocol revision
+        run: |
+          set -euo pipefail
+          # 2026-07-28 removed the initialize handshake. A handshake-only client cannot audit
+          # these servers at all, so this gate exists to make that regression loud.
+          out=$(vexar-mcp audit-server --format json --fail-on never -- \
+                 python tests/fixtures/stateless_mcp_server.py)
+          python - "$out" <<'PY'
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          live = payload.get("live") or {}
+          assert live.get("negotiation") == "stateless", live
+          assert live.get("protocol_version") == "2026-07-28", live
+          assert payload["summary"]["tools_scanned"] >= 1, payload["summary"]
+          print("stateless audit gate: OK")
+          PY
+
       - name: Onboarding assets match the tool's real output
         run: |
           set -euo pipefail

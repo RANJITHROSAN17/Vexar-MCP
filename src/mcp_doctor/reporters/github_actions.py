@@ -14,6 +14,7 @@ import contextlib
 from pathlib import Path
 
 from mcp_doctor.models import Diagnostic, ScanReport, Severity
+from mcp_doctor.sanitize import neutralize_workflow_command
 
 _ANNOTATION_LEVEL = {
     Severity.ERROR: "error",
@@ -86,9 +87,12 @@ def _compose_message(diagnostic: Diagnostic) -> str:
     Returns:
         ``[tool] message`` plus an optional ``Fix: remediation`` suffix.
     """
-    message = f"[{diagnostic.tool_name}] {diagnostic.message}"
+    # Untrusted text (a tool name can come from a remote server during a live audit) must not
+    # carry ANSI escapes into a CI log, nor start a workflow command of its own.
+    message = f"[{neutralize_workflow_command(diagnostic.tool_name)}] "
+    message += neutralize_workflow_command(diagnostic.message)
     if diagnostic.remediation:
-        message = f"{message} Fix: {diagnostic.remediation}"
+        message = f"{message} Fix: {neutralize_workflow_command(diagnostic.remediation)}"
     return message
 
 
@@ -109,7 +113,12 @@ def render_annotation(diagnostic: Diagnostic, *, root: Path | None = None) -> st
     level = _ANNOTATION_LEVEL[diagnostic.severity]
     effective_root = root if root is not None else Path.cwd()
     properties = (
-        ("file", _normalize_source_file(diagnostic.source_file, effective_root)),
+        (
+            "file",
+            _normalize_source_file(
+                neutralize_workflow_command(diagnostic.source_file), effective_root
+            ),
+        ),
         ("line", str(max(1, diagnostic.line))),
         ("title", f"{diagnostic.rule_id} ({diagnostic.rule_slug})"),
     )

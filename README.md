@@ -65,6 +65,42 @@ It does not replace a security review. It catches a specific, documented set of 
 modes early, and it makes the standard you enforce explicit and reviewable. [What it cannot
 do](docs/limitations.md) is written down rather than implied.
 
+### How it works
+
+```mermaid
+flowchart LR
+    subgraph inputs["Untrusted input — never executed"]
+        A["Python source<br/>ast.parse"]
+        B["JSON tool manifest<br/>stdlib json"]
+        C["Running MCP server<br/>stdio JSON-RPC"]
+    end
+
+    A --> D["Loaders<br/>normalise to ToolSpec"]
+    B --> D
+    C --> D
+
+    D --> E["14 rules<br/>security · schema · contract · tokens"]
+    E --> F["Policy<br/>fail-on · score floor · budgets"]
+    F --> G["ScanReport<br/>status + coverage + findings"]
+
+    G --> H["terminal"]
+    G --> I["JSON / SARIF"]
+    G --> J["Markdown / PR annotations"]
+    G --> K["HTML dashboard"]
+
+    D -. "unreadable file" .-> L["ParseIssue<br/>score withheld · exit 3"]
+    L --> G
+
+    classDef untrusted fill:#2b1a1a,stroke:#f87171,color:#fecaca
+    classDef out fill:#12212b,stroke:#2dd4bf,color:#ccfbf1
+    class A,B,C untrusted
+    class H,I,J,K out
+```
+
+The dotted path is the point: a file that cannot be read becomes a **`ParseIssue`**, not an
+empty result. The report and the exit code both record that the analysis was incomplete, so
+"nothing found" and "nothing read" can never be confused again.
+
 ---
 
 ## Quick start
@@ -324,10 +360,22 @@ vexar-mcp audit-server -- python my_server.py
 vexar-mcp audit-server --format sarif --output live.sarif -- npx -y @acme/mcp-server
 ```
 
-It performs the real `initialize` handshake, follows `tools/list` pagination, validates
-protocol conformance (`MCP012`), and runs the entire rule set over the tools that are
-actually exposed — through the same normalisation pipeline as file scans, so results are
+It negotiates the protocol revision the server actually speaks, follows `tools/list`
+pagination, validates conformance (`MCP012`), and runs the entire rule set over the tools that
+are actually exposed — through the same normalisation pipeline as file scans, so results are
 directly comparable with a static baseline.
+
+| Revision | Negotiation | Notes |
+| :--- | :--- | :--- |
+| `2026-07-28` | `stateless` | Current. No handshake; version per request in `_meta`, agreed via `server/discover` |
+| `2025-11-25` | `handshake` | Last initialization-based revision |
+| `2025-06-18` | `handshake` | |
+| `2025-03-26` | `handshake` | |
+| `2024-11-05` | `handshake` | |
+
+The client tries the handshake first and falls back to discovery, so one binary audits both
+generations. Every report states which revision and mode were used — the two prove different
+things about a server. Full detail: [live audit](docs/live-audit.md).
 
 The command is argv-only (no shell), bounded by a hard deadline, an 8 MiB response cap, and
 a 50-page cap, and the child is killed on expiry. This is the only command that starts a
@@ -484,6 +532,30 @@ contract.
 Milestones and queued work live in [`.github/roadmap.json`](.github/roadmap.json). Coverage and test counts above are a point-in-time local measurement, not a guarantee; the CI badge is authoritative for a given commit.
 
 ---
+
+## Where this is going
+
+The direction is **scanner → governance platform**: a scan is a snapshot, and what teams
+actually need is a standard they can hold over time. Growth is ordered by that, not by feature
+count.
+
+| Horizon | Work | Why it comes next |
+| :--- | :--- | :--- |
+| **Now (0.2.x)** | Prove the current protocol revision stays auditable; harden output sinks; keep every claim measured | A scanner that cannot audit current servers, or that can be made to lie in a report, has no product to grow |
+| **Next (0.3)** | `fix(engine)` symlink confinement (RM-033) · remote auditing over Streamable HTTP (RM-032) · a standing [compatibility matrix](docs/compliance.md) (RM-034) | Closes review findings F-05 and the "no ecosystem server tested" gap |
+| **Then (0.4)** | PyPI publishing (RM-023) · a reproducible token-estimator benchmark (RM-029) · multi-server registry auditing (RM-024) | Distribution and measurement: `pip install vexar-mcp` should work, and every number we publish should come from a script |
+| **Later** | Policy inheritance across orgs and teams (RM-025) · stronger TypeScript parsing (RM-027) · loader completeness signals (RM-028) | Depth for teams already using it, not acquisition features |
+
+Two rules constrain the roadmap:
+
+1. **No capability ships unmeasured.** A rule, a parser, or a cost model lands with a test that
+   would fail if it were wrong — including the honest `n/a` when it cannot see something.
+2. **No growth at the cost of trust.** If a feature would make the product look better without
+   making it more correct, it does not go in.
+
+The full queued set is [`.github/roadmap.json`](.github/roadmap.json); the 2026-10 review that
+drove the current plan is [`docs/review-2026-10.md`](docs/review-2026-10.md), including its
+findings register and accepted risks.
 
 ## Contributing
 

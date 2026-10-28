@@ -36,7 +36,7 @@ vexar-mcp --version
 ```
 
 ```console
-vexar-mcp 0.2.1
+vexar-mcp 0.2.2
 ```
 
 If `vexar-mcp` is not found, the install went into a different environment than your shell is

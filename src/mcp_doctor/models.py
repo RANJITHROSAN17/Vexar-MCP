@@ -229,6 +229,9 @@ class ScanReport:
     status: ScanStatus = ScanStatus.CLEAN
     coverage: ScanCoverage = field(default_factory=ScanCoverage)
     parse_issues: tuple[ParseIssue, ...] = ()
+    #: Set only for live audits: the protocol revision actually used and how it was agreed.
+    live_protocol: str | None = None
+    live_mode: str | None = None
 
     @property
     def is_complete(self) -> bool:

@@ -8,12 +8,23 @@ from mcp_doctor.baseline import BaselineDelta
 from mcp_doctor.models import ScanReport, ScanStatus, Severity
 from mcp_doctor.risk import risk_band
 from mcp_doctor.rules.base import RuleDefinition
+from mcp_doctor.sanitize import strip_control_chars
 
 _SEV_BADGE = {
     Severity.ERROR: "[ERROR]",
     Severity.WARNING: "[WARN ]",
     Severity.INFO: "[INFO ]",
 }
+
+
+def _t(text: str) -> str:
+    """Strip invisible control characters from text that came from a scanned file.
+
+    A tool name is untrusted input: a scanned repository can put ``\x1b[2K`` in one and erase
+    the line above it in a CI log, or an OSC-8 sequence that turns a finding into a link.
+    """
+    return strip_control_chars(text, keep_newlines=False)
+
 
 _STATUS_LABEL = {
     ScanStatus.CLEAN: "CLEAN - analyzed everything, no findings",
@@ -43,6 +54,10 @@ def render_terminal(report: ScanReport, delta: BaselineDelta | None = None) -> s
         f"Errors: {s.errors}  Warnings: {s.warnings}  Info: {s.infos}"
     )
     c = report.coverage
+    # Live audits must say which revision they spoke and how they agreed it: the two
+    # negotiation modes prove different things about the server.
+    if report.live_protocol:
+        lines.append(f"Live protocol: {report.live_protocol}  |  negotiation: {report.live_mode}")
     lines.append(
         f"Policy: {report.policy_name}  |  Risk Index: {s.risk_index}/100 "
         f"({risk_band(s.risk_index)})  |  Status: {report.status.value.upper()}"
@@ -60,8 +75,8 @@ def render_terminal(report: ScanReport, delta: BaselineDelta | None = None) -> s
         lines.append("-" * 78)
         for issue in report.parse_issues:
             location = f":{issue.line}" if issue.line else ""
-            lines.append(f"[{issue.kind.value}] {issue.source_file}{location}")
-            lines.append(f"        {issue.message}")
+            lines.append(f"[{issue.kind.value}] {_t(issue.source_file)}{location}")
+            lines.append(f"        {_t(issue.message)}")
 
     if not report.tools:
         lines.append("")
@@ -99,23 +114,23 @@ def render_terminal(report: ScanReport, delta: BaselineDelta | None = None) -> s
         for diag in delta.new_findings:
             lines.append(
                 f"{_SEV_BADGE[diag.severity]} {diag.rule_id} ({diag.rule_slug}) at "
-                f"{diag.source_file}:{diag.line} [{diag.tool_name}]"
+                f"{_t(diag.source_file)}:{diag.line} [{_t(diag.tool_name)}]"
             )
-            lines.append(f"        {diag.message}")
+            lines.append(f"        {_t(diag.message)}")
             if diag.remediation:
-                lines.append(f"        Fix: {diag.remediation}")
+                lines.append(f"        Fix: {_t(diag.remediation)}")
         return "\n".join(lines)
 
     lines.append("")
     for diag in report.diagnostics:
         badge = _SEV_BADGE[diag.severity]
         lines.append(
-            f"{badge} {diag.rule_id} ({diag.rule_slug}) at {diag.source_file}:{diag.line} "
-            f"[{diag.tool_name}] risk={diag.risk}"
+            f"{badge} {diag.rule_id} ({diag.rule_slug}) at {_t(diag.source_file)}:{diag.line} "
+            f"[{_t(diag.tool_name)}] risk={diag.risk}"
         )
-        lines.append(f"        {diag.message}")
+        lines.append(f"        {_t(diag.message)}")
         if diag.remediation:
-            lines.append(f"        Fix: {diag.remediation}")
+            lines.append(f"        Fix: {_t(diag.remediation)}")
     return "\n".join(lines)
 
 
@@ -127,8 +142,8 @@ def render_token_report(report: ScanReport) -> str:
     ]
     for tool in sorted(report.tools, key=lambda t: t.estimated_tokens, reverse=True):
         lines.append(
-            f"{tool.name:<32} {tool.estimated_tokens:>12} {len(tool.parameters):>8}  "
-            f"{tool.source_file}:{tool.line}"
+            f"{_t(tool.name)[:32]:<32} {tool.estimated_tokens:>12} "
+            f"{len(tool.parameters):>8}  {_t(tool.source_file)}:{tool.line}"
         )
     lines.append("-" * 78)
     lines.append(

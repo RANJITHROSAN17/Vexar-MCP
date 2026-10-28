@@ -31,8 +31,24 @@ Everything after `--` is the server command, passed as an argv list with **no sh
 identically. Live and static results are directly comparable, and a baseline taken from one
 is meaningful against the other.
 
-Supported revisions: `2024-11-05`, `2025-03-26`, `2025-06-18`. An unknown negotiated
-revision is reported, not silently accepted.
+Supported revisions: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`, `2026-07-28`.
+An unknown negotiated revision is reported, not silently accepted.
+
+### Two negotiation modes, and why it matters
+
+| Mode | When | How the revision is agreed |
+| :--- | :--- | :--- |
+| `handshake` | revisions `2025-11-25` and earlier | `initialize` → `notifications/initialized`, version in the result |
+| `stateless` | `2026-07-28` and later | `server/discover` → newest mutually supported revision, carried per request in `params._meta["io.modelcontextprotocol/protocolVersion"]` |
+
+The client tries the handshake first and falls back to discovery. This is not a compatibility
+nicety: `2026-07-28` **removed** the handshake, so a handshake-only client cannot audit any
+server built on the current revision. Before 0.2.2 that is exactly what happened, and the
+failure surfaced as `server rejected 'initialize'` — which reads like the server's fault.
+
+Every audit report states which mode was used (`Live protocol: <revision> | negotiation:
+<mode>` in the terminal, `"live": {"protocol_version": ..., "negotiation": ...}` in JSON),
+because the two modes prove different things about the server.
 
 ## Safety rails
 

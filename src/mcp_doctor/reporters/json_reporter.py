@@ -58,6 +58,13 @@ def render_json(report: ScanReport, delta: BaselineDelta | None = None) -> str:
         # from the second - an empty diagnostics list on a PARTIAL scan means nothing.
         "status": report.status.value,
         "analysis_complete": report.is_complete,
+        # Provenance for live audits: which revision was used, and whether it was agreed by
+        # the initialize handshake or by server/discover. Absent (null) for static scans.
+        "live": (
+            {"protocol_version": report.live_protocol, "negotiation": report.live_mode}
+            if report.live_protocol
+            else None
+        ),
         "coverage": {
             "candidate_files": report.coverage.candidate_files,
             "files_analyzed": report.coverage.files_analyzed,

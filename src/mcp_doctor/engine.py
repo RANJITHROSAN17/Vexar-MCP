@@ -15,6 +15,7 @@ from __future__ import annotations
 import fnmatch
 import os
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from mcp_doctor.loaders import load_json_manifest, load_python_file, load_typescript_file
@@ -304,7 +305,8 @@ def scan_server(
         if rule.rule_id in effective_cfg.ignored_rules:
             continue
         raw.extend(rule.check(result.tools, effective_cfg))
-    return assemble_report(result.tools, _inline_suppressed(raw, result.tools), effective_cfg)
+    report = assemble_report(result.tools, _inline_suppressed(raw, result.tools), effective_cfg)
+    return replace(report, live_protocol=result.protocol_version, live_mode=result.mode)
 
 
 __all__ = [

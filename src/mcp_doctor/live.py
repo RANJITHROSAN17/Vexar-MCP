@@ -29,6 +29,7 @@ import signal
 import subprocess
 import threading
 import time
+from collections.abc import Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import IO, Any
@@ -37,13 +38,22 @@ from mcp_doctor import __version__
 from mcp_doctor.loaders.json_manifest import parse_tool_entries
 from mcp_doctor.models import Category, Diagnostic, Severity, ToolSpec
 
-# Protocol revisions this build knows how to converse with.
+# Protocol revisions this build knows how to converse with. Newest last; selection always
+# prefers the newest mutually supported revision.
 SUPPORTED_PROTOCOL_VERSIONS = (
     "2024-11-05",
     "2025-03-26",
     "2025-06-18",
+    "2025-11-25",
+    "2026-07-28",
 )
 DEFAULT_PROTOCOL_VERSION = "2025-06-18"
+
+#: Revisions from 2026-07-28 on are stateless: the handshake is gone and each request declares
+#: the version it uses in ``params._meta[VERSION_META_KEY]``.
+VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
+STATELESS_PROTOCOL_VERSIONS = frozenset({"2026-07-28"})
+DISCOVER_METHOD = "server/discover"
 
 _MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 _MAX_PAGES = 50
@@ -92,6 +102,9 @@ class LiveAuditResult:
     server_version: str
     duration_ms: int
     pages: int
+    #: How the revision was agreed: "handshake" (initialize) or "stateless" (server/discover).
+    #: Recorded because the two modes mean different things for what an audit can prove.
+    mode: str = "handshake"
     stderr_tail: str = ""
     issues: tuple[str, ...] = ()
 
@@ -104,9 +117,16 @@ class LiveAuditResult:
 class _JsonRpcClient:
     """Minimal newline-delimited JSON-RPC 2.0 client bound to a child process."""
 
-    def __init__(self, process: subprocess.Popen[str], deadline: float) -> None:
+    def __init__(
+        self,
+        process: subprocess.Popen[str],
+        deadline: float,
+        *,
+        protocol_version: str | None = None,
+    ) -> None:
         self._process = process
         self._deadline = deadline
+        self.protocol_version: str | None = None
         self._next_id = 0
         self._lines: queue.Queue[str | None] = queue.Queue()
         self._stderr_buf: list[str] = []
@@ -155,13 +175,26 @@ class _JsonRpcClient:
             payload["params"] = params
         self._send(payload)
 
+    def set_protocol_version(self, version: str | None) -> None:
+        """Declare the protocol version carried on every subsequent request.
+
+        From the stateless revisions on, the version is a per-request fact rather than a
+        connection-level negotiation, so it belongs in ``params._meta``.
+        """
+        self.protocol_version = version
+
     def request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send a request and return the matching response object."""
         self._next_id += 1
         request_id = self._next_id
         payload: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id, "method": method}
-        if params is not None:
-            payload["params"] = params
+        merged = dict(params or {})
+        if self.protocol_version:
+            meta = dict(merged.get("_meta") or {})
+            meta.setdefault(VERSION_META_KEY, self.protocol_version)
+            merged["_meta"] = meta
+        if merged:
+            payload["params"] = merged
         self._send(payload)
 
         consumed = 0
@@ -202,6 +235,40 @@ class _JsonRpcClient:
             if not isinstance(result, dict):
                 raise LiveAuditError(f"server returned a non-object result for '{method}'")
             return result
+
+
+def _discover(client: _JsonRpcClient, handshake_error: LiveAuditError) -> dict[str, Any]:
+    """Negotiate with a stateless server via the mandatory ``server/discover`` RPC.
+
+    Raises:
+        LiveAuditError: If discovery is unavailable too. The message names both failures,
+            because "the server is broken" and "we speak a protocol it removed" look
+            identical from the outside and only one of them is our problem.
+    """
+    try:
+        result = client.request(DISCOVER_METHOD)
+    except LiveAuditError as discover_error:
+        raise LiveAuditError(
+            f"cannot negotiate with this server. The handshake was rejected "
+            f"({handshake_error}) and `{DISCOVER_METHOD}` is unavailable ({discover_error}). "
+            f"Revisions from 2026-07-28 are stateless and must implement `{DISCOVER_METHOD}`; "
+            f"older servers must accept `initialize`."
+        ) from discover_error
+    if not isinstance(result.get("protocolVersions"), list):
+        raise LiveAuditError(
+            f"`{DISCOVER_METHOD}` returned no `protocolVersions` list, so the protocol "
+            "revision cannot be negotiated."
+        )
+    return result
+
+
+def select_protocol_version(supported: Sequence[str]) -> str | None:
+    """Return the newest revision both sides support, or ``None`` when they share none.
+
+    Revisions are ``YYYY-MM-DD`` strings, so lexicographic order is chronological order.
+    """
+    mutual = [version for version in supported if version in SUPPORTED_PROTOCOL_VERSIONS]
+    return max(mutual) if mutual else None
 
 
 def _terminate(process: subprocess.Popen[str]) -> None:
@@ -256,25 +323,49 @@ def introspect_server(spec: LiveServerSpec) -> LiveAuditResult:
     pages = 0
     client = _JsonRpcClient(process, deadline)
     try:
-        init = client.request(
-            "initialize",
-            {
-                "protocolVersion": spec.protocol_version,
-                "capabilities": {},
-                "clientInfo": {"name": "vexar-mcp", "version": __version__},
-            },
-        )
-        negotiated = str(init.get("protocolVersion", ""))
-        if not negotiated:
-            issues.append(
-                "Server omitted `protocolVersion` in the initialize result (MCP requires it)."
+        mode = "handshake"
+        try:
+            init = client.request(
+                "initialize",
+                {
+                    "protocolVersion": spec.protocol_version,
+                    "capabilities": {},
+                    "clientInfo": {"name": "vexar-mcp", "version": __version__},
+                },
             )
-        elif negotiated not in SUPPORTED_PROTOCOL_VERSIONS:
-            supported = ", ".join(SUPPORTED_PROTOCOL_VERSIONS)
-            issues.append(
-                f"Server negotiated unsupported protocolVersion '{negotiated}'. "
-                f"Vexar-MCP supports: {supported}."
+        except LiveAuditError as handshake_error:
+            # The stateless revisions removed the handshake entirely. Rather than reporting
+            # the server as broken, discover what it actually speaks and talk that.
+            init = _discover(client, handshake_error)
+            mode = "stateless"
+
+        if mode == "stateless":
+            advertised = init.get("protocolVersions")
+            advertised_versions = (
+                [str(v) for v in advertised] if isinstance(advertised, list) else []
             )
+            chosen = select_protocol_version(advertised_versions)
+            if chosen is None:
+                raise LiveAuditError(
+                    "this server speaks no protocol revision Vexar-MCP supports "
+                    f"(server: {', '.join(advertised_versions) or 'none advertised'}; "
+                    f"Vexar-MCP: {', '.join(SUPPORTED_PROTOCOL_VERSIONS)})"
+                )
+            negotiated = chosen
+            client.set_protocol_version(chosen)
+        else:
+            negotiated = str(init.get("protocolVersion", ""))
+            if not negotiated:
+                issues.append(
+                    "Server omitted `protocolVersion` in the initialize result (MCP requires it)."
+                )
+            elif negotiated not in SUPPORTED_PROTOCOL_VERSIONS:
+                supported = ", ".join(SUPPORTED_PROTOCOL_VERSIONS)
+                issues.append(
+                    f"Server negotiated unsupported protocolVersion '{negotiated}'. "
+                    f"Vexar-MCP supports: {supported}."
+                )
+            client.notify("notifications/initialized")
 
         capabilities = init.get("capabilities")
         has_tools = isinstance(capabilities, dict) and "tools" in capabilities
@@ -283,8 +374,6 @@ def introspect_server(spec: LiveServerSpec) -> LiveAuditResult:
                 "Server did not advertise the `tools` capability; tools/list may be empty or "
                 "rejected by clients."
             )
-
-        client.notify("notifications/initialized")
 
         entries: list[Any] = []
         cursor: str | None = None
@@ -336,6 +425,7 @@ def introspect_server(spec: LiveServerSpec) -> LiveAuditResult:
     return LiveAuditResult(
         tools=tools,
         protocol_version=negotiated,
+        mode=mode,
         server_name=server_name,
         server_version=server_version,
         duration_ms=int((time.monotonic() - started) * 1000),
