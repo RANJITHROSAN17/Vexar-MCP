@@ -90,7 +90,7 @@ see a `ScanReport`.
 ```
                        ┌──────────────────────────────────────────┐
    files ──loaders──►  │              rule catalog                │
-                       │  built-in (MCP001-MCP011, MCP013)        │
+                       │  built-in (MCP001-MCP011, MCP013-MCP015) │
    live server         │  + opt-in rule packs (rules/plugin.py)   │
    ──live.py────►      └───────────────┬──────────────────────────┘
    (stdio JSON-RPC)                    │  tools + diagnostics

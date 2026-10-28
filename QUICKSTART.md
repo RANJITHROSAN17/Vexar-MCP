@@ -100,7 +100,7 @@ Three commands worth knowing immediately:
 
 ```bash
 vexar-mcp token-report .        # what your tool catalog costs on every single request
-vexar-mcp rules                 # all 14 rules, with severity and what each one flags
+vexar-mcp rules                 # all 15 rules, with severity and what each one flags
 vexar-mcp scan . --format html --output report.html   # one self-contained file to share
 ```
 

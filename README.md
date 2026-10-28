@@ -207,7 +207,7 @@ All checks passed! Zero security, schema, contract, or token-budget findings.
 
 ## What it checks
 
-Fourteen rules across four categories — thirteen static, plus `MCP012` for live protocol validation. Run `vexar-mcp rules` to list them, or `vexar-mcp rules --format json` for the machine-readable catalog.
+Fifteen rules across four categories — fourteen static, plus `MCP012` for live protocol validation. Run `vexar-mcp rules` to list them, or `vexar-mcp rules --format json` for the machine-readable catalog.
 
 | Rule | Severity | Category | Flags |
 | :--- | :--- | :--- | :--- |
