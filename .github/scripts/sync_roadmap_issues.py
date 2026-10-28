@@ -283,10 +283,15 @@ def main(argv: list[str] | None = None) -> int:
         for number, item in select_issues_to_refresh(roadmap, existing):
             client.update_issue(number, item["title"], render_issue_body(item))
             print(f"[roadmap-bot] Refreshed #{number}: {item['id']} text had drifted")
-        for number, item in select_shipped_issues_to_close(roadmap, existing):
+        to_close = select_shipped_issues_to_close(roadmap, existing)
+        for number, item in to_close:
             client.close_issue(number, render_shipped_comment(item))
             print(f"[roadmap-bot] Closed #{number}: {item['id']} shipped")
-        to_open = select_items_to_open(roadmap, existing)
+        # Closures free queue slots. Recompute against the post-closure state, otherwise the
+        # queue stays under-filled until the next scheduled run a week later.
+        closed = {number for number, _ in to_close}
+        remaining = [issue for issue in existing if int(issue.get("number", 0)) not in closed]
+        to_open = select_items_to_open(roadmap, remaining)
         if not to_open:
             print("[roadmap-bot] Active contributor queue is already full; nothing new to open.")
             return 0

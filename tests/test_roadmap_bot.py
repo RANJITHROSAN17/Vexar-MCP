@@ -176,3 +176,31 @@ def test_every_queued_item_is_contributor_ready() -> None:
         and (not item.get("files") or not item.get("acceptance_criteria"))
     ]
     assert not incomplete, f"queued items missing files/criteria: {incomplete}"
+
+
+def test_closing_shipped_issues_frees_queue_slots_immediately() -> None:
+    """A closure must count as a freed slot in the same run, not the next one."""
+    roadmap = {
+        "max_open_roadmap_issues": 2,
+        "items": [
+            {
+                "id": "RM-001",
+                "title": "done",
+                "summary": "s",
+                "motivation": "m",
+                "status": "shipped",
+            },
+            {"id": "RM-002", "title": "next", "summary": "s", "motivation": "m"},
+        ],
+    }
+    issues = [
+        {"number": 1, "state": "open", "body": "<!-- roadmap-id: RM-001 -->"},
+        {"number": 2, "state": "open", "body": "<!-- roadmap-id: RM-999 -->"},
+    ]
+    to_close = bot_mod.select_shipped_issues_to_close(roadmap, issues)
+    assert [number for number, _ in to_close] == [1]
+
+    closed = {number for number, _ in to_close}
+    remaining = [i for i in issues if i["number"] not in closed]
+    opened = bot_mod.select_items_to_open(roadmap, remaining)
+    assert [item["id"] for item in opened] == ["RM-002"]
