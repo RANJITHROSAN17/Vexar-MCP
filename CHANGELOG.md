@@ -22,6 +22,54 @@ Versioning contract, so upgrades are predictable:
 
 ---
 
+## [0.2.5] - 2026-10-28
+
+Adds YAML tool manifests, closing [issue #40](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/40).
+Agent frameworks and declarative MCP gateways routinely keep tool schemas in YAML, which was
+a blind spot: a repository whose tools lived in `tools.yaml` scanned as having no tools at all.
+
+### Added
+
+- **YAML manifest support** for `*.yaml` and `*.yml`, accepting the same four document shapes
+  as the JSON loader (`tools:` list, `result.tools` envelope, a single tool mapping, a bare
+  list) with the same rules, scoring, and `ToolSpec` normalization.
+- **`vexar-mcp[yaml]` extra.** PyYAML stays optional, so the core install keeps zero runtime
+  dependencies.
+
+Three behaviours are deliberate:
+
+- **Discovery only treats manifest-shaped YAML as a candidate.** A file is parsed when it
+  contains a `tools:` or `inputSchema:`/`input_schema:` key at shallow indentation. Without
+  that gate, every `.github/workflows/*.yml` in every repository would enter the scan, and
+  counting them as "analyzed files with no tools" would misreport coverage. Non-manifest YAML
+  is never parsed and never becomes a parse issue. An explicitly named file skips the check.
+- **A missing PyYAML fails loudly instead of skipping.** A manifest that cannot be read
+  produces a `missing_dependency` parse issue, withholds the grade, and exits `3`, naming the
+  install command. Silently skipping a file full of vulnerable tools and reporting A+ is the
+  failure mode the scoring model exists to prevent.
+- **Findings carry the tool's real line.** A YAML manifest is parsed with a `SafeLoader`
+  subclass that records each mapping's source line, so a finding on the fortieth tool points
+  at line 40 instead of line 1.
+
+`yaml.load`, `full_load` and `unsafe_load` are never used: only `SafeLoader` touches scanned
+input, and a test pins the loader class so a later refactor cannot quietly swap it.
+
+### Changed
+
+- Parameter line numbers in JSON and YAML manifests now follow their tool's line instead of a
+  fixed `1`, so all findings about one tool agree on a location (previously `MCP015` pointed at
+  line 1 while `MCP008` pointed at the right line).
+- `parse_tool_entries` accepts optional per-entry lines; JSON callers are unchanged.
+
+### Fixed
+
+- **`rulesets/contributor-enforcement.json` was invalid JSON** — a stray backslash after
+  `"bypass_actor_ids": [100000000]`. The ruleset could not have been imported into GitHub, and
+  it made `vexar-mcp scan .` on this repository report an unanalyzed input.
+
+
+---
+
 ## [0.2.4] - 2026-10-28
 
 Adds `vexar-mcp init`, the adoption path that was missing: the tool could tell you what was

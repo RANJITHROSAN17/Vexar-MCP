@@ -22,7 +22,13 @@ _BOUND_KEYS = frozenset(
 )
 
 
-def _parse_schema_params(schema: dict[str, Any]) -> tuple[ParameterSpec, ...]:
+def _parse_schema_params(schema: dict[str, Any], line: int) -> tuple[ParameterSpec, ...]:
+    """Normalize a JSON-Schema ``properties`` block into parameters.
+
+    Every parameter inherits the tool's line. A property's own line is not recoverable
+    from a decoded document, and reporting the tool's line keeps a finding on the same
+    location as every other finding about that tool instead of pointing at line 1.
+    """
     props = schema.get("properties")
     if not isinstance(props, dict):
         return ()
@@ -61,13 +67,15 @@ def _parse_schema_params(schema: dict[str, Any]) -> tuple[ParameterSpec, ...]:
                 description=desc,
                 required=str(name) in required_set,
                 has_bounds=has_bounds,
-                line=1,
+                line=line,
             )
         )
     return tuple(params)
 
 
-def _normalize_tool_entry(entry: Any, source_file: str, index: int) -> ToolSpec | None:
+def _normalize_tool_entry(
+    entry: Any, source_file: str, index: int, line: int | None = None
+) -> ToolSpec | None:
     if not isinstance(entry, dict):
         return None
 
@@ -85,14 +93,17 @@ def _normalize_tool_entry(entry: Any, source_file: str, index: int) -> ToolSpec 
         return None
 
     description = str(entry.get("description", ""))
-    params = _parse_schema_params(schema)
+    # JSON has no cheap way to report the real line, so the entry's position in the array
+    # stands in for it. YAML can report the true line and passes one in.
+    resolved_line = line if line is not None else index + 1
+    params = _parse_schema_params(schema, resolved_line)
     est_tokens = estimate_tool_tokens(name, description, params, raw_schema=schema)
 
     return ToolSpec(
         name=name,
         description=description,
         source_file=source_file,
-        line=index + 1,
+        line=resolved_line,
         parameters=params,
         raw_schema=schema,
         estimated_tokens=est_tokens,
@@ -134,29 +145,59 @@ def load_json_manifest(path: Path, *, issues: list[ParseIssue] | None = None) ->
             )
         return []
 
-    candidates: list[Any] = []
+    return parse_tool_entries(extract_tool_candidates(raw), str(path))
+
+
+def extract_tool_candidates(raw: Any) -> list[Any]:
+    """Return the list of tool entries from an already-decoded manifest document.
+
+    Handles the four container shapes a tool manifest can take: a ``tools`` list, an
+    MCP ``result.tools`` envelope, a single tool object, and a bare list of tools.
+    Anything else yields no candidates, which is how unrelated files (``package.json``,
+    ``tsconfig.json``, a CI workflow) are ignored instead of reported as empty manifests.
+
+    Shared with the YAML loader so both formats accept exactly the same shapes.
+    """
     if isinstance(raw, dict):
-        if isinstance(raw.get("tools"), list):
-            candidates = raw["tools"]
-        elif isinstance(raw.get("result"), dict) and isinstance(raw["result"].get("tools"), list):
-            candidates = raw["result"]["tools"]
-        elif "name" in raw and any(k in raw for k in ("inputSchema", "input_schema", "parameters")):
-            candidates = [raw]
-    elif isinstance(raw, list):
-        candidates = raw
+        tools = raw.get("tools")
+        if isinstance(tools, list):
+            return [*tools]
+        result = raw.get("result")
+        if isinstance(result, dict):
+            nested = result.get("tools")
+            if isinstance(nested, list):
+                return [*nested]
+        if "name" in raw and any(k in raw for k in ("inputSchema", "input_schema", "parameters")):
+            return [raw]
+        return []
+    if isinstance(raw, list):
+        return list(raw)
+    return []
 
-    return parse_tool_entries(candidates, str(path))
 
-
-def parse_tool_entries(candidates: Sequence[Any], source_file: str) -> list[ToolSpec]:
+def parse_tool_entries(
+    candidates: Sequence[Any], source_file: str, *, lines: Sequence[int | None] | None = None
+) -> list[ToolSpec]:
     """Normalize already-decoded tool entries into ToolSpec objects.
 
-    Shared by the file loader and the live MCP introspection path so a tool fetched
-    from a running server is analysed by exactly the same code as one read from disk.
+    Shared by the JSON and YAML file loaders and the live MCP introspection path, so a
+    tool fetched from a running server is analysed by exactly the same code as one read
+    from disk.
+
+    Args:
+        candidates: Decoded tool entries.
+        source_file: Path recorded on every :class:`ToolSpec`.
+        lines: Optional 1-based source line per entry, for formats that can report one.
+            Omitted by JSON callers, which fall back to the entry's array position.
     """
     tools: list[ToolSpec] = []
     for idx, item in enumerate(candidates):
-        spec = _normalize_tool_entry(item, source_file, idx)
+        spec = _normalize_tool_entry(
+            item,
+            source_file,
+            idx,
+            lines[idx] if lines is not None and idx < len(lines) else None,
+        )
         if spec is not None:
             tools.append(spec)
     return tools

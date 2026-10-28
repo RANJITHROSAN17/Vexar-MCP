@@ -71,7 +71,7 @@ do](docs/limitations.md) is written down rather than implied.
 flowchart LR
     subgraph inputs["Untrusted input — never executed"]
         A["Python source<br/>ast.parse"]
-        B["JSON tool manifest<br/>stdlib json"]
+        B["JSON / YAML manifest<br/>stdlib json + optional PyYAML"]
         C["Running MCP server<br/>stdio JSON-RPC"]
     end
 
@@ -128,6 +128,7 @@ That is the whole on-ramp. If step 2 prints findings and step 3 exits `1`, it is
 ```bash
 vexar-mcp scan .                                   # scan the current repository
 vexar-mcp scan tools.json                          # a JSON / OpenAI-style tool manifest
+vexar-mcp scan tools.yaml                          # the same shapes in YAML (needs [yaml] extra)
 vexar-mcp token-report .                           # what your catalog costs per request
 vexar-mcp rules                                    # the 15 rules, and what they mean
 vexar-mcp init . --github-action                   # config + CI workflow, ready to commit

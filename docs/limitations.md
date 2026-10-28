@@ -66,6 +66,10 @@ Configuration is discovered from the directory of the first scan target, not fro
 
 `# noqa` must name the rules explicitly (`# noqa: MCP001` or `# noqa: MCP001,MCP008`) or use `ALL`. A bare `# noqa` with no rule list does not suppress anything.
 
+## YAML manifests depend on an optional package
+
+YAML manifests are read only when PyYAML is installed (`pip install 'vexar-mcp[yaml]'`). Without it, a manifest-shaped file is reported as an unanalyzed input rather than being skipped silently, so a bare install can never turn a YAML-only repository into a clean scan. Discovery is also heuristic: a YAML file is only parsed when it contains a `tools:` or `inputSchema:` key, which keeps CI workflows and compose files out of the analysis. A manifest that expresses its tools some other way needs to be named explicitly on the command line.
+
 ## Distribution
 
 There is no PyPI release of `vexar-mcp`. `pip install vexar-mcp` does not work, and the `mcp-doctor` package on PyPI is an unrelated project by a different author. Install from the repository as described in [Usage](usage.md#install).

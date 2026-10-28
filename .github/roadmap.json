@@ -483,7 +483,9 @@
         "Use `yaml.safe_load` when `pyyaml` is available; never use unsafe `yaml.load`.",
         "Reuse `_normalize_tool_entry` from `json_manifest.py` to avoid code duplication.",
         "Add unit tests for YAML tool manifests and non-tool YAML configs (e.g., GitHub Actions workflows must be ignored cleanly)."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.2.5"
     },
     {
       "id": "RM-015",

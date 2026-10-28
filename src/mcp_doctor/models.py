@@ -51,6 +51,8 @@ class IssueKind(str, Enum):
 
     SYNTAX_ERROR = "syntax_error"
     INVALID_JSON = "invalid_json"
+    INVALID_YAML = "invalid_yaml"
+    MISSING_DEPENDENCY = "missing_dependency"
     UNREADABLE = "unreadable"
 
 

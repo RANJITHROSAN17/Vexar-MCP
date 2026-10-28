@@ -250,8 +250,25 @@ vexar-mcp scan . --baseline .vexar-baseline.json --policy strict-prod
 | `.py` | `ast.parse` (never imported) | `@mcp.tool()` / `@server.tool()` decorated functions, `Tool(...)` objects, `FastMCP` builders; parameter names, annotations, defaults, bounds; sink calls inside the function body |
 | `.ts`, `.js`, `.jsx` | Static text/AST scan, no Node runtime | TypeScript MCP SDK `server.tool(...)` registrations |
 | `.json` | `json.loads` | MCP `tools/list` payloads, OpenAI and Anthropic tool manifests |
+| `.yaml`, `.yml` | `yaml.safe_load` (optional PyYAML) | The same manifest shapes as JSON, wrapped in YAML |
 
 Directories are walked recursively. These directory names are skipped by default: `.git`, `.venv`, `venv`, `node_modules`, `__pycache__`, `dist`, `build`. Override with `exclude = [...]` in configuration.
+
+### YAML manifests
+
+YAML support comes from an optional dependency, so the core package keeps its zero-dependency install:
+
+```bash
+pip install 'vexar-mcp[yaml]'    # adds PyYAML
+```
+
+Three behaviours are worth knowing, because YAML is the one format where most files in a repository are *not* interesting to a scanner:
+
+- **Only manifest-shaped files are analyzed.** A `.yaml`/`.yml` file enters the scan when it contains a `tools:` key or an `inputSchema:`/`input_schema:` definition, matched conservatively so a workflow step writing `tools: cargo` at deep indentation does not qualify. Your CI workflows, `docker-compose.yml`, and `mkdocs.yml` are never parsed and never appear in coverage. Naming a file explicitly (`vexar-mcp scan tools.yaml`) skips the heuristic entirely — an explicit target is an instruction.
+- **A missing PyYAML is a failure, not a skip.** If a manifest-shaped file cannot be read because PyYAML is absent, the scan reports a `missing_dependency` parse issue, withholds the grade, and exits `3`. Quietly skipping a manifest full of vulnerable tools and reporting A+ is the exact false confidence the scoring model exists to prevent.
+- **Findings carry the real line number.** A tool starting on line 40 of a manifest is reported at line 40, so a finding in a long manifest points somewhere you can look. (JSON manifests fall back to the entry's position in the array, because a decoded document has no line information.)
+
+Malformed YAML produces an `invalid_yaml` parse issue with the offending line, and — like any unreadable input — makes the result `PARTIAL` rather than clean.
 
 If a target does not exist, the CLI exits with status `2` and an error message.
 

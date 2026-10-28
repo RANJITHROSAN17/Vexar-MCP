@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from mcp_doctor import __version__
+from mcp_doctor.config import load_config
 from mcp_doctor.engine import scan_paths
 from mcp_doctor.models import ScanConfig
 
@@ -74,10 +75,10 @@ class TestDemoAsset:
 
     def test_demo_shows_both_the_findings_and_the_refusal(self) -> None:
         svg = (ROOT / "assets" / "demo.svg").read_text(encoding="utf-8")
-        # Derived from an actual scan rather than hardcoded: the score moves whenever a rule
-        # is added or reweighted, and a literal here would rot silently until someone
-        # noticed the README showing a score the tool no longer produces.
-        report = scan_paths([ROOT / "examples" / "vulnerable_server.py"], ScanConfig())
+        # Derived from the *same* command the demo runs, not from one file: the demo scans
+        # `examples/` under strict-prod, and deriving from a narrower target made this test
+        # pass by coincidence rather than by agreement with the asset.
+        report = scan_paths([ROOT / "examples"], load_config(policy_override="strict-prod"))
         assert report.summary.score is not None
         assert f"Health Score: {report.summary.score}/100" in svg, (
             "should show a real findings scan"
