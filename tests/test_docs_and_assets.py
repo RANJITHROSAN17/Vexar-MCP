@@ -230,3 +230,24 @@ def test_the_composite_action_installs_yaml_support() -> None:
     assert any("[yaml]" in line for line in install_lines), (
         f"the composite action does not install the yaml extra: {install_lines}"
     )
+
+
+def test_every_workflow_that_scans_this_repository_can_read_every_format() -> None:
+    """A job that scans `examples/` must install the extras the scan needs.
+
+    `examples/` contains a YAML manifest, so an install without `[yaml]` reports an
+    unanalyzed input, exits 3, and fails the job under `set -e`. That failure is confusing
+    because nothing is wrong with the code being scanned -- and the composite action already
+    installs the extra, so a workflow calling it is fine.
+    """
+    offenders = []
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.y*ml")):
+        text = path.read_text(encoding="utf-8")
+        if "vexar-mcp scan examples/" not in text and "vexar-mcp scan .github/" not in text:
+            continue
+        if "uses: ./" in text:  # delegates to the composite action, which installs [yaml]
+            continue
+        installs = [line for line in text.splitlines() if "pip install" in line]
+        if not any("[yaml]" in line or "[dev]" in line for line in installs):
+            offenders.append(path.name)
+    assert not offenders, f"workflow(s) scan YAML manifests but install no yaml extra: {offenders}"
