@@ -1,0 +1,37 @@
+# A clean YAML tool manifest, in the shape agent frameworks and declarative MCP
+# gateways use. CI scans it with `vexar-mcp scan examples/` under the strictest preset,
+# so it must pass every rule there: full descriptions, typed and bounded parameters, no
+# ambiguous names, and each tool under the strict 200-token context budget.
+#
+#     pip install 'vexar-mcp[yaml]'      # PyYAML is optional; the core install has no deps
+#     vexar-mcp scan examples/tools_manifest.yaml
+tools:
+  - name: lookup_release_notes
+    description: Look up the release notes for a published package version.
+    inputSchema:
+      type: object
+      required: [package, version]
+      properties:
+        package:
+          type: string
+          description: Package name as published.
+          maxLength: 214
+        version:
+          type: string
+          description: An exact released version.
+          maxLength: 32
+
+  - name: list_open_issues
+    description: List open issues on a repository, newest first. Read-only.
+    inputSchema:
+      type: object
+      required: [repository]
+      properties:
+        repository:
+          type: string
+          description: Repository as `owner/name`.
+          maxLength: 140
+        limit:
+          type: integer
+          description: Maximum issues to return.
+          maximum: 100

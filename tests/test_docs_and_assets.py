@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from mcp_doctor import __version__
+from mcp_doctor.config import load_config
 from mcp_doctor.engine import scan_paths
 from mcp_doctor.models import ScanConfig
 
@@ -74,10 +75,10 @@ class TestDemoAsset:
 
     def test_demo_shows_both_the_findings_and_the_refusal(self) -> None:
         svg = (ROOT / "assets" / "demo.svg").read_text(encoding="utf-8")
-        # Derived from an actual scan rather than hardcoded: the score moves whenever a rule
-        # is added or reweighted, and a literal here would rot silently until someone
-        # noticed the README showing a score the tool no longer produces.
-        report = scan_paths([ROOT / "examples" / "vulnerable_server.py"], ScanConfig())
+        # Derived from the *same* command the demo runs, not from one file: the demo scans
+        # `examples/` under strict-prod, and deriving from a narrower target made this test
+        # pass by coincidence rather than by agreement with the asset.
+        report = scan_paths([ROOT / "examples"], load_config(policy_override="strict-prod"))
         assert report.summary.score is not None
         assert f"Health Score: {report.summary.score}/100" in svg, (
             "should show a real findings scan"
@@ -214,3 +215,18 @@ class TestQuotedOutputIsReal:
         text = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
         documented = set(re.findall(r"### `vexar-mcp ([a-z-]+)", text))
         assert not (known - documented), f"undocumented subcommand(s): {sorted(known - documented)}"
+
+
+def test_the_composite_action_installs_yaml_support() -> None:
+    """The action is the main CI entry point; it must read every format the CLI documents.
+
+    Without the extra, a repository with YAML manifests reports an unanalyzed input under
+    the action while the CLI reads it fine -- a divergence users would only discover from a
+    mysterious PARTIAL status.
+    """
+    action = (ROOT / "action.yml").read_text(encoding="utf-8")
+    install_lines = [line for line in action.splitlines() if "pip install" in line]
+    assert install_lines, "the action should install the package"
+    assert any("[yaml]" in line for line in install_lines), (
+        f"the composite action does not install the yaml extra: {install_lines}"
+    )

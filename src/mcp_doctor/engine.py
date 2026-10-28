@@ -19,6 +19,11 @@ from dataclasses import replace
 from pathlib import Path
 
 from mcp_doctor.loaders import load_json_manifest, load_python_file, load_typescript_file
+from mcp_doctor.loaders.yaml_manifest import (
+    YAML_SUFFIXES,
+    load_yaml_manifest,
+    looks_like_tool_manifest,
+)
 from mcp_doctor.models import (
     Diagnostic,
     ParseIssue,
@@ -66,10 +71,16 @@ def _is_excluded_dir(name: str, full_path: Path, exclude_globs: tuple[str, ...])
 
 
 def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> list[Path]:
-    """Walk target files/directories and return candidate Python, JSON, TS, JS and JSX files.
+    """Walk targets and return candidate Python, JSON, TypeScript, JavaScript and YAML files.
 
     Excluded directories are pruned during traversal rather than filtered afterwards, so a
     repository with a large dependency tree is not walked at all.
+
+    YAML is treated differently from the other suffixes: a ``.yaml``/``.yml`` file only
+    becomes a candidate when :func:`looks_like_tool_manifest` recognises it. Walking a
+    repository otherwise yields every CI workflow and compose file, and counting those as
+    "analyzed files with no tools" would misreport coverage. An explicitly named YAML
+    target is always accepted, because naming a file is an instruction, not a heuristic.
     """
     discovered: list[Path] = []
     seen: set[Path] = set()
@@ -80,11 +91,8 @@ def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> lis
             raise FileNotFoundError(f"Scan target does not exist: {raw_target}")
 
         if target.is_file():
-            if (
-                target.suffix in _SUPPORTED_SUFFIXES
-                and target not in seen
-                and not _is_excluded(target, config.exclude_globs)
-            ):
+            supported = target.suffix in _SUPPORTED_SUFFIXES or target.suffix in YAML_SUFFIXES
+            if supported and target not in seen and not _is_excluded(target, config.exclude_globs):
                 seen.add(target)
                 discovered.append(raw_target)
             continue
@@ -99,7 +107,10 @@ def discover_candidate_files(targets: Sequence[Path], config: ScanConfig) -> lis
             for name in sorted(filenames):
                 candidate = directory / name
                 if candidate.suffix not in _SUPPORTED_SUFFIXES:
-                    continue
+                    if candidate.suffix not in YAML_SUFFIXES:
+                        continue
+                    if not looks_like_tool_manifest(candidate):
+                        continue
                 if _is_excluded(candidate, config.exclude_globs):
                     continue
                 resolved = candidate.resolve()
@@ -248,8 +259,19 @@ def assemble_report(
     )
 
 
+def _load_file(file_path: Path, issues: list[ParseIssue]) -> list[ToolSpec]:
+    """Dispatch one candidate file to the loader for its language or format."""
+    if file_path.suffix == ".py":
+        return load_python_file(file_path, issues=issues)
+    if file_path.suffix in (".ts", ".js", ".jsx"):
+        return load_typescript_file(file_path, issues=issues)
+    if file_path.suffix in YAML_SUFFIXES:
+        return load_yaml_manifest(file_path, issues=issues)
+    return load_json_manifest(file_path, issues=issues)
+
+
 def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> ScanReport:
-    """Scan Python/TypeScript/JavaScript servers and JSON tool manifests into a ScanReport."""
+    """Scan servers and tool manifests in Python, TypeScript, JSON and YAML into a ScanReport."""
     effective_cfg = config or ScanConfig()
     files = discover_candidate_files(targets, effective_cfg)
 
@@ -258,13 +280,7 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
     files_with_tools = 0
 
     for file_path in files:
-        loaded = (
-            load_python_file(file_path, issues=parse_issues)
-            if file_path.suffix == ".py"
-            else load_typescript_file(file_path, issues=parse_issues)
-            if file_path.suffix in (".ts", ".js", ".jsx")
-            else load_json_manifest(file_path, issues=parse_issues)
-        )
+        loaded = _load_file(file_path, parse_issues)
         if loaded:
             files_with_tools += 1
         all_tools.extend(loaded)

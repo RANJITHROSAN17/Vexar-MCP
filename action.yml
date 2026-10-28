@@ -102,7 +102,11 @@ runs:
 
     - name: Install Vexar-MCP
       shell: bash
-      run: python -m pip install --quiet "${{ github.action_path }}"
+      # `[yaml]` is installed deliberately: the action is how most projects run this in CI,
+      # and a workflow that silently skipped YAML manifests would report `PARTIAL` -- or,
+      # worse, look clean while ignoring files. Installing the extra here means the action
+      # analyses every format the CLI documents.
+      run: python -m pip install --quiet "${{ github.action_path }}[yaml]"
 
     - name: Run vexar-mcp scan
       id: run_scan

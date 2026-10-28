@@ -143,7 +143,7 @@ jobs:
           cache: "pip"
 
       - name: Install Vexar-MCP
-        run: python -m pip install -e "."
+        run: python -m pip install -e ".[yaml]"
 
       - name: Strict production gate on the clean example
         run: |
@@ -151,6 +151,28 @@ jobs:
           # A clean server must reach A+ under the strictest scoring.
           vexar-mcp scan examples/clean_server.py --policy strict-prod \
             --format json | python -c "import json,sys; d=json.load(sys.stdin)['summary']; assert d['score']==100, d; assert d['grade']=='A+', d"
+
+      - name: YAML tool manifests are really analyzed
+        run: |
+          set -euo pipefail
+          # Guards the optional-dependency path: if PyYAML is missing, or discovery stops
+          # recognising `tools:`, this reports an unanalyzed input and the scan exits 3.
+          vexar-mcp scan examples/tools_manifest.yaml --format json \
+            | python -c "import json,sys; d=json.load(sys.stdin); \
+                assert d['summary']['tools_scanned'] == 2, d['summary']; \
+                assert d['status'] == 'clean', d['status']; \
+                print('YAML manifest OK:', d['summary']['tools_scanned'], 'tools, score', d['summary']['score'])"
+
+      - name: CI workflows are not mistaken for tool manifests
+        run: |
+          set -euo pipefail
+          # This repository's own 15 YAML workflows live here. If discovery ever treats a
+          # configuration file as a candidate, it surfaces as a parse issue or as a tool.
+          out="$(vexar-mcp scan .github/ --format json --fail-on never || true)"
+          echo "${out}" | python -c "import json,sys; d=json.load(sys.stdin); \
+              assert not d['parse_issues'], d['parse_issues']; \
+              assert d['summary']['tools_scanned'] == 0, d['summary']; \
+              print('workflow YAML ignored cleanly:', d['coverage']['candidate_files'], 'non-YAML candidates')"
 
       - name: Baseline adoption flow
         run: |
