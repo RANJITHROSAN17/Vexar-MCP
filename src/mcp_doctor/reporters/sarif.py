@@ -5,8 +5,22 @@ from __future__ import annotations
 import json
 
 from mcp_doctor import __version__
+from mcp_doctor.baseline import fingerprint
 from mcp_doctor.models import ScanReport, Severity
 from mcp_doctor.rules import get_all_rules
+
+# GitHub Code Scanning buckets alerts by `security-severity`; map our severities onto it.
+_SECURITY_SEVERITY = {
+    Severity.ERROR: "8.0",
+    Severity.WARNING: "5.5",
+    Severity.INFO: "2.0",
+}
+
+
+def _security_severity(severity: Severity) -> str:
+    """Return the CVSS-style string GitHub uses to rank code-scanning alerts."""
+    return _SECURITY_SEVERITY[severity]
+
 
 _SARIF_LEVEL = {
     Severity.ERROR: "error",
@@ -24,7 +38,10 @@ def render_sarif(report: ScanReport) -> str:
             "shortDescription": {"text": r.summary},
             "help": {"text": r.remediation},
             "defaultConfiguration": {"level": _SARIF_LEVEL[r.severity]},
-            "properties": {"tags": [r.category.value, "mcp"]},
+            "properties": {
+                "tags": [r.category.value, "mcp"],
+                "security-severity": _security_severity(r.severity),
+            },
         }
         for r in get_all_rules()
     ]
@@ -34,6 +51,8 @@ def render_sarif(report: ScanReport) -> str:
             "ruleId": d.rule_id,
             "level": _SARIF_LEVEL[d.severity],
             "message": {"text": f"[{d.tool_name}] {d.message}"},
+            "partialFingerprints": {"vexarRuleTool": fingerprint(d)},
+            "properties": {"risk": d.risk, "tool": d.tool_name, "category": d.category.value},
             "locations": [
                 {
                     "physicalLocation": {
@@ -58,6 +77,10 @@ def render_sarif(report: ScanReport) -> str:
                         "informationUri": "https://github.com/RANJITHROSAN17/Vexar-MCP",
                         "rules": rules_meta,
                     }
+                },
+                "properties": {
+                    "policy": report.policy_name,
+                    "riskIndex": report.summary.risk_index,
                 },
                 "results": results,
             }

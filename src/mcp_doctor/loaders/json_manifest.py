@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -116,9 +117,18 @@ def load_json_manifest(path: Path) -> list[ToolSpec]:
     elif isinstance(raw, list):
         candidates = raw
 
+    return parse_tool_entries(candidates, str(path))
+
+
+def parse_tool_entries(candidates: Sequence[Any], source_file: str) -> list[ToolSpec]:
+    """Normalize already-decoded tool entries into ToolSpec objects.
+
+    Shared by the file loader and the live MCP introspection path so a tool fetched
+    from a running server is analysed by exactly the same code as one read from disk.
+    """
     tools: list[ToolSpec] = []
     for idx, item in enumerate(candidates):
-        spec = _normalize_tool_entry(item, str(path), idx)
+        spec = _normalize_tool_entry(item, source_file, idx)
         if spec is not None:
             tools.append(spec)
     return tools

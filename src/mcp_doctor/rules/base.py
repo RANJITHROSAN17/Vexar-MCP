@@ -55,3 +55,43 @@ def register_rule(
 def get_all_rules() -> list[RuleDefinition]:
     """Return all registered rules ordered by rule ID."""
     return [_REGISTRY[k] for k in sorted(_REGISTRY)]
+
+
+def snapshot_registry() -> dict[str, RuleDefinition]:
+    """Return a copy of the current registry.
+
+    Rule packs register into a process-global table, which is what a CLI wants (load
+    once, scan once) but is surprising for long-lived library hosts and confusing in
+    tests. Snapshot/restore lets callers scope pack loading to a single unit of work.
+    """
+    return dict(_REGISTRY)
+
+
+def restore_registry(snapshot: dict[str, RuleDefinition]) -> None:
+    """Restore a previously captured registry snapshot."""
+    _REGISTRY.clear()
+    _REGISTRY.update(snapshot)
+
+
+def get_rule_catalog() -> dict[str, Category]:
+    """Return a mapping of every registered rule ID to its category."""
+    return {rule_id: definition.category for rule_id, definition in _REGISTRY.items()}
+
+
+def register_definition(definition: RuleDefinition) -> None:
+    """Register an externally built rule definition, rejecting ID collisions.
+
+    Third-party rule packs must not be able to shadow a built-in rule: silently
+    replacing ``MCP005`` with a no-op would turn the scanner into a rubber stamp.
+    Colliding IDs therefore raise instead of overwriting.
+
+    Raises:
+        ValueError: When the rule ID is already registered or its slug is in use.
+    """
+    if definition.rule_id in _REGISTRY:
+        raise ValueError(
+            f"rule ID '{definition.rule_id}' is already registered and cannot be overridden"
+        )
+    if any(existing.slug == definition.slug for existing in _REGISTRY.values()):
+        raise ValueError(f"rule slug '{definition.slug}' is already registered")
+    _REGISTRY[definition.rule_id] = definition

@@ -97,6 +97,8 @@ class Diagnostic:
     line: int
     tool_name: str
     remediation: str = ""
+    # Deterministic 0-100 risk score (severity x exploitability x mitigation), see mcp_doctor.risk.
+    risk: int = 0
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,14 @@ class ScanConfig:
     max_tool_tokens: int = 250
     max_server_tokens: int = 4000
     ignored_rules: frozenset[str] = field(default_factory=frozenset)
+    # Active policy preset name, surfaced in every reporter for auditability.
+    policy_name: str = "default"
+    # Minimum diagnostic severity that fails the run; None means "never fail".
+    fail_on: Severity | None = Severity.ERROR
+    # Minimum acceptable health score; a lower score fails the run.
+    min_score: int = 0
+    # Opt-in, explicitly trusted third-party rule packs (module paths or TOML/JSON files).
+    rule_packs: tuple[str, ...] = ()
     exclude_globs: tuple[str, ...] = (
         ".git",
         ".venv",
@@ -129,6 +139,8 @@ class ScanSummary:
     infos: int
     score: int
     grade: str
+    # Aggregate risk index (0-100, higher = riskier), sum of per-finding risk capped at 100.
+    risk_index: int = 0
 
     @property
     def total_diagnostics(self) -> int:
@@ -142,3 +154,5 @@ class ScanReport:
     tools: tuple[ToolSpec, ...]
     diagnostics: tuple[Diagnostic, ...]
     summary: ScanSummary
+    # Enforcement profile this report was produced under, so results are self-describing.
+    policy_name: str = "default"

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from mcp_doctor.baseline import BaselineDelta
 from mcp_doctor.models import ScanReport, Severity
+from mcp_doctor.risk import risk_band
 from mcp_doctor.rules.base import RuleDefinition
 
 _SEV_BADGE = {
@@ -14,7 +16,7 @@ _SEV_BADGE = {
 }
 
 
-def render_terminal(report: ScanReport) -> str:
+def render_terminal(report: ScanReport, delta: BaselineDelta | None = None) -> str:
     """Format a ScanReport for terminal output."""
     lines: list[str] = []
     s = report.summary
@@ -27,11 +29,22 @@ def render_terminal(report: ScanReport) -> str:
         f"Context Footprint: ~{s.total_estimated_tokens} tokens  |  "
         f"Errors: {s.errors}  Warnings: {s.warnings}  Info: {s.infos}"
     )
+    lines.append(
+        f"Policy: {report.policy_name}  |  Risk Index: {s.risk_index}/100 "
+        f"({risk_band(s.risk_index)})"
+    )
     lines.append("=" * 78)
 
     if not report.tools:
         lines.append("No MCP tools or agent tool manifests discovered in target path(s).")
         return "\n".join(lines)
+
+    if delta is not None:
+        lines.append(
+            f"Baseline: {len(delta.new_findings)} new, {len(delta.resolved)} resolved, "
+            f"{delta.unchanged} unchanged"
+        )
+        lines.append("")
 
     if not report.diagnostics:
         lines.append(
@@ -39,11 +52,28 @@ def render_terminal(report: ScanReport) -> str:
         )
         return "\n".join(lines)
 
+    if delta is not None:
+        lines.append("NEW FINDINGS")
+        lines.append("-" * 78)
+        if not delta.new_findings:
+            lines.append("None. No regressions introduced since the baseline.")
+            return "\n".join(lines)
+        for diag in delta.new_findings:
+            lines.append(
+                f"{_SEV_BADGE[diag.severity]} {diag.rule_id} ({diag.rule_slug}) at "
+                f"{diag.source_file}:{diag.line} [{diag.tool_name}]"
+            )
+            lines.append(f"        {diag.message}")
+            if diag.remediation:
+                lines.append(f"        Fix: {diag.remediation}")
+        return "\n".join(lines)
+
     lines.append("")
     for diag in report.diagnostics:
         badge = _SEV_BADGE[diag.severity]
         lines.append(
-            f"{badge} {diag.rule_id} ({diag.rule_slug}) at {diag.source_file}:{diag.line} [{diag.tool_name}]"
+            f"{badge} {diag.rule_id} ({diag.rule_slug}) at {diag.source_file}:{diag.line} "
+            f"[{diag.tool_name}] risk={diag.risk}"
         )
         lines.append(f"        {diag.message}")
         if diag.remediation:

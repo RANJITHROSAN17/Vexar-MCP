@@ -1,0 +1,29 @@
+# Vexar-MCP's own configuration (dogfooding).
+#
+# The tool scans itself with this file, so it stays honest about the settings it
+# documents. Every key below is optional — delete the file and the defaults apply.
+
+# Enforcement profile used by local runs. `default` keeps local feedback low-friction;
+# CI passes --policy explicitly so a preset change here cannot silently weaken the gate.
+policy = "default"
+
+# Rule IDs to silence project-wide. Ignoring anything in a category the active policy
+# protects (e.g. security under `strict-prod`) is a hard configuration error.
+ignore = []
+
+# Directories never walked. This replaces the built-in list, so it is kept complete.
+exclude = [
+  ".git",
+  ".venv",
+  "venv",
+  "node_modules",
+  "__pycache__",
+  "dist",
+  "build",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+]
+
+# Opt-in third-party rule packs (TOML/JSON data, or a trusted Python module path).
+rule-packs = []
