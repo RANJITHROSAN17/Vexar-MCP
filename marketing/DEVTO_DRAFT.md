@@ -35,7 +35,7 @@ Five output formats from the same report object: terminal scorecard, JSON, SARIF
 ```console
 $ vexar-mcp scan examples/vulnerable_server.py
 ==============================================================================
-Vexar-MCP  |  Health Score: 8/100 (F)  |  Tools: 2 across 1 file(s)
+Vexar-MCP  |  Health Score: 4/100 (F)  |  Tools: 2 across 1 file(s)
 Context Footprint: ~105 tokens  |  Errors: 4  Warnings: 5  Info: 1
 ==============================================================================
 

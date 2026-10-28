@@ -48,6 +48,12 @@ from mcp_doctor.reporters import (
 )
 from mcp_doctor.rules import get_all_rules, get_rule_catalog
 from mcp_doctor.rules.plugin import RulePackError, load_rule_packs
+from mcp_doctor.scaffold import (
+    WORKFLOW_PATH,
+    describe_next_steps,
+    plan_scaffold,
+    write_scaffold,
+)
 from mcp_doctor.simulate.cost_model import (
     DEFAULT_CALLS_PER_DAY,
     PRICING_AS_OF,
@@ -280,6 +286,43 @@ def _build_parser() -> argparse.ArgumentParser:
         "--allow-incomplete",
         action="store_true",
         help="Exit 0 even if the underlying scan could not analyze every file (projection is a lower bound).",
+    )
+
+    # ------------------------------------------------------------------- init
+    init_p = sub.add_parser(
+        "init",
+        help="Write a starter vexar-mcp.toml and optionally a CI workflow.",
+    )
+    init_p.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Project directory to scaffold (default: current directory).",
+    )
+    init_p.add_argument(
+        "--github-action",
+        action="store_true",
+        help="Also write .github/workflows/vexar-mcp.yml.",
+    )
+    init_p.add_argument(
+        "--policy",
+        default=None,
+        help="Preset whose gate values are written into the config (default: the 'default' preset).",
+    )
+    init_p.add_argument(
+        "--action-ref",
+        default="main",
+        help="Ref of RANJITHROSAN17/Vexar-MCP used by the generated workflow (default: main).",
+    )
+    init_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing files instead of refusing.",
+    )
+    init_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the files instead of writing them.",
     )
 
     return parser
@@ -700,6 +743,44 @@ def _cmd_audit_server(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _cmd_init(args: argparse.Namespace) -> int:
+    """Scaffold a configuration file and, optionally, a CI workflow."""
+    target = Path(args.directory)
+    plan = plan_scaffold(
+        target,
+        github_action=args.github_action,
+        force=args.force,
+        policy=args.policy,
+        action_ref=args.action_ref,
+    )
+
+    if plan.is_blocked:
+        for problem in plan.problems:
+            print(f"vexar-mcp: error: {problem}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        for file in plan.files:
+            print(f"===== {file.path} =====")
+            print(file.content, end="" if file.content.endswith("\n") else "\n")
+        return 0
+
+    written = write_scaffold(plan)
+    for path in written:
+        print(f"wrote {path}")
+    if args.action_ref.strip() in {"main", "master"} and any(
+        path.name == WORKFLOW_PATH.name for path in written
+    ):
+        print(
+            "note: the workflow tracks a moving branch; re-run with "
+            "--action-ref <tag-or-sha> to pin the tool version.",
+            file=sys.stderr,
+        )
+    print()
+    print(describe_next_steps(target, github_action=args.github_action))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint returning POSIX exit status (0=pass, 1=gate failure, 2=error)."""
     parser = _build_parser()
@@ -716,6 +797,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_audit_server(args)
         if args.command == "simulate":
             return _cmd_simulate(args)
+        if args.command == "init":
+            return _cmd_init(args)
         if args.command == "token-report":
             cfg = _resolve_config(args)
             report = scan_paths([Path(p) for p in args.paths], cfg)

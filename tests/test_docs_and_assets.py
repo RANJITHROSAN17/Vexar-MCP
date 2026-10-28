@@ -167,3 +167,50 @@ class TestReadmeAboveTheFold:
 )
 def test_referenced_assets_exist(asset: str) -> None:
     assert (ROOT / asset).is_file()
+
+
+class TestQuotedOutputIsReal:
+    """Scores quoted in prose must be scores the tool actually produces.
+
+    The onboarding docs show real terminal output, which is the point -- but it means every
+    rule change moves those numbers. A literal that nobody re-derives silently becomes a
+    claim about behaviour that no longer exists, and it is the first thing a newcomer
+    compares against when they run the command themselves.
+    """
+
+    DOCS = ("README.md", "QUICKSTART.md", "docs/usage.md", "marketing/DEVTO_DRAFT.md")
+
+    def _real_scores(self) -> set[int]:
+        scores = set()
+        for name in ("vulnerable_server.py", "clean_server.py"):
+            report = scan_paths([ROOT / "examples" / name], ScanConfig())
+            if report.summary.score is not None:
+                scores.add(report.summary.score)
+        return scores
+
+    def test_every_quoted_health_score_is_one_the_tool_produces(self) -> None:
+        real = self._real_scores()
+        offenders: list[str] = []
+        for name in self.DOCS:
+            text = (ROOT / name).read_text(encoding="utf-8")
+            for match in re.finditer(r"Health Score: (\d+)/100", text):
+                if int(match.group(1)) not in real:
+                    offenders.append(f"{name}: {match.group(0)}")
+            for match in re.finditer(r"\*\*(\d+)/100\*\*", text):
+                if int(match.group(1)) not in real:
+                    offenders.append(f"{name}: **{match.group(1)}/100**")
+        assert not offenders, (
+            "documented scores the tool does not produce: "
+            f"{offenders} (it currently produces {sorted(real)})"
+        )
+
+    def test_every_subcommand_is_documented_in_the_usage_reference(self) -> None:
+        """A command nobody documented is a command nobody finds."""
+        from mcp_doctor.cli import _build_parser
+
+        known = set()
+        for action in _build_parser()._subparsers._group_actions:  # type: ignore[union-attr]
+            known |= set(action.choices)  # type: ignore[attr-defined]
+        text = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+        documented = set(re.findall(r"### `vexar-mcp ([a-z-]+)", text))
+        assert not (known - documented), f"undocumented subcommand(s): {sorted(known - documented)}"

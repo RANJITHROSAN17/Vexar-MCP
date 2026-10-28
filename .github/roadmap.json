@@ -304,9 +304,11 @@
       "acceptance_criteria": [
         "Create `vexar-mcp.toml` with documented defaults (`max-tool-tokens`, `max-server-tokens`, `ignore`, `exclude`).",
         "Refuse to overwrite existing files unless `--force` is passed.",
-        "When `--github-action` is passed, write `.github/workflows/mcp-doctor.yml` referencing `RANJITHROSAN17/Vexar-MCP@main`.",
+        "When `--github-action` is passed, write `.github/workflows/vexar-mcp.yml` referencing `RANJITHROSAN17/Vexar-MCP@main`.",
         "Add unit tests covering fresh creation, existing-file protection, and `--force`."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.2.4"
     },
     {
       "id": "RM-008",

@@ -22,6 +22,45 @@ Versioning contract, so upgrades are predictable:
 
 ---
 
+## [0.2.4] - 2026-10-28
+
+Adds `vexar-mcp init`, the adoption path that was missing: the tool could tell you what was
+wrong but not help you start. Closes [issue #7](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/7).
+
+### Added
+
+- **`vexar-mcp init [directory]`** writes a commented `vexar-mcp.toml`, and with
+  `--github-action` a workflow that gates every push and pull request. `--policy` chooses the
+  preset whose gate values are written, `--action-ref` pins the tool version, `--dry-run`
+  prints without writing, `--force` overwrites.
+
+  Four behaviours are deliberate rather than convenient:
+
+  - **The generated config is validated before it is written**, through the same loader a
+    scan uses. A scaffold the tool rejects is worse than no scaffold.
+  - **A refusal writes nothing.** Existing targets mean exit `2` and an untouched directory,
+    never a half-scaffolded project.
+  - **An existing configuration is never shadowed silently.** `vexar-mcp.toml` wins over
+    `.mcp-doctor.toml` and pyproject tables, so writing one beside an existing config would
+    change how the project is scanned without saying so. `init` names the file and refuses.
+  - **`ignore` and `exclude` are generated empty.** A scaffold that pre-silences findings
+    produces a clean report, not a clean server.
+
+  Generated values are read from the live policy preset and `ScanConfig` defaults, so
+  regenerating after a policy change cannot produce comments that disagree with the tool.
+
+### Fixed
+
+- **Documentation quoted a health score the tool no longer produced.** Four files showed
+  `8/100` for the bundled insecure example after `MCP015` was added; it is `4/100`. A new
+  test derives the real scores and fails if a documented one disagrees, so the next rule
+  change cannot leave the onboarding docs claiming stale output.
+- `docs/usage.md` described five report formats and omitted `html`; the command synopsis now
+  lists `init`, and every subcommand has a reference section (both guarded by tests).
+
+
+---
+
 ## [0.2.3] - 2026-10-28
 
 One new rule, contributed against [issue #5](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/5).

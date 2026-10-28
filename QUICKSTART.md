@@ -36,7 +36,7 @@ vexar-mcp --version
 ```
 
 ```console
-vexar-mcp 0.2.3
+vexar-mcp 0.2.4
 ```
 
 If `vexar-mcp` is not found, the install went into a different environment than your shell is
@@ -56,7 +56,7 @@ You should see a low score, a handful of findings with exact line numbers and a 
 for each, and an **exit code of `1`**:
 
 ```console
-Vexar-MCP  |  Health Score: 8/100 (F)  |  Tools: 2 across 1 file(s)
+Vexar-MCP  |  Health Score: 4/100 (F)  |  Tools: 2 across 1 file(s)
 ...
 [ERROR] MCP005 (dangerous-shell-execution) at examples/vulnerable_server.py:25 [run]
         Tool 'run' invokes dangerous execution sink `subprocess.run(shell=True)` with parameter 'cmd'.
@@ -77,7 +77,7 @@ Vexar-MCP  |  Health Score: 100/100 (A+)  |  Tools: 2 across 1 file(s)
 All checks passed! Zero security, schema, contract, or token-budget findings.
 ```
 
-**That contrast is the product.** `8/100` on one file and `100/100` on the other, from the same
+**That contrast is the product.** `4/100` on one file and `100/100` on the other, from the same
 command, with the difference explained line by line.
 
 ---
@@ -99,10 +99,15 @@ Reading the output, in order of importance:
 Three commands worth knowing immediately:
 
 ```bash
+vexar-mcp init . --github-action                      # config + CI workflow, ready to commit
 vexar-mcp token-report .        # what your tool catalog costs on every single request
 vexar-mcp rules                 # all 15 rules, with severity and what each one flags
 vexar-mcp scan . --format html --output report.html   # one self-contained file to share
 ```
+
+`init` writes a commented `vexar-mcp.toml` you can edit and, with `--github-action`, a
+workflow that fails a pull request when a new finding appears. It refuses to overwrite
+anything without `--force`, and it will not write a config your existing one would shadow.
 
 <details>
 <summary><strong>Nothing was found, and you expected findings</strong></summary>
