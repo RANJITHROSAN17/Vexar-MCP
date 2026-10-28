@@ -50,7 +50,7 @@ python -m mcp_doctor.cli scan .
 ## Commands
 
 ```text
-vexar-mcp [--version] {scan,token-report,rules} ...
+vexar-mcp [--version] {scan,audit-server,baseline,policy,rules,token-report,simulate} ...
 ```
 
 ### `vexar-mcp scan [paths...]`
@@ -87,6 +87,43 @@ check_package_metadata                     97        1  examples/clean_server.py
 ------------------------------------------------------------------------------
 Total context-window tax across 3 tool(s): ~425 tokens/turn
 ```
+
+### `vexar-mcp simulate [paths...] --model <name>`
+
+Projects the token cost of a catalog into money, for a model and a call volume you choose.
+It runs a real scan first and reads token counts from the same estimator that drives `MCP002`
+and `MCP014`, so the projection can never contradict a finding.
+
+| Flag | Values | Default | Meaning |
+| :--- | :--- | :--- | :--- |
+| `--model` | any name in the price table | `claude-sonnet-4.5` | Model to price against. |
+| `--calls-per-day` | integer | `1000` | Volume assumption (30-day month). |
+| `--input-price` | float | none | Override USD per 1M input tokens (your contract rate). |
+| `--format` | `terminal`, `json` | `terminal` | Output format. |
+| `--allow-incomplete` | flag | off | Exit 0 even when the scan could not read every file. |
+
+```console
+$ vexar-mcp simulate examples --calls-per-day 2000
+MODEL: claude-sonnet-4.5  (input $3.00/1M tokens, priced 2026-10)
+VOLUME: 2,000 calls/day (~60,000 calls/month)
+
+TOOL NAME                          TOKENS     USD/CALL    USD/MONTH  SOURCE
+------------------------------------------------------------------------------------
+...
+CATALOG TOTAL                         530     0.001590        95.40
+
+Every call pays the catalog tax: 530 tokens x 2,000 calls/day = $95.40/month.
+  Removing the costliest tool would save $33.48/month.
+```
+
+Three deliberate behaviours:
+
+- **An unknown model is an error (exit 2), not a default price.** A projection built on a
+  silently substituted rate is a guess wearing a dollar sign. Use `--input-price` for
+  internal or newer models.
+- **An incomplete scan is a lower bound (exit 3)**, matching `scan`. Removing that warning
+  would make an understated bill look authoritative.
+- **No tools found exits 4** rather than printing a confident `$0.00`.
 
 ### `vexar-mcp policy [--format terminal|json]`
 

@@ -57,7 +57,7 @@ Bot automation: `feature-upgrade-bot.yml` proposes `RM-017` (protocol validation
 ## Week 6 (Phase 2 — Tool Simulation)
 - [ ] Build `simulate/` framework for malicious tool responses (shell exposure, env leakage, file write)
 - [ ] Add adversarial scenario tests (`tests/test_simulate.py`)
-- [ ] Integrate with `cli_simulate.py`
+- [x] Integrate with the real CLI as `vexar-mcp simulate` (0.2.1; the old `cli_simulate.py` stub is gone)
 
 Bot automation: `roadmap-issue-bot.yml` replenishes `RM-018` (simulation) automatically.
 

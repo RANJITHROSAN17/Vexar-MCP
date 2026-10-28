@@ -46,6 +46,10 @@ CI.
   artefacts now come from one analysis via `--emit`.
 - The history sparkline could record an ungraded score (`None`) and poison the trend for
   later runs; only graded runs are recorded now.
+- **Dead CLI stub removed.** `mcp_doctor/cli_simulate.py` was unreachable from the real
+  entry point, 0% covered, and printed a hardcoded token estimate for a hardcoded example.
+  Now that `simulate` is a real command reading a real scan, the stub is gone rather than
+  left behind as a second, wrong answer.
 
 ### Added
 
@@ -64,6 +68,12 @@ CI.
   "we measured nothing" cannot be mistaken for `100`. `grade` is `"N/A"` in the same cases.
 - Composite action inputs `allow-incomplete` and outputs `status`, `analysis-complete`,
   `files-failed`. With `--emit`, `score` is emitted empty for ungraded scans.
+- **`vexar-mcp simulate`** projects a catalog into per-call and monthly spend for a chosen
+  model and call volume, built on the same estimator that drives `MCP002`/`MCP014` so a
+  projection cannot contradict a finding. An unknown model is an error (exit `2`), never a
+  default price; an incomplete scan is labelled a lower bound (exit `3`); an empty catalog
+  exits `4` instead of quoting a confident `$0.00`. See
+  [docs/usage.md](docs/usage.md).
 - `docs/scan-status.md` and new CI gates asserting the fail-open regression and the server
   budget, plus 45 tests covering completeness, coverage, pruning, multi-output and registry
   integrity.

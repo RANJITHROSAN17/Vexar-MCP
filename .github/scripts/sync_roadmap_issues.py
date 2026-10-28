@@ -89,10 +89,52 @@ def select_items_to_open(
     for item in roadmap.get("items", []):
         if item["id"] in seen_ids:
             continue
+        if item.get("status") == "shipped":
+            continue
         to_open.append(item)
         if len(to_open) >= slots_available:
             break
     return to_open
+
+
+def select_shipped_issues_to_close(
+    roadmap: dict[str, Any],
+    existing_issues: list[dict[str, Any]],
+) -> list[tuple[int, dict[str, Any]]]:
+    """Return `(issue_number, item)` for open issues whose roadmap item already shipped.
+
+    A queue that keeps advertising delivered work is worse than an empty queue: it spends
+    contributor attention on a task that cannot be accepted. Closure is driven by the
+    roadmap manifest, so shipping an item is a one-line change in reviewed JSON.
+    """
+    shipped = {
+        item["id"]: item
+        for item in roadmap.get("items", [])
+        if item.get("status") == "shipped" and item.get("id")
+    }
+    to_close: list[tuple[int, dict[str, Any]]] = []
+    for issue in existing_issues:
+        if "pull_request" in issue or issue.get("state") != "open":
+            continue
+        match = ROADMAP_MARKER_RE.search(issue.get("body") or "")
+        if not match:
+            continue
+        item = shipped.get(match.group(1))
+        if item is not None:
+            to_close.append((int(issue["number"]), item))
+    return to_close
+
+
+def render_shipped_comment(item: dict[str, Any]) -> str:
+    """Explain the closure so a contributor is not left guessing."""
+    version = item.get("shipped_in", "the latest release")
+    return (
+        f"Shipped in **{version}** — closing this as delivered. "
+        f"Thanks to everyone who picked it up.\n\n"
+        f"The implementation is on `main`; see the CHANGELOG entry for {version} and the "
+        f"linked tests. If you think something in this item is still missing, please open a "
+        f"new issue describing the remaining gap rather than reopening this one."
+    )
 
 
 class GitHubClient:
@@ -155,6 +197,10 @@ class GitHubClient:
         )
         return res
 
+    def close_issue(self, number: int, comment: str) -> None:
+        self.request("POST", f"/issues/{number}/comments", {"body": comment})
+        self.request("PATCH", f"/issues/{number}", {"state": "closed", "state_reason": "completed"})
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -188,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         for item in to_open:
             print(f"  - [{item['id']}] {item['title']}")
+        shipped = [i for i in roadmap.get("items", []) if i.get("status") == "shipped"]
+        print(f"[dry-run] {len(shipped)} item(s) marked shipped and excluded from the queue.")
         return 0
 
     token = os.environ.get("GITHUB_TOKEN", "")
@@ -202,6 +250,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         client.sync_labels(roadmap.get("labels", []))
         existing = client.list_all_issues()
+        for number, item in select_shipped_issues_to_close(roadmap, existing):
+            client.close_issue(number, render_shipped_comment(item))
+            print(f"[roadmap-bot] Closed #{number}: {item['id']} shipped")
         to_open = select_items_to_open(roadmap, existing)
         if not to_open:
             print("[roadmap-bot] Active contributor queue is already full; nothing new to open.")

@@ -48,6 +48,13 @@ from mcp_doctor.reporters import (
 )
 from mcp_doctor.rules import get_all_rules, get_rule_catalog
 from mcp_doctor.rules.plugin import RulePackError, load_rule_packs
+from mcp_doctor.simulate.cost_model import (
+    DEFAULT_CALLS_PER_DAY,
+    PRICING_AS_OF,
+    UnknownModelError,
+    render_projection,
+    simulate,
+)
 
 _FORMATS = ("terminal", "json", "sarif", "markdown", "github", "html")
 
@@ -246,6 +253,34 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     tok_p.add_argument("paths", nargs="*", default=["."])
     tok_p.add_argument("--config", type=Path, default=None)
+
+    # ------------------------------------------------------------- simulate
+    sim_p = sub.add_parser(
+        "simulate",
+        help="Project the per-call and monthly cost of a tool catalog on a given model.",
+    )
+    sim_p.add_argument("paths", nargs="*", default=["."])
+    sim_p.add_argument("--config", type=Path, default=None)
+    sim_p.add_argument(
+        "--model",
+        default="claude-sonnet-4.5",
+        help="Model to price against. Unknown models are rejected unless --input-price is given.",
+    )
+    sim_p.add_argument(
+        "--calls-per-day", type=int, default=DEFAULT_CALLS_PER_DAY, help="Volume assumption."
+    )
+    sim_p.add_argument(
+        "--input-price",
+        type=float,
+        default=None,
+        help="Override the input-token price in USD per 1M tokens (your contract rate).",
+    )
+    sim_p.add_argument("--format", choices=("terminal", "json"), default="terminal")
+    sim_p.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Exit 0 even if the underlying scan could not analyze every file (projection is a lower bound).",
+    )
 
     return parser
 
@@ -587,6 +622,40 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _cmd_simulate(args: argparse.Namespace) -> int:
+    """Project catalog cost from a real scan, refusing to price a model we do not know."""
+    cfg = _resolve_config(args)
+    report = scan_paths([Path(p) for p in args.paths], cfg)
+
+    try:
+        projection = simulate(
+            report,
+            model=args.model,
+            calls_per_day=args.calls_per_day,
+            input_price=args.input_price,
+        )
+    except UnknownModelError as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        print(f"vexar-mcp: prices reviewed {PRICING_AS_OF}", file=sys.stderr)
+        return 2
+
+    if args.format == "json":
+        print(json.dumps(projection.as_dict(), indent=2))
+    else:
+        print(render_projection(projection))
+
+    # A projection over an empty or partly-read catalog would understate spend, so it is
+    # reported with the same "this number is not trustworthy" exit codes as a scan.
+    code, reasons = _analysis_failures(
+        report, allow_incomplete=args.allow_incomplete, fail_on_no_matches=True
+    )
+    for reason in reasons:
+        print(f"vexar-mcp: error: {reason}", file=sys.stderr)
+    if code == 3:
+        print("vexar-mcp: projection above is a LOWER BOUND.", file=sys.stderr)
+    return code
+
+
 def _cmd_audit_server(args: argparse.Namespace) -> int:
     command = [part for part in args.server_command if part != "--"]
     if not command:
@@ -645,6 +714,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_baseline(args)
         if args.command == "audit-server":
             return _cmd_audit_server(args)
+        if args.command == "simulate":
+            return _cmd_simulate(args)
         if args.command == "token-report":
             cfg = _resolve_config(args)
             report = scan_paths([Path(p) for p in args.paths], cfg)

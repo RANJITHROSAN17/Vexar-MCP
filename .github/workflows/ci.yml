@@ -253,6 +253,19 @@ jobs:
           print("server budget gate: OK")
           PY
 
+      - name: Cost projection refuses to quote an unverified price
+        run: |
+          set -euo pipefail
+          # A known model prices a real scan and passes.
+          vexar-mcp simulate examples/clean_server.py --format json > /tmp/projection.json
+          python -c "import json;d=json.load(open('/tmp/projection.json'));assert d['catalog_tokens_per_turn']>0 and d['monthly_usd']>0,d"
+          # An unknown model must fail closed rather than fall back to a default rate.
+          if vexar-mcp simulate examples/clean_server.py --model not-a-real-model; then
+            echo "::error::simulate priced an unknown model instead of failing"
+            exit 1
+          fi
+          echo "cost projection gate: OK"
+
       - name: Configuration errors fail with exit code 2
         run: |
           set +e

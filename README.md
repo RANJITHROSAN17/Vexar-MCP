@@ -184,7 +184,9 @@ Add a format to `vexar-mcp scan .`:
 | Annotations | `--format github` | Inline `::error` / `::warning` / `::notice` on PR diff lines — no SARIF upload or Advanced Security needed |
 | HTML | `--format html --output report.html` | One self-contained file: scorecards, filters, search, tool costs, trend sparkline. No CDN, works offline |
 
-Plus `vexar-mcp token-report .` for a per-tool context-window leaderboard:
+Plus `vexar-mcp simulate . --model claude-sonnet-4.5 --calls-per-day 2000` to turn a
+catalog into a monthly bill projection, and `vexar-mcp token-report .` for a per-tool
+context-window leaderboard:
 
 ```console
 $ vexar-mcp token-report examples/clean_server.py examples/tools_manifest.json
