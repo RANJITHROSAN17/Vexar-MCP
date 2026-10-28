@@ -263,3 +263,56 @@ def test_action_manifest_missing_fields(tmp_path: Path) -> None:
     errors = mod.validate_action(path)
     assert any("missing required field 'description'" in e for e in errors)
     assert any("missing required field 'runs'" in e for e in errors)
+
+
+# --------------------------------------------------------------------------------------
+# AI review report script
+# --------------------------------------------------------------------------------------
+
+AI_SCRIPT = ROOT / ".github" / "scripts" / "ai_review_report.py"
+
+
+def _load_ai_report():
+    spec = importlib.util.spec_from_file_location("ai_review_report", AI_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["ai_review_report"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_ai_review_report_reports_findings() -> None:
+    module = _load_ai_report()
+    report = module.build_report(ROOT / "examples")
+    assert "AI Code Reviewer" in report
+    assert "| MCP001 |" in report
+    assert "Risk index" in report
+    assert "### Enhancements" in report
+
+
+def test_ai_review_report_handles_clean_input(tmp_path: Path) -> None:
+    module = _load_ai_report()
+    (tmp_path / "empty.py").write_text("x = 1\n", encoding="utf-8")
+    report = module.build_report(tmp_path)
+    assert "No security, schema, contract, or token-budget findings" in report
+    assert "Nothing outstanding" in report
+
+
+def test_ai_review_report_main_writes_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_ai_report()
+    monkeypatch.chdir(tmp_path)
+    assert module.main([str(ROOT / "examples")]) == 0
+    written = (tmp_path / "ai_review_report.md").read_text(encoding="utf-8")
+    assert "Vexar-MCP" in written
+
+
+def test_ai_review_report_truncates_large_results(tmp_path: Path) -> None:
+    module = _load_ai_report()
+    monkeypatch_limit = 1
+    original = module.MAX_DIAGNOSTICS
+    module.MAX_DIAGNOSTICS = monkeypatch_limit
+    try:
+        report = module.build_report(ROOT / "examples")
+    finally:
+        module.MAX_DIAGNOSTICS = original
+    assert "further finding(s) omitted" in report

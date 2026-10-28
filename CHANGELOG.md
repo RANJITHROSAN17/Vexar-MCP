@@ -90,6 +90,17 @@ opt-in rule pack system.
 - Added `.github/scripts/validate_workflows.py`, wired into CI, so an invalid workflow or
   action manifest fails a normal check with a file-and-line message instead of poisoning
   the Actions tab.
+- `code-review-bot.yml`: replaced a free-text write to `$GITHUB_OUTPUT` (GitHub expects
+  `key=value`) and stopped it commenting on push events, where there is no issue to
+  comment on (`HttpError: Not Found`).
+- `ai-code-review-bot.yml`: the inline `python -c` report generator had broken quote
+  escaping and died with `SyntaxError: unterminated string literal`; it now lives in
+  `.github/scripts/ai_review_report.py` and is tested. Also fixed a call to `vexar-mcp
+  audit` (no such command), a read of `summary.info` (the key is `infos`), and a commit
+  comment that needed `contents: write` — push runs now publish to the job summary.
+- `final-merge-approval-bot.yml`: the job condition ended with `|| github.event_name ==
+  "push"` for an event the workflow never subscribes to, and `workflow_dispatch` runs
+  tried to comment with no issue in context. Both fixed.
 - Removed the orphaned `rules/mcp009_protocol.py`, which was never imported but would have
   overwritten `MCP009` (hardcoded secret detection) with a silent no-op had anyone wired it
   up. Its `protocol-legacy-transport` intent is now covered by `MCP012` against live
