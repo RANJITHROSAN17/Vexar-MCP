@@ -182,6 +182,27 @@ These are permanment guarantees, and a change to any of them is a security-relev
 Any PR that weakens one of these — for example by making the completeness gate opt-in, or by
 restoring a numeric default score for empty scans — must be reviewed as a security regression.
 
+### The roadmap is reviewed JSON, and the bot obeys it
+
+`.github/roadmap.json` is the single source of truth for the contributor queue. The curator
+bot never invents work and never trusts its own memory of the repo:
+
+- an item with `"status": "shipped"` is never opened, and its open issue is closed with the
+  release it landed in;
+- an open issue whose title or body drifted from the manifest is rewritten, so a contributor
+  never reads text the project no longer believes;
+- a queued item may *mention* an existing rule, but may never *propose* an ID that is already
+  registered — otherwise contributors are asked to rebuild shipped work under a taken ID.
+
+Three tests enforce this (`tests/test_roadmap_bot.py`): no proposal of an existing rule ID,
+every `shipped_in` present in `CHANGELOG.md`, and every queued item carrying files and
+acceptance criteria. Shipping a feature is therefore a small, reviewable diff: set
+`status`/`shipped_in`, add the changelog entry, push, and let the bot close the issue.
+
+This exists because it went wrong. Before 0.2.1, nineteen of thirty items were marked queued
+while the code was on `main`; five issues stayed open advertising delivered work, and two
+proposed rule IDs that other rules had already claimed.
+
 ### Policy presets are a versioned contract
 
 | Change | Required |

@@ -149,3 +149,30 @@ def test_roadmap_never_proposes_a_rule_id_that_already_exists() -> None:
             if proposes and rule_id in live_ids:
                 offenders.append((item["id"], rule_id))
     assert not offenders, f"queued roadmap items propose already-registered rules: {offenders}"
+
+
+def test_shipped_items_name_a_version_that_exists_in_the_changelog() -> None:
+    """`shipped_in` is a claim about the changelog, so the changelog must agree."""
+    roadmap = json.loads((ROOT / ".github" / "roadmap.json").read_text(encoding="utf-8"))
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    released = set(re.findall(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.MULTILINE))
+    assert released, "CHANGELOG.md has no released versions"
+
+    missing = [
+        (item["id"], item.get("shipped_in"))
+        for item in roadmap["items"]
+        if item.get("status") == "shipped" and item.get("shipped_in") not in released
+    ]
+    assert not missing, f"roadmap claims shipments the changelog does not record: {missing}"
+
+
+def test_every_queued_item_is_contributor_ready() -> None:
+    """An item without files or acceptance criteria is a wish, not a task."""
+    roadmap = json.loads((ROOT / ".github" / "roadmap.json").read_text(encoding="utf-8"))
+    incomplete = [
+        item["id"]
+        for item in roadmap["items"]
+        if item.get("status") != "shipped"
+        and (not item.get("files") or not item.get("acceptance_criteria"))
+    ]
+    assert not incomplete, f"queued items missing files/criteria: {incomplete}"
