@@ -989,6 +989,29 @@
         "A test asserts every revision in `SUPPORTED_PROTOCOL_VERSIONS` has a fixture exercising it.",
         "The README links the matrix next to the live-audit docs."
       ]
+    },
+    {
+      "id": "RM-035",
+      "title": "chore(ci): unify GitHub Action pins so one major runs per action",
+      "summary": "The repository pins actions/checkout at v4, v5 and v7, and actions/github-script at v7 and v9. Different majors of the same action mean two workflows can behave differently for no visible reason, and it is how the setup-python drift in PR #61 happened: one Dependabot PR was closed unmerged and four files were bumped by hand, leaving five on the old major.",
+      "motivation": "Actions drift silently. checkout v7 blocks checking out fork pull requests under pull_request_target, and welcome-bot.yml combines pull_request_target with checkout@v4 -- so this cannot be a blind bump, which is exactly why it needs to be a reviewed task rather than a Dependabot merge.",
+      "acceptance_criteria": [
+        "Every workflow and action.yml uses one major per action.",
+        "Welcome-bot is resolved deliberately: either it keeps an older checkout pin with a comment explaining why, or it stops checking out under pull_request_target.",
+        "The pin-drift ratchet in tests/test_docs_and_assets.py drops its allowlist, so the test is what enforces it from then on."
+      ],
+      "labels": [
+        "roadmap",
+        "difficulty/medium",
+        "area/ci",
+        "dependencies"
+      ],
+      "priority": "medium",
+      "files": [
+        ".github/workflows/",
+        "action.yml",
+        "tests/test_docs_and_assets.py"
+      ]
     }
   ],
   "min_open_good_first_issues": 2
