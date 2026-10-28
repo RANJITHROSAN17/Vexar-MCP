@@ -1,0 +1,42 @@
+name: Issue Labeler — Route New Issues to an Area
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: labeler-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: Apply area/type labels from issue text
+    runs-on: ubuntu-latest
+    # Bot-authored noise does not need routing, and a maintainer's own issue is already filed
+    # where they want it.
+    if: github.event.issue.user.type != 'Bot'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit-test the classifier before letting it touch an issue
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pytest
+          pytest tests/test_issue_labeler.py -q
+
+      - name: Label the issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/auto_label_issue.py

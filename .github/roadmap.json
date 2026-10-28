@@ -115,6 +115,11 @@
       "name": "pinned",
       "color": "b60205",
       "description": "Exempt from stale bot cleanup"
+    },
+    {
+      "name": "stale",
+      "color": "ededed",
+      "description": "No activity for 60 days. Never auto-closed - a nudge, not a verdict."
     }
   ],
   "items": [
@@ -681,7 +686,7 @@
     },
     {
       "id": "RM-023",
-      "title": "feat(release): publish Vexar-MCP to PyPI via trusted publishing",
+      "title": "chore(release): prove PyPI trusted publishing end to end",
       "labels": [
         "roadmap",
         "help wanted",
@@ -691,18 +696,17 @@
         "difficulty/medium",
         "size/M"
       ],
-      "summary": "Configure OIDC trusted publishing so `pip install vexar-mcp` works and every tagged release is reproducible without long-lived secrets.",
-      "motivation": "Packaging is complete and `publish-pypi.yml` exists, but adoption is blocked on a real index release. This is the single highest-leverage remaining item.",
+      "summary": "The publish workflow now builds, verifies and uploads via OIDC (pypa/gh-action-pypi-publish). What remains is the PyPI-side trusted publisher registration and one real publish to confirm the round trip.",
+      "motivation": "It shipped broken: the workflow requested id-token: write and then ran `twine upload`, which cannot use an OIDC token, with no token supplied. It is fixed, but 'the workflow exists' is not 'publishing works' \u2014 that needs a real release to prove.",
       "files": [
         ".github/workflows/publish-pypi.yml",
-        "pyproject.toml",
-        "docs/release-management.md"
+        "pyproject.toml"
       ],
       "acceptance_criteria": [
-        "A tagged `vX.Y.Z` release publishes an sdist and wheel to PyPI using OIDC trusted publishing (no `PYPI_API_TOKEN`).",
-        "The workflow fails closed if the built version does not match the git tag.",
-        "`pip install vexar-mcp` followed by `vexar-mcp --version` is verified in a clean environment inside the workflow.",
-        "SECURITY.md and docs/usage.md no longer tell users to install from git."
+        "Trusted publisher is registered on PyPI for this repo, workflow and environment.",
+        "A patch release publishes automatically from a GitHub Release with no secret.",
+        "`pip install vexar-mcp==<version>` in a clean environment yields a working `vexar-mcp`.",
+        "The version in pyproject.toml, the tag, the release and PyPI all agree."
       ]
     },
     {

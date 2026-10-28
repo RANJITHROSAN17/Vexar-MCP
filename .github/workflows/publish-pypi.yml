@@ -1,15 +1,77 @@
-name: Publish to PyPI (Trusted Publisher)
+name: Publish to PyPI (Trusted Publishing)
+
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build and verify only; do not upload to PyPI"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
-  id-token: write  # Required for OIDC / Trusted Publisher
 
 jobs:
+  build:
+    name: Build and verify distributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel and sdist
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+
+      - name: Verify the wheel really contains the package
+        # Catches the packaging bug where the build succeeds but ships an empty wheel.
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess, sys, zipfile
+          from pathlib import Path
+
+          wheel = next(Path("dist").glob("*.whl"))
+          names = zipfile.ZipFile(wheel).namelist()
+          assert any(n.endswith("mcp_doctor/cli.py") for n in names), names[:10]
+          assert any("entry_points.txt" in n for n in names), "missing console script metadata"
+          print(f"wheel check: OK ({wheel.name}, {len(names)} entries)")
+          PY
+
+      - name: Confirm the version matches the tag
+        if: github.event_name == 'release'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          assert version == tag, f"pyproject version {version} != release tag {tag}"
+          print(f"version check: OK ({version})")
+          PY
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
   publish:
+    name: Upload to PyPI via OIDC
+    needs: build
+    if: github.event_name == 'release' || inputs.dry-run == false
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -17,14 +79,14 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - name: Install build
-        run: pip install build twine
-      - name: Build distributions
-        run: python -m build
-      - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-        run: twine upload dist/*
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        # Trusted Publishing: the action exchanges a short-lived OIDC token for an upload
+        # permission. `twine upload` cannot do this, which is why the previous workflow could
+        # never have published despite declaring id-token: write.
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -52,7 +52,16 @@ jobs:
               core.info('Already greeted; no duplicate comment.');
               return;
             }
-            await github.rest.issues.createComment({
-              ...params,
-              body: `${marker}\n👋 **Welcome to mcp-doctor!**\nPlease read \`CONTRIBUTOR_RULES.md\`, add tests for your changes, and link the issue in your PR.`,
-            });
+            const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+            const body = [
+              marker,
+              '👋 **Welcome to Vexar-MCP!** Thanks for taking the time.',
+              '',
+              `- New contributor? Start from the [good first issues](${repoUrl}/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) — each lists the files involved and the commands to verify your work.`,
+              '- Issue? An `area/*` label is applied automatically and a maintainer will reply. If this is a false positive, a short reproduction snippet is the single most useful thing you can add.',
+              '- Pull request? Please run `ruff check . && ruff format --check . && mypy src && pytest --cov=mcp_doctor --cov-fail-under=85` and link the issue it closes.',
+              `- How work is reviewed: [CONTRIBUTING.md](${repoUrl}/blob/main/CONTRIBUTING.md) · governance: [CONTRIBUTOR_RULES.md](${repoUrl}/blob/main/CONTRIBUTOR_RULES.md)`,
+              '',
+              `Questions are welcome in [Discussions](${repoUrl}/discussions) — no question is too basic.`,
+            ].join('\n');
+            await github.rest.issues.createComment({ ...params, body });

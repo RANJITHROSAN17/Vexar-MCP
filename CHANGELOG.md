@@ -16,6 +16,40 @@ Versioning contract, so upgrades are predictable:
 
 ---
 
+## [Unreleased]
+
+Contributor-onboarding and automation. No package behaviour changes, so the released version
+stays 0.2.1.
+
+### Fixed
+
+- **The stale bot did nothing.** `stale-bot.yml` was a scheduled job whose only step echoed a
+  string, while `CONTRIBUTOR_RULES.md` claimed stale management was active. It now nudges
+  after 60 days, never closes anything, and exempts pinned/roadmap/help-wanted/
+  good-first-issue/security work.
+- **PyPI trusted publishing could never have worked.** `publish-pypi.yml` requested
+  `id-token: write` and then ran `twine upload`, which cannot exchange an OIDC token for an
+  upload permission, and no token was provided. It now builds and verifies the wheel (package
+  contents, console-script metadata, version matches the tag) and publishes with
+  `pypa/gh-action-pypi-publish`. RM-023 was therefore *not* shipped when the roadmap said so.
+- The welcome bot greeted first-time contributors to the pre-rename name (`mcp-doctor`) and
+  linked only the governance file. It now links the starter issues, the verification command,
+  and Discussions.
+- `CONTRIBUTOR_RULES.md` claimed the project had no welcome bot while one was running. R8 now
+  documents the real bot inventory, with the two limits that matter: a bot may speak once, and
+  **a bot may never close a contributor's thread or guess a difficulty label**.
+
+### Added
+
+- **`issue-labeler.yml`** with `.github/scripts/auto_label_issue.py`: routes a new issue to
+  `area/*` and `type/*` from its text and paths. Deliberately refuses to apply `difficulty/*`
+  or `good first issue` — an automated guess at "beginner friendly" is how a starter issue
+  becomes a dead end. Pure function, 14 tests.
+- README "Easy wins" table and a contributor landing paragraph, so a first-time visitor sees
+  four tasks they can finish today instead of a wall of feature documentation.
+
+---
+
 ## [0.2.1] - 2026-10-28
 
 The trust release. 0.2.0 added policy, baselines and live auditing on top of a scanner that

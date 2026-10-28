@@ -1,13 +1,39 @@
-name: Stale Bot
+name: Stale Bot — Nudge, Never Close
+
 on:
   schedule:
     - cron: "0 0 * * 0"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   stale:
+    name: Mark idle issues and PRs stale (never close them)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Gentle triage
-        run: |
-          echo "Bot: gentle reminder only — silent, never closes contributor/pinned"
+      - name: Mark stale
+        # days-before-close is -1 on purpose: closing someone's issue closes a conversation,
+        # and this project would rather leave a nudge than quietly shut a door. Exemptions
+        # cover everything where silence is expected (queued roadmap work, wanted help,
+        # security reports) and everything where it is a promise (pinned).
+        uses: actions/stale@v9
+        with:
+          days-before-stale: 60
+          days-before-close: -1
+          stale-issue-label: "stale"
+          exempt-issue-labels: "pinned,roadmap,help wanted,good first issue,type/security"
+          stale-pr-label: "stale"
+          exempt-pr-labels: "pinned,dependencies,type/security"
+          stale-issue-message: >
+            This issue has had no activity for 60 days. It is not closed, and it is not
+            forgotten — it is just waiting. If you are still interested, a one-line comment
+            is enough to keep it fresh. If you are the maintainer, update the roadmap entry
+            in `.github/roadmap.json` instead of editing this issue by hand.
+          stale-pr-message: >
+            This pull request has had no activity for 60 days. It stays open; rebase or
+            comment when you are ready and a maintainer will pick it up.
+          operations-per-run: 60

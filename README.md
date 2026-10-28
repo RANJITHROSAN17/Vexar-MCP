@@ -455,7 +455,28 @@ Milestones and queued work live in [`.github/roadmap.json`](.github/roadmap.json
 
 ## Contributing
 
-Contributions are welcome, including rule proposals, false-positive reports, and documentation fixes.
+**New here? Start with a [`good first issue`](https://github.com/RANJITHROSAN17/Vexar-MCP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).**
+Each one lists the files involved and the commands to verify your work, so you never have to
+guess whether it is done. Need help? Read [`CONTRIBUTING.md`](CONTRIBUTING.md), ask in
+[Discussions](https://github.com/RANJITHROSAN17/Vexar-MCP/discussions), or comment on the issue
+and a maintainer will answer.
+
+We welcome docs, tests, parser improvements, CLI enhancements, and rule ideas — a false
+positive reported with a reproduction snippet is as valuable as a feature.
+
+### Easy wins (under an hour each)
+
+These are small, self-contained, and fully specified. Pick one and open a PR the same day.
+
+| Task | Why it is a good first PR | Issue |
+| :--- | :--- | :--- |
+| Add rule `MCP015`: flag tool parameters with no description | One rule function, two tests, no parser changes | [#5](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/5) |
+| Make the `simulate` price table self-checking | Pure data + one test; no CLI wiring | [RM-030](.github/roadmap.json) |
+| Fixed-up corpus of token-estimator accuracy | Test-only; needs care with provenance | [RM-029](.github/roadmap.json) |
+| Report constructs the TS loader saw but could not resolve | Touches one loader, well covered by fixtures | [RM-028](.github/roadmap.json) |
+
+If you want a larger piece, `simulate`, rule packs, and the loaders are all small enough to
+understand in one sitting — that is a deliberate design goal, not an accident.
 
 1. Browse [`good first issue`](https://github.com/RANJITHROSAN17/Vexar-MCP/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) and [`help wanted`](https://github.com/RANJITHROSAN17/Vexar-MCP/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
 2. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) — adding a rule is a decorated function plus two tests.
