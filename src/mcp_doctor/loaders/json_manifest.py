@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from mcp_doctor.models import ParameterSpec, ToolSpec
+from mcp_doctor.models import IssueKind, ParameterSpec, ParseIssue, ToolSpec
 from mcp_doctor.tokens import estimate_tool_tokens
 
 _BOUND_KEYS = frozenset(
@@ -99,11 +99,39 @@ def _normalize_tool_entry(entry: Any, source_file: str, index: int) -> ToolSpec 
     )
 
 
-def load_json_manifest(path: Path) -> list[ToolSpec]:
-    """Load MCP / OpenAI / Anthropic tool specifications from a JSON file."""
+def load_json_manifest(path: Path, *, issues: list[ParseIssue] | None = None) -> list[ToolSpec]:
+    """Load MCP / OpenAI / Anthropic tool specifications from a JSON file.
+
+    Args:
+        path: JSON manifest to read.
+        issues: Optional sink for analysis failures. Malformed JSON or an unreadable file
+            appends a :class:`ParseIssue` instead of silently returning no tools - a
+            manifest that cannot be parsed is an analysis failure, not a clean result.
+    """
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        if issues is not None:
+            issues.append(
+                ParseIssue(
+                    source_file=str(path),
+                    kind=IssueKind.UNREADABLE,
+                    message=f"cannot read file: {exc}",
+                )
+            )
+        return []
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as exc:
+        if issues is not None:
+            issues.append(
+                ParseIssue(
+                    source_file=str(path),
+                    kind=IssueKind.INVALID_JSON,
+                    message=f"invalid JSON: {exc.msg}",
+                    line=exc.lineno,
+                )
+            )
         return []
 
     candidates: list[Any] = []

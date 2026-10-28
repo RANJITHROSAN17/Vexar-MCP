@@ -6,7 +6,7 @@ import json
 
 from mcp_doctor import __version__
 from mcp_doctor.baseline import fingerprint
-from mcp_doctor.models import ScanReport, Severity
+from mcp_doctor.models import ScanReport, ScanStatus, Severity
 from mcp_doctor.rules import get_all_rules
 
 # GitHub Code Scanning buckets alerts by `security-severity`; map our severities onto it.
@@ -81,7 +81,47 @@ def render_sarif(report: ScanReport) -> str:
                 "properties": {
                     "policy": report.policy_name,
                     "riskIndex": report.summary.risk_index,
+                    "status": report.status.value,
+                    "analysisComplete": report.is_complete,
+                    "coverage": {
+                        "candidateFiles": report.coverage.candidate_files,
+                        "filesAnalyzed": report.coverage.files_analyzed,
+                        "filesFailed": report.coverage.files_failed,
+                        "toolsAnalyzed": report.coverage.tools_analyzed,
+                    },
                 },
+                # Analysis failures belong in `invocations.toolExecutionNotifications`: SARIF
+                # treats that as "the tool could not do its job", which is exactly what an
+                # unparsable file is. They are never emitted as `results`, because a parse
+                # error is not a security finding.
+                "invocations": [
+                    {
+                        "executionSuccessful": report.status is not ScanStatus.ERROR,
+                        "toolExecutionNotifications": [
+                            {
+                                "level": "error",
+                                "message": {
+                                    "text": (
+                                        f"{issue.kind.value}: {issue.source_file}"
+                                        + (f":{issue.line}" if issue.line else "")
+                                        + f" - {issue.message}"
+                                    )
+                                },
+                                "locations": [
+                                    {
+                                        "physicalLocation": {
+                                            "artifactLocation": {
+                                                "uri": issue.source_file.lstrip("./")
+                                            },
+                                            "region": {"startLine": max(1, issue.line or 1)},
+                                        }
+                                    }
+                                ],
+                            }
+                            for issue in report.parse_issues
+                        ],
+                    }
+                ],
                 "results": results,
             }
         ],

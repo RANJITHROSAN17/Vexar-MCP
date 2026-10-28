@@ -53,6 +53,18 @@ def render_json(report: ScanReport, delta: BaselineDelta | None = None) -> str:
         "schema": "vexar-mcp-report/v1",
         "version": __version__,
         "policy": {"name": report.policy_name},
+        # `status` and `coverage` answer "did the analysis complete?"; `summary` and
+        # `diagnostics` answer "what did it find?". Consumers must never infer the first
+        # from the second - an empty diagnostics list on a PARTIAL scan means nothing.
+        "status": report.status.value,
+        "analysis_complete": report.is_complete,
+        "coverage": {
+            "candidate_files": report.coverage.candidate_files,
+            "files_analyzed": report.coverage.files_analyzed,
+            "files_failed": report.coverage.files_failed,
+            "files_with_tools": report.coverage.files_with_tools,
+            "tools_analyzed": report.coverage.tools_analyzed,
+        },
         "summary": {
             "files_scanned": s.files_scanned,
             "tools_scanned": s.tools_scanned,
@@ -61,11 +73,21 @@ def render_json(report: ScanReport, delta: BaselineDelta | None = None) -> str:
             "warnings": s.warnings,
             "infos": s.infos,
             "total_diagnostics": s.total_diagnostics,
+            # null when nothing was analyzed: there is no honest score to report.
             "score": s.score,
             "grade": s.grade,
             "risk_index": s.risk_index,
             "risk_band": risk_band(s.risk_index),
         },
+        "parse_issues": [
+            {
+                "kind": issue.kind.value,
+                "source_file": issue.source_file,
+                "line": issue.line,
+                "message": issue.message,
+            }
+            for issue in report.parse_issues
+        ],
         "tools": [
             {
                 "name": t.name,

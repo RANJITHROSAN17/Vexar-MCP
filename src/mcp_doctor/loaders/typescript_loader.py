@@ -15,7 +15,7 @@ from bisect import bisect_right
 from pathlib import Path
 from typing import NamedTuple
 
-from mcp_doctor.models import CodeSink, ParameterSpec, ToolSpec
+from mcp_doctor.models import CodeSink, IssueKind, ParameterSpec, ParseIssue, ToolSpec
 from mcp_doctor.tokens import estimate_tool_tokens
 
 _EXTENSIONS = frozenset({".ts", ".js", ".jsx"})
@@ -331,7 +331,7 @@ def _sinks(
     return tuple(result)
 
 
-def load_typescript_file(path: Path) -> list[ToolSpec]:
+def load_typescript_file(path: Path, *, issues: list[ParseIssue] | None = None) -> list[ToolSpec]:
     """Extract literal SDK tool registrations without executing JavaScript.
 
     Args:
@@ -339,13 +339,22 @@ def load_typescript_file(path: Path) -> list[ToolSpec]:
 
     Returns:
         Tools in source order, with statically known parameters and inline-handler
-        sinks. Unreadable files and unsupported extensions yield an empty list.
+        sinks. Unsupported extensions yield an empty list; unreadable files append a
+        :class:`ParseIssue` to ``issues`` when a sink is supplied.
     """
     if path.name.endswith(".d.ts") or path.suffix not in _EXTENSIONS:
         return []
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+    except OSError as exc:
+        if issues is not None:
+            issues.append(
+                ParseIssue(
+                    source_file=str(path),
+                    kind=IssueKind.UNREADABLE,
+                    message=f"cannot read file: {exc}",
+                )
+            )
         return []
     source = _Source(text)
     functions, namespaces = _imports(source)

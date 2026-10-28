@@ -177,7 +177,7 @@ def test_sarif_includes_security_severity_and_policy(capsys: pytest.CaptureFixtu
 def test_markdown_includes_risk_and_policy(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["scan", VULNERABLE, "--format", "markdown"]) == 1
     out = capsys.readouterr().out
-    assert "Policy: `default`" in out
+    assert "**Policy:** `default`" in out
     assert "Risk" in out
 
 

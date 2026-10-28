@@ -15,7 +15,7 @@ from collections.abc import Sequence
 
 from mcp_doctor import __version__
 from mcp_doctor.baseline import BaselineDelta, fingerprint
-from mcp_doctor.models import ScanReport, Severity
+from mcp_doctor.models import ScanReport, ScanStatus, Severity
 from mcp_doctor.risk import risk_band
 
 _SEVERITY_COLOR = {
@@ -29,6 +29,22 @@ _BAND_COLOR = {
     "medium": "#d97706",
     "low": "#0284c7",
     "none": "#16a34a",
+}
+_STATUS_COLOR = {
+    ScanStatus.CLEAN: "#16a34a",
+    ScanStatus.FINDINGS: "#d97706",
+    ScanStatus.PARTIAL: "#dc2626",
+    ScanStatus.NO_MATCHES: "#0284c7",
+    ScanStatus.ERROR: "#dc2626",
+}
+
+
+_STATUS_TEXT = {
+    ScanStatus.CLEAN: "Every input was analyzed and no rule fired.",
+    ScanStatus.FINDINGS: "Every input was analyzed; findings are listed below.",
+    ScanStatus.PARTIAL: "Some inputs could not be analyzed. Results are incomplete and must not be read as clean.",
+    ScanStatus.NO_MATCHES: "No supported MCP tool was recognized, so nothing was graded.",
+    ScanStatus.ERROR: "Nothing could be analyzed.",
 }
 
 
@@ -97,8 +113,34 @@ def render_html(
     """
     s = report.summary
     band = risk_band(s.risk_index)
-    score_color = _score_color(s.score)
+    score_color = _score_color(s.score) if s.score is not None else "#6b7280"
     chart = _sparkline(list(history or []))
+    score_value = "n/a" if s.score is None else str(s.score)
+    status_color = _STATUS_COLOR[report.status]
+    c = report.coverage
+
+    issue_block = ""
+    if report.parse_issues:
+        issue_rows = "".join(
+            "<tr><td class='mono'>{kind}</td><td class='mono'>{file}</td><td>{msg}</td></tr>".format(
+                kind=html.escape(issue.kind.value),
+                file=html.escape(issue.source_file + (f":{issue.line}" if issue.line else "")),
+                msg=html.escape(issue.message),
+            )
+            for issue in report.parse_issues
+        )
+        issue_block = (
+            "<section><h2 style='color:#dc2626'>Analysis issues — these inputs were not checked</h2>"
+            "<table><thead><tr><th>Kind</th><th>File</th><th>Reason</th></tr></thead>"
+            f"<tbody>{issue_rows}</tbody></table></section>"
+        )
+
+    status_block = (
+        f"<div style='background:{status_color}1a;border:1px solid {status_color}55;"
+        f"border-radius:12px;padding:12px 16px;margin-bottom:20px;color:{status_color}'>"
+        f"<strong>Status: {report.status.value.upper()}</strong> — "
+        f"{html.escape(_STATUS_TEXT[report.status])}</div>"
+    )
 
     delta_block = ""
     if delta is not None:
@@ -258,7 +300,7 @@ def render_html(
   <div class="cards">
     <div class="card">
       <div class="label">Health score</div>
-      <div class="value" style="color:{score_color}">{s.score}<span class="hint">/100</span></div>
+      <div class="value" style="color:{score_color}">{score_value}<span class="hint">/100</span></div>
       <div class="hint">grade {html.escape(s.grade)}</div>
     </div>
     <div class="card">
@@ -282,6 +324,11 @@ def render_html(
       <div class="hint">advisory</div>
     </div>
     <div class="card">
+      <div class="label">Coverage</div>
+      <div class="value">{c.files_analyzed}<span class="hint">/{c.candidate_files}</span></div>
+      <div class="hint">{c.files_failed} failed · {c.files_with_tools} with tools</div>
+    </div>
+    <div class="card">
       <div class="label">Context tax</div>
       <div class="value">{s.total_estimated_tokens}</div>
       <div class="hint">tokens / turn</div>
@@ -290,6 +337,8 @@ def render_html(
   </div>
 
   {delta_block}
+  {status_block}
+  {issue_block}
 
   <section>
     <h2>Findings</h2>

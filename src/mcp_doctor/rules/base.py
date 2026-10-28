@@ -38,14 +38,19 @@ def register_rule(
     """Decorator registering a lint rule in the global rule table."""
 
     def _decorator(fn: RuleCheckFn) -> RuleCheckFn:
-        _REGISTRY[rule_id] = RuleDefinition(
-            rule_id=rule_id,
-            slug=slug,
-            severity=severity,
-            category=category,
-            summary=summary,
-            remediation=remediation,
-            check=fn,
+        # Route through register_definition so the decorator shares one guard with
+        # programmatic registration: duplicate IDs and duplicate slugs raise instead of
+        # silently replacing an existing rule.
+        register_definition(
+            RuleDefinition(
+                rule_id=rule_id,
+                slug=slug,
+                severity=severity,
+                category=category,
+                summary=summary,
+                remediation=remediation,
+                check=fn,
+            )
         )
         return fn
 

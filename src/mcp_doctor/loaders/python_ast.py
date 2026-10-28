@@ -7,7 +7,14 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
-from mcp_doctor.models import CodeSink, ParameterSpec, SecretLiteral, ToolSpec
+from mcp_doctor.models import (
+    CodeSink,
+    IssueKind,
+    ParameterSpec,
+    ParseIssue,
+    SecretLiteral,
+    ToolSpec,
+)
 from mcp_doctor.tokens import estimate_tool_tokens
 
 _NOQA_RE = re.compile(r"#\s*noqa\s*:\s*([A-Za-z0-9_,\s]+)", re.IGNORECASE)
@@ -751,13 +758,41 @@ def _build_base_index(tree: ast.AST) -> dict[str, list[_ModelField]]:
     return index
 
 
-def load_python_file(path: Path) -> list[ToolSpec]:
-    """Parse a Python source file and return all discovered MCP / agent ToolSpecs."""
-    source = path.read_text(encoding="utf-8")
+def load_python_file(path: Path, *, issues: list[ParseIssue] | None = None) -> list[ToolSpec]:
+    """Parse a Python source file and return all discovered MCP / agent ToolSpecs.
+
+    Args:
+        path: Python source file to inspect. It is parsed with ``ast.parse`` and never
+            imported or executed.
+        issues: Optional sink for analysis failures. A file that cannot be read or parsed
+            appends a :class:`ParseIssue` here instead of silently yielding no tools, so
+            the caller can report incomplete coverage rather than a clean result.
+    """
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        if issues is not None:
+            issues.append(
+                ParseIssue(
+                    source_file=str(path),
+                    kind=IssueKind.UNREADABLE,
+                    message=f"cannot read file: {exc}",
+                )
+            )
+        return []
     lines = source.splitlines()
     try:
         tree = ast.parse(source, filename=str(path))
-    except SyntaxError:
+    except (SyntaxError, ValueError) as exc:
+        if issues is not None:
+            issues.append(
+                ParseIssue(
+                    source_file=str(path),
+                    kind=IssueKind.SYNTAX_ERROR,
+                    message=f"{type(exc).__name__}: {getattr(exc, 'msg', exc)}",
+                    line=getattr(exc, "lineno", None),
+                )
+            )
         return []
     base_index = _build_base_index(tree)
     module_aliases = _import_aliases(tree.body)

@@ -59,7 +59,8 @@ def test_cli_rules_and_token_report_subcommands(capsys: pytest.CaptureFixture[st
 
     assert main(["rules", "--format", "json"]) == 0
     rules_json = json.loads(capsys.readouterr().out)
-    expected_ids = {f"MCP{i:03d}" for i in range(1, 12)} | {"MCP013"}
+    # MCP012 is live-only (emitted by audit-server), so the static catalog is 1-11, 13, 14.
+    expected_ids = {f"MCP{i:03d}" for i in range(1, 12)} | {"MCP013", "MCP014"}
     assert {rule["rule_id"] for rule in rules_json} == expected_ids
     assert len(rules_json) == len(expected_ids)
 

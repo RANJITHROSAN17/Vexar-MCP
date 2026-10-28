@@ -5,6 +5,12 @@ Exit codes are part of the public contract because CI gates depend on them:
 * ``0`` - the scan finished and every gate passed
 * ``1`` - the scan finished but a gate failed (severity, score floor, or baseline delta)
 * ``2`` - usage, configuration, I/O, or live-server error; nothing was gated
+* ``3`` - the analysis was incomplete (files could not be parsed): results unreliable
+* ``4`` - no supported MCP tool was found, and the policy requires at least one
+
+Exit ``3`` exists so CI can tell "your code is broken" (``1``) from "we could not read
+your code" (``3``). Both must fail the build, but conflating them teaches teams to ignore
+the gate.
 """
 
 from __future__ import annotations
@@ -28,7 +34,7 @@ from mcp_doctor.baseline import (
 from mcp_doctor.config import describe_config, discover_config, load_config
 from mcp_doctor.engine import scan_paths, scan_server
 from mcp_doctor.live import LiveAuditError
-from mcp_doctor.models import Diagnostic, ScanConfig, ScanReport
+from mcp_doctor.models import Diagnostic, ScanConfig, ScanReport, ScanStatus
 from mcp_doctor.policies import PolicyViolation, apply_policy, list_policies, resolve_policy
 from mcp_doctor.reporters import (
     render_github_annotations,
@@ -141,6 +147,29 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Append this run's score to the --history file after scanning.",
     )
     scan_p.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help=(
+            "Do not fail when some files cannot be analyzed. Off by default: an unparsable "
+            "file means the result cannot be trusted, so it is a gate failure (exit 3)."
+        ),
+    )
+    scan_p.add_argument(
+        "--fail-on-no-matches",
+        action="store_true",
+        help="Fail (exit 4) when no supported MCP tool is discovered in the target.",
+    )
+    scan_p.add_argument(
+        "--emit",
+        action="append",
+        default=[],
+        metavar="FORMAT=PATH",
+        help=(
+            "Render an additional format from the same scan, e.g. "
+            "--emit sarif=out.sarif --emit html=report.html. Repeatable. Use '-' for stdout."
+        ),
+    )
+    scan_p.add_argument(
         "--print-config",
         action="store_true",
         help="Print the effective configuration and exit without scanning.",
@@ -172,6 +201,18 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=30.0,
         help="Seconds to allow for the whole handshake and tools/list exchange (default 30).",
+    )
+    live_p.add_argument(
+        "--fail-on-no-matches",
+        action="store_true",
+        help="Fail (exit 4) when the server advertises no tools.",
+    )
+    live_p.add_argument(
+        "--emit",
+        action="append",
+        default=[],
+        metavar="FORMAT=PATH",
+        help="Render an additional format from the same audit (repeatable).",
     )
 
     # ------------------------------------------------------------ baseline
@@ -307,7 +348,11 @@ def _gate_failures(
         )
 
     # A score floor is meaningless in delta mode: the backlog is accepted risk by design.
-    if delta_new is None and report.summary.score < config.min_score:
+    if (
+        delta_new is None
+        and report.summary.score is not None
+        and report.summary.score < config.min_score
+    ):
         reasons.append(
             f"health score {report.summary.score} is below the required floor of {config.min_score} "
             f"(policy '{config.policy_name}')"
@@ -315,10 +360,43 @@ def _gate_failures(
     return reasons
 
 
+def _analysis_failures(
+    report: ScanReport, *, allow_incomplete: bool, fail_on_no_matches: bool
+) -> tuple[int, list[str]]:
+    """Return ``(exit_code, reasons)`` for analysis-completeness problems.
+
+    These are reported before finding-based gates because an incomplete scan makes the
+    finding set unreliable: ``0`` findings from a ``PARTIAL`` scan means nothing.
+    """
+    reasons: list[str] = []
+    if not allow_incomplete:
+        if report.status is ScanStatus.PARTIAL:
+            failed = report.coverage.files_failed
+            reasons.append(
+                f"analysis incomplete: {failed} file(s) could not be analyzed, so the "
+                "result cannot be trusted (re-run with --allow-incomplete to downgrade this)"
+            )
+        elif report.status is ScanStatus.ERROR:
+            reasons.append(
+                "analysis failed: no candidate file could be analyzed "
+                "(re-run with --allow-incomplete to downgrade this)"
+            )
+    if fail_on_no_matches and report.status is ScanStatus.NO_MATCHES:
+        reasons.append(
+            "no supported MCP tool found in the scan target; nothing was graded "
+            "(--fail-on-no-matches)"
+        )
+    if not reasons:
+        return 0, []
+    code = 3 if report.status in (ScanStatus.PARTIAL, ScanStatus.ERROR) else 4
+    return code, reasons
+
+
 def _summary_line(report: ScanReport, config: ScanConfig) -> str:
     s = report.summary
+    score = "n/a" if s.score is None else f"{s.score}/100 ({s.grade})"
     return (
-        f"vexar-mcp: score {s.score}/100 ({s.grade}), risk {s.risk_index}, "
+        f"vexar-mcp: status {report.status.value}, score {score}, risk {s.risk_index}, "
         f"{s.errors} error(s), {s.warnings} warning(s), {s.infos} info, "
         f"policy '{config.policy_name}'"
     )
@@ -459,21 +537,53 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         except ValueError as exc:
             print(f"vexar-mcp: error: {exc}", file=sys.stderr)
             return 2
-        history.append(report.summary.score)
+        # An ungraded scan has no score to trend; recording None would poison the
+        # sparkline for every later run.
+        if report.summary.score is not None:
+            history.append(report.summary.score)
 
     text = _render(report, args.format, delta=delta, history=history)
     _emit(text, args.output)
 
-    if args.append_history and args.history is not None:
+    for spec in getattr(args, "emit", []):
+        fmt, _, target = spec.partition("=")
+        if not target:
+            print(f"vexar-mcp: error: --emit expects FORMAT=PATH, got '{spec}'", file=sys.stderr)
+            return 2
+        if fmt not in _FORMATS:
+            print(
+                f"vexar-mcp: error: unknown --emit format '{fmt}'. Choose from: "
+                f"{', '.join(_FORMATS)}",
+                file=sys.stderr,
+            )
+            return 2
+        rendered = _render(report, fmt, delta=delta, history=history)
+        if target == "-":
+            print(rendered)
+        else:
+            path = Path(target)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(rendered + ("" if rendered.endswith("\n") else "\n"), encoding="utf-8")
+
+    if args.append_history and args.history is not None and report.summary.score is not None:
         _append_history(args.history, report.summary.score)
 
     failures = _gate_failures(
         report, cfg, delta_new=delta.new_findings if delta is not None else None
     )
+    analysis_code, analysis_reasons = _analysis_failures(
+        report,
+        allow_incomplete=bool(getattr(args, "allow_incomplete", False)),
+        fail_on_no_matches=bool(getattr(args, "fail_on_no_matches", False)),
+    )
     if args.format not in ("json", "sarif", "html", "github"):
         print(_summary_line(report, cfg), file=sys.stderr)
+    for reason in analysis_reasons:
+        print(f"vexar-mcp: analysis problem: {reason}", file=sys.stderr)
     for reason in failures:
         print(f"vexar-mcp: gate failed: {reason}", file=sys.stderr)
+    if analysis_code:
+        return analysis_code
     return 1 if failures else 0
 
 
@@ -505,10 +615,19 @@ def _cmd_audit_server(args: argparse.Namespace) -> int:
     _emit(_render(report, args.format), args.output)
 
     failures = _gate_failures(report, cfg, delta_new=None)
+    analysis_code, analysis_reasons = _analysis_failures(
+        report,
+        allow_incomplete=bool(getattr(args, "allow_incomplete", False)),
+        fail_on_no_matches=bool(getattr(args, "fail_on_no_matches", False)),
+    )
     if args.format not in ("json", "sarif", "html", "github"):
         print(_summary_line(report, cfg), file=sys.stderr)
+    for reason in analysis_reasons:
+        print(f"vexar-mcp: analysis problem: {reason}", file=sys.stderr)
     for reason in failures:
         print(f"vexar-mcp: gate failed: {reason}", file=sys.stderr)
+    if analysis_code:
+        return analysis_code
     return 1 if failures else 0
 
 

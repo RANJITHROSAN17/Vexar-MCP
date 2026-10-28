@@ -316,3 +316,92 @@ def test_ai_review_report_truncates_large_results(tmp_path: Path) -> None:
     finally:
         module.MAX_DIAGNOSTICS = original
     assert "further finding(s) omitted" in report
+
+
+# --------------------------------------------------------------------------------------
+# Composite action output mapping
+# --------------------------------------------------------------------------------------
+
+OUTPUTS_SCRIPT = ROOT / ".github" / "scripts" / "action_outputs.py"
+
+
+def _load_outputs_mod():
+    spec = importlib.util.spec_from_file_location("action_outputs", OUTPUTS_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["action_outputs"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_action_outputs_maps_a_graded_report() -> None:
+    mod = _load_outputs_mod()
+    outputs = mod.outputs_from_report(
+        {
+            "status": "findings",
+            "analysis_complete": True,
+            "policy": {"name": "ci"},
+            "summary": {"score": 42, "grade": "F", "risk_index": 70, "total_diagnostics": 5},
+            "coverage": {"files_failed": 0},
+            "baseline": {"new": 2},
+        }
+    )
+    assert outputs["score"] == "42"
+    assert outputs["policy"] == "ci"
+    assert outputs["status"] == "findings"
+    assert outputs["analysis_complete"] == "true"
+    assert outputs["new_findings"] == "2"
+
+
+def test_action_outputs_leaves_score_empty_when_ungraded() -> None:
+    """An ungraded scan must not surface a fake 100 to downstream workflow steps."""
+    mod = _load_outputs_mod()
+    outputs = mod.outputs_from_report(
+        {
+            "status": "partial",
+            "analysis_complete": False,
+            "summary": {"score": None, "grade": "N/A"},
+            "coverage": {"files_failed": 3},
+        }
+    )
+    assert outputs["score"] == ""
+    assert outputs["grade"] == "N/A"
+    assert outputs["status"] == "partial"
+    assert outputs["analysis_complete"] == "false"
+    assert outputs["files_failed"] == "3"
+
+
+def test_action_outputs_handles_a_minimal_document() -> None:
+    mod = _load_outputs_mod()
+    outputs = mod.outputs_from_report({})
+    assert outputs["policy"] == "default"
+    assert outputs["risk_index"] == "0"
+
+
+def test_action_outputs_cli_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    import json as _json
+
+    mod = _load_outputs_mod()
+    report = tmp_path / "r.json"
+    report.write_text(
+        _json.dumps({"status": "clean", "summary": {"score": 100, "grade": "A+"}}), encoding="utf-8"
+    )
+    assert mod.main([str(report)]) == 0
+    out = capsys.readouterr().out
+    assert "score=100" in out
+    assert "exit_code" not in out  # the shell owns that, not this script
+
+
+def test_action_outputs_cli_reports_bad_input(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mod = _load_outputs_mod()
+    assert mod.main([]) == 2
+    assert mod.main([str(tmp_path / "missing.json")]) == 1
+    broken = tmp_path / "broken.json"
+    broken.write_text("{oops", encoding="utf-8")
+    assert mod.main([str(broken)]) == 1
+    listy = tmp_path / "list.json"
+    listy.write_text("[]", encoding="utf-8")
+    assert mod.main([str(listy)]) == 1
+    assert "not a JSON object" in capsys.readouterr().err
