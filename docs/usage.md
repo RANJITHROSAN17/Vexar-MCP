@@ -88,11 +88,70 @@ check_package_metadata                     97        1  examples/clean_server.py
 Total context-window tax across 3 tool(s): ~425 tokens/turn
 ```
 
+### `vexar-mcp policy [--format terminal|json]`
+
+List the built-in enforcement presets with the fail-on threshold, score floor, token
+budget, and protected categories each one applies. See [policies.md](policies.md).
+
+```console
+$ vexar-mcp policy
+PRESET                   FAIL-ON     MIN  TOK/TOOL  PROTECTED
+--------------------------------------------------------------------------------------------
+default                  error         0       250  -
+ci                       warning      80       230  security
+strict-prod              warning      90       200  security
+enterprise-governance    info         97       180  security,contract
+```
+
+### `vexar-mcp audit-server -- <command>`
+
+Introspect a *running* MCP server over stdio JSON-RPC and scan its announced tool catalog.
+See [live-audit.md](live-audit.md).
+
+```bash
+vexar-mcp audit-server -- python my_server.py
+vexar-mcp audit-server --format json --timeout 60 -- npx -y @acme/mcp-server
+```
+
+### `vexar-mcp baseline write|show`
+
+Create or inspect accepted-risk snapshots. See [baseline.md](baseline.md).
+
+```bash
+vexar-mcp baseline write . --output .vexar-baseline.json
+vexar-mcp baseline show .vexar-baseline.json
+```
+
 ### `vexar-mcp rules [--format terminal|json]`
 
 Lists every registered rule with its ID, severity, category, slug, and summary. Useful for building your own ignore lists or docs.
 
 ---
+
+## Gates and adopted risk
+
+`scan` enforces a policy. The most useful flags:
+
+| Flag | Purpose |
+| :--- | :--- |
+| `--policy <name>` | Apply an enforcement preset (`default`, `ci`, `strict-prod`, `enterprise-governance`) |
+| `--fail-on <sev>` | Override the policy threshold (`error`, `warning`, `info`, `never`) |
+| `--min-score <0-100>` | Fail when the health score drops below a floor |
+| `--ignore <ids>` | Skip rule IDs — rejected if the active policy protects them |
+| `--rule-pack <spec>` | Load an opt-in rule pack (repeatable) |
+| `--baseline <file>` | Gate only on findings introduced after the baseline |
+| `--write-baseline <file>` | Record current findings as accepted risk, then exit |
+| `--print-config` | Print the effective configuration and the file it came from, without scanning |
+| `--history <file>` | Score history for the HTML trend sparkline; add `--append-history` to record this run |
+
+```bash
+# What will CI actually enforce, and from which file?
+vexar-mcp scan . --policy strict-prod --print-config
+
+# Adopt on legacy code: accept the backlog, fail only on regressions
+vexar-mcp scan . --write-baseline .vexar-baseline.json
+vexar-mcp scan . --baseline .vexar-baseline.json --policy strict-prod
+```
 
 ## Scanning targets
 
@@ -154,6 +213,20 @@ $ vexar-mcp scan examples/vulnerable_server.py --format markdown
 | Health Score | Grade | Tools Audited | Est. Context Tax | Errors | Warnings | Info |
 | **8/100** | **F** | 2 | ~105 tokens | 4 | 5 | 1 |
 ```
+
+### HTML
+
+A single self-contained file — no CDN, no fonts, no external scripts, works offline and
+renders in restricted viewers:
+
+```bash
+vexar-mcp scan . --format html --output vexar-report.html
+vexar-mcp scan . --format html --output vexar-report.html --history scores.json --append-history
+```
+
+Includes score and risk scorecards, an inline SVG trend sparkline when `--history` is used,
+severity filters, free-text search, a baseline delta block, and a tool catalogue ranked by
+context cost.
 
 ### GitHub Actions annotations
 
@@ -242,3 +315,25 @@ Path("out.sarif").write_text(render_sarif(report), encoding="utf-8")
 ```
 
 `scan_paths` raises `FileNotFoundError` for a missing target. Nothing in the scanned file is executed.
+
+## pre-commit hooks
+
+Two hooks are provided in `.pre-commit-hooks.yaml`:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/RANJITHROSAN17/Vexar-MCP
+    rev: v0.2.0
+    hooks:
+      - id: vexar-mcp            # default profile, changed files only
+      - id: vexar-mcp-policy     # strict-prod gate on changed files
+```
+
+The `vexar-mcp-live` hook is defined but not enabled by default, because it needs the exact
+server command for your project:
+
+```yaml
+      - id: vexar-mcp-live
+        args: ["--", "python", "my_server.py"]
+```

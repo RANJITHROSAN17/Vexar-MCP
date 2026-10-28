@@ -139,6 +139,49 @@ This repository should remain lightweight and practical. The governance model sh
 - strong docs and issue quality instead of heavy ceremony
 - explicit risk-based review where it matters
 
+## Policy and rule governance (0.2.0)
+
+The tool now enforces standards, not just reports findings, so policy changes carry more
+weight than feature changes.
+
+### Rule ID namespace
+
+- `MCP001`–`MCP013` are owned by the project. `MCP012` is reserved for live-only protocol
+  findings.
+- Retired IDs are never reused: a retired ID stays retired, because a reused ID silently
+  changes the meaning of someone's committed baseline.
+- Third-party rule packs must use their own prefix and cannot register `MCP*` IDs. The
+  registry rejects collisions and duplicate slugs, so a pack can never shadow a built-in
+  check.
+
+### Policy presets are a versioned contract
+
+| Change | Required |
+| :--- | :--- |
+| Add a preset | Docs + changelog (additive, safe) |
+| Tighten a preset | Changelog "Policy changes" note + rationale in the PR |
+| Loosen a preset | Reviewed as security-relevant; changelog must say what is no longer caught |
+| Change a protected category | Treated as loosening or tightening accordingly; always called out |
+
+### Baselines are accepted-risk records
+
+- Baselines are committed artefacts and are reviewed like code.
+- A baseline diff that only adds entries needs a reason in the PR description.
+- Entries are never hand-edited; regenerate from a scan.
+- Each accepted-risk backlog should have an owner and a target issue.
+
+### Trust boundaries introduced by 0.2.0
+
+Two features run code. Both are opt-in, both are documented, and both are in scope for
+review:
+
+1. **Live server auditing** (`audit-server`) starts a process the operator names. Rails:
+   argv-only, single deadline, response and page caps, child killed on expiry.
+2. **Python rule packs** are imported on demand. Review them like a dependency; prefer
+   declarative packs, which are data and never executed.
+
+Static `scan` remains free of code execution — that property must not regress.
+
 ## Summary
 
 Vexar-MCP should remain a disciplined, high-trust repository: fast-moving, technically strong, documentation-aware, and release-minded. Governance should help the project scale without turning into bureaucracy.
@@ -151,4 +194,4 @@ The project is strongest when it balances:
 - product clarity
 - release discipline
 
-This is the right foundation for evolving from a high-quality technical project into a platform-grade MCP security product.
+This is the right foundation for evolving from a high-quality technical project into a platform-grade MCP security product. As the tool started enforcing standards in 0.2.0, the bar shifted from "does it detect well?" to "can teams trust what it enforces, and can they audit why a build failed?" Every governance decision above serves that second question.

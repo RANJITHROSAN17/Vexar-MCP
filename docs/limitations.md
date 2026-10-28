@@ -75,3 +75,47 @@ The dashboard in `assets/` is a static viewer. It reads a report file next to it
 ## Reporting a limitation
 
 If a rule misfires on realistic code, or misses an obvious sink, that is a bug worth fixing: open an issue with the file, the line, and what you expected. Security issues in Vexar-MCP itself go through [the private channel](../SECURITY.md), not a public issue.
+
+---
+
+## Policy, baseline, and live-audit limitations
+
+**Policies are only as good as the rules behind them.** A `strict-prod` preset cannot catch
+what no rule detects. The preset hierarchy controls *enforcement*, not coverage — see the
+rule limitations above.
+
+**The score is a heuristic.** `score = 100 - (15·errors + 6·warnings + 2·info)` saturates at
+zero quickly. It is a trend signal, not a maturity model. `risk_index` uses a different,
+documented model (`src/mcp_doctor/risk.py`) and saturates smoothly; neither is a substitute
+for reading the findings.
+
+**Baseline fingerprints ignore line numbers.** That is intentional, but it has consequences:
+moving a vulnerable tool to a different file makes its finding look *new* (safe direction),
+while fixing everything in a tool resolves the entry. Fingerprints are
+`rule + tool + file`, so two identical rules firing on the same tool in the same file
+collapse into one entry.
+
+**In baseline mode the score floor is not enforced.** A baseline exists to tolerate a low
+score while a backlog is burned down. If you want the floor enforced, run an additional
+non-baseline scan (for example nightly).
+
+**Live auditing sees only what the server exposes at that moment.** Tools behind feature
+flags, entitlements, or migrations that have not run will not appear. It also requires the
+server to start successfully in the auditing environment — missing credentials typically
+produce exit `2` (could not audit), not a clean result.
+
+**Live auditing cannot judge behaviour.** It reads `tools/list` metadata. It does not call
+the tools, so it cannot detect a tool that *claims* to be safe and then shells out at
+runtime. It complements static analysis; it does not replace it.
+
+**Protocol validation follows the revisions this build knows.** A newer revision than the
+supported list is reported as a warning. If a revision is legitimate but not yet listed,
+that is an upgrade, not a server bug.
+
+**Rule packs are heuristics you wrote.** A declarative pack cannot prove anything about a
+tool beyond name, description, parameter count, and token cost. A Python pack can do
+anything, which is why it is a trust boundary rather than a default.
+
+**Presets are conservative, not complete.** `enterprise-governance` fails on informational
+findings. That is a deliberate stance for regulated estates and will be noisy for teams that
+have not triaged their backlog — pair it with a baseline.

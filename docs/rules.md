@@ -220,3 +220,29 @@ A finding is a **static signal**, not a confirmed vulnerability. Many are true p
 ## Adding a rule
 
 Rules are registered functions in `src/mcp_doctor/rules/`. See [CONTRIBUTING.md](../CONTRIBUTING.md) — a rule is a decorated function plus positive and negative tests.
+
+---
+
+## `MCP012` — live protocol violation
+
+**Severity:** warning · **Category:** contract · **Source:** live audit only
+
+Emitted by `vexar-mcp audit-server` when a running server deviates from the MCP transport
+contract:
+
+| Condition | Why it matters |
+| :--- | :--- |
+| Negotiated `protocolVersion` is not one Vexar-MCP supports | Clients and servers disagree about message shapes in ways that fail at runtime, not at review time |
+| `initialize` result omits `protocolVersion` | The handshake is non-conformant; clients fall back to guessing |
+| Server does not advertise the `tools` capability | `tools/list` may be rejected or empty for conformant clients |
+| A `tools/list` entry is not an object, or has no `name` | The tool cannot be routed to by an LLM at all |
+| A tool has no `inputSchema`, or a non-object one | The agent cannot construct valid arguments; schema rules cannot run |
+| Pagination exceeds 50 pages | Cursor loops or unbounded catalogs; results may be truncated |
+
+Because these findings describe the *server's* conformance rather than one tool's source,
+they are reported against `mcp://<server-name>` rather than a file path, and they appear in
+JSON/SARIF like any other finding.
+
+Remediation: re-run the server against a supported MCP revision, advertise `tools` in
+`initialize`, and return real `inputSchema` objects from `tools/list`. Full details:
+[live-audit.md](live-audit.md).

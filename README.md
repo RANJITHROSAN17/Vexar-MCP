@@ -21,15 +21,19 @@
   <a href="#see-it-work">Example output</a> ·
   <a href="#what-it-checks">Rules</a> ·
   <a href="docs/usage.md">Usage</a> ·
-  <a href="docs/github-actions.md">GitHub Action</a> ·
-  <a href="docs/limitations.md">Limitations</a>
+  <a href="docs/policies.md">Policies</a> ·
+  <a href="docs/baseline.md">Baselines</a> ·
+  <a href="docs/live-audit.md">Live audit</a> ·
+  <a href="docs/github-actions.md">GitHub Action</a>
 </p>
 
 ---
 
-Vexar-MCP is a static analyzer for MCP servers. It reads Python source with `ast.parse` and reads JSON tool manifests with the standard library — **your code is never imported or executed**. Findings are reported as shell output, JSON, SARIF, GitHub Markdown, or inline Pull Request annotations.
+Vexar-MCP analyzes MCP servers and enforces a policy over them. Static scans read Python source with `ast.parse` and JSON tool manifests with the standard library — **your code is never imported or executed**. `audit-server` goes further and introspects a *running* server over stdio JSON-RPC, because generated and feature-flagged tools are invisible to static analysis.
 
-It does not replace a security review. It catches a specific set of well-known MCP failure modes early, in the editor or in CI. [What it cannot do](docs/limitations.md) is documented explicitly.
+Findings are reported as shell output, JSON, SARIF, GitHub Markdown, inline Pull Request annotations, or a standalone HTML dashboard — and gated by a named policy so the same standard applies on a laptop and in CI.
+
+It does not replace a security review. It catches a specific set of well-known MCP failure modes early, and it makes the standard you enforce explicit and reviewable. [What it cannot do](docs/limitations.md) is documented explicitly.
 
 ---
 
@@ -44,8 +48,19 @@ pip install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main"
 # 2. Scan a server, a directory, or a tool manifest
 vexar-mcp scan path/to/your_mcp_server
 
-# 3. Get a machine-readable report for CI
-vexar-mcp scan . --format sarif --fail-on warning
+# 3. Enforce a policy instead of ad-hoc flags
+vexar-mcp scan . --policy strict-prod
+
+# 4. Adopt on an existing codebase without failing on day one
+vexar-mcp scan . --write-baseline .vexar-baseline.json
+vexar-mcp scan . --baseline .vexar-baseline.json --policy strict-prod
+
+# 5. Audit a running server over stdio JSON-RPC
+vexar-mcp audit-server -- python my_server.py
+
+# 6. Get a machine-readable report for CI, or a self-contained HTML dashboard
+vexar-mcp scan . --format sarif --output vexar.sarif
+vexar-mcp scan . --format html  --output vexar-report.html
 ```
 
 Try it against the bundled examples without installing anything into your project:
@@ -124,7 +139,7 @@ All checks passed! Zero security, schema, contract, or token-budget findings.
 
 ## What it checks
 
-Eleven rules across four categories. Run `vexar-mcp rules` to list them, or `vexar-mcp rules --format json` for the machine-readable catalog.
+Thirteen rules across four categories — twelve static, plus `MCP012` for live protocol validation. Run `vexar-mcp rules` to list them, or `vexar-mcp rules --format json` for the machine-readable catalog.
 
 | Rule | Severity | Category | Flags |
 | :--- | :--- | :--- | :--- |
@@ -139,6 +154,7 @@ Eleven rules across four categories. Run `vexar-mcp rules` to list them, or `vex
 | `MCP009` | error | security | Hardcoded credential literal inside a tool handler (provider token prefixes, bearer headers) |
 | `MCP010` | warning | security | Outbound HTTP call with no explicit `timeout=` |
 | `MCP011` | error | security | SQL statement built by interpolating tool input into `.execute(...)` / `.executemany(...)` |
+| `MCP012` | warning | contract | Live audit only: unsupported protocol revision, missing `tools` capability, malformed `tools/list` entries, runaway pagination |
 | `MCP013` | error | security | `pickle.loads`, `yaml.load` without `SafeLoader`, and similar unsafe deserialization |
 
 Rules are static pattern and data-flow heuristics, not a proof of exploitability — [read the limitations](docs/limitations.md) before treating a finding as a confirmed vulnerability. Per-rule detail and remediation examples: [`docs/rules.md`](docs/rules.md).
@@ -164,6 +180,7 @@ Add a format to `vexar-mcp scan .`:
 | SARIF | `--format sarif` | GitHub Code Scanning, any SARIF-consuming IDE |
 | Markdown | `--format markdown` | `$GITHUB_STEP_SUMMARY`, PR comments |
 | Annotations | `--format github` | Inline `::error` / `::warning` / `::notice` on PR diff lines — no SARIF upload or Advanced Security needed |
+| HTML | `--format html --output report.html` | One self-contained file: scorecards, filters, search, tool costs, trend sparkline. No CDN, works offline |
 
 Plus `vexar-mcp token-report .` for a per-tool context-window leaderboard:
 
@@ -179,6 +196,105 @@ Total context-window tax across 3 tool(s): ~425 tokens/turn
 ```
 
 Token counts are a deterministic offline estimate (character- and structure-based), not a tokenizer round-trip; see [`docs/limitations.md`](docs/limitations.md).
+
+
+---
+
+## Policies and gates
+
+A policy is a named bundle of detection and enforcement settings, so the standard lives in
+one reviewable place instead of drifting across laptops and CI.
+
+```bash
+vexar-mcp policy                        # what each preset enforces
+vexar-mcp scan . --policy strict-prod   # release gate
+vexar-mcp scan . --print-config         # exactly what will be enforced, and from which file
+```
+
+| Preset | Fails on | Score floor | Token budget / tool | Unignorable |
+| :--- | :--- | :---: | :---: | :--- |
+| `default` | `error` | — | 250 | — |
+| `ci` | `warning` | 80 (B) | 230 | security |
+| `strict-prod` | `warning` | 90 (A) | 200 | security |
+| `enterprise-governance` | `info` | 97 (A+) | 180 | security, contract |
+
+A protected rule **cannot** be ignored — not from the CLI, not from a config file:
+
+```console
+$ vexar-mcp scan . --policy strict-prod --ignore MCP005
+vexar-mcp: error: policy 'strict-prod' protects security rules; these cannot be ignored: MCP005.
+```
+
+The most common way a security gate dies is not being defeated — it is being quietly
+silenced one rule at a time. Exit codes make the distinction explicit: `1` means a gate
+failed, `2` means the invocation or configuration was wrong.
+
+Details: [`docs/policies.md`](docs/policies.md).
+
+---
+
+## Adopting a gate on dirty code
+
+```bash
+vexar-mcp scan . --write-baseline .vexar-baseline.json     # accept what exists today
+vexar-mcp scan . --baseline .vexar-baseline.json           # fail only on what's new
+vexar-mcp baseline show .vexar-baseline.json               # inspect accepted risk
+```
+
+Fingerprints are `rule + tool + file` — line numbers and message wording are excluded, so
+unrelated edits never masquerade as new violations. Baselines are versioned, sorted JSON
+designed to be committed and reviewed. Details: [`docs/baseline.md`](docs/baseline.md).
+
+---
+
+## Live server auditing
+
+Static analysis cannot see tools a server generates at runtime. `audit-server` speaks the
+protocol:
+
+```bash
+vexar-mcp audit-server -- python my_server.py
+vexar-mcp audit-server --format sarif --output live.sarif -- npx -y @acme/mcp-server
+```
+
+It performs the real `initialize` handshake, follows `tools/list` pagination, validates
+protocol conformance (`MCP012`), and runs the entire rule set over the tools that are
+actually exposed — through the same normalisation pipeline as file scans, so results are
+directly comparable with a static baseline.
+
+The command is argv-only (no shell), bounded by a hard deadline, an 8 MiB response cap, and
+a 50-page cap, and the child is killed on expiry. This is the only command that starts a
+process; plain `scan` remains pure static analysis. Details:
+[`docs/live-audit.md`](docs/live-audit.md).
+
+---
+
+## Rule packs
+
+Organization conventions without forking the tool:
+
+```toml
+[[rule]]
+id = "ACME001"
+slug = "acme-tools-must-be-namespaced"
+severity = "warning"
+category = "contract"
+summary = "All tools must live in the acme_ namespace."
+remediation = "Rename the tool with an acme_ prefix."
+message = "Tool '{tool}' is outside the ACME namespace."
+  [rule.match]
+  name_regex = "^acme_"
+  invert = true
+```
+
+```bash
+vexar-mcp scan . --rule-pack ./policies/acme-rules.toml
+```
+
+Declarative packs are **data, never executed** — that is the recommended format. Python
+packs are supported for teams that audit them like any other dependency. The `MCP` rule-ID
+namespace is reserved: a pack cannot shadow a built-in security rule. Details:
+[`docs/rule-packs.md`](docs/rule-packs.md).
 
 ---
 
@@ -228,10 +344,12 @@ Full workflow recipes, including SARIF upload to the Security tab: [`docs/github
 
 ## Security model
 
-- **No code execution.** Python targets are inspected with `ast.parse` only — no imports, no subprocesses, no plugin loading of scanned files.
+- **No code execution during scans.** Python targets are inspected with `ast.parse` only — no imports, no subprocesses, no plugin loading of scanned files.
+- **Two features run code, both opt-in and both documented.** `audit-server` launches a server you name on the command line (argv only, hard deadline, response and pagination caps); Python rule packs are imported only when passed with `--rule-pack`. See [live-audit.md](docs/live-audit.md) and [rule-packs.md](docs/rule-packs.md).
 - **No network calls.** Scanning is fully offline; nothing about your source leaves the machine.
 - **No secrets in output.** `MCP009` records the *shape* of a credential match (pattern name, variable name, line) and never the literal value, so reports and SARIF uploads cannot become a second copy of a leaked key.
 - **Your files are read, not modified.** The tool only writes to stdout or a file you name.
+- **Reports cannot become a second leak.** HTML findings are embedded as escaped JSON, so server-controlled strings cannot break out of the document.
 
 **What a finding means:** a static-analysis signal that a risky pattern exists at that line. It is not proof of exploitability, and a clean scan is not proof of safety. Known gaps, false-positive sources, and unsupported inputs are listed in [`docs/limitations.md`](docs/limitations.md).
 
@@ -260,6 +378,10 @@ The repository publishes this viewer to GitHub Pages on every push to `main`: `d
 | :--- | :--- |
 | Install and scan my server | [`docs/usage.md`](docs/usage.md) |
 | Understand a specific finding | [`docs/rules.md`](docs/rules.md) |
+| Enforce a team or production standard | [`docs/policies.md`](docs/policies.md) |
+| Adopt the gate on an existing codebase | [`docs/baseline.md`](docs/baseline.md) |
+| Audit a running MCP server | [`docs/live-audit.md`](docs/live-audit.md) |
+| Add organization-specific rules | [`docs/rule-packs.md`](docs/rule-packs.md) |
 | Wire this into CI | [`docs/github-actions.md`](docs/github-actions.md) |
 | Know what it will *not* catch | [`docs/limitations.md`](docs/limitations.md) |
 | Render a report in the dashboard | [`docs/dashboard.md`](docs/dashboard.md) |
@@ -272,16 +394,20 @@ The repository publishes this viewer to GitHub Pages on every push to `main`: `d
 
 ## Project status
 
-`0.1.x` — usable, pre-1.0. Rule IDs and the JSON schema are stable; CLI flags may still change with a changelog note.
+`0.2.x` — usable, pre-1.0. Rule IDs, exit codes, configuration keys, `vexar-mcp-report/v1`
+and `vexar-mcp-baseline/v1` are stable; anything that changes keeps working with a
+changelog note. See [CHANGELOG.md](CHANGELOG.md) for the versioning contract.
 
 | Verified signal | Value | How it is measured |
 | :--- | :--- | :--- |
-| Diagnostic rules | **12** (`MCP001`–`MCP011`, `MCP013`) | `vexar-mcp rules` against the current source |
-| Report formats | **5** | `docs/usage.md`, reporter modules |
-| Test suite | **153 tests passing** | `pytest` on Python 3.13 (CI covers 3.10–3.12) |
-| Statement coverage | **93.05%** | `pytest --cov=mcp_doctor` |
+| Diagnostic rules | **13** (`MCP001`–`MCP013`) | `vexar-mcp rules` against the current source |
+| Enforcement presets | **4** | `vexar-mcp policy` |
+| Report formats | **6** (terminal, JSON, SARIF, Markdown, annotations, HTML) | `docs/usage.md`, reporter modules |
+| Scan modes | **2** — static files, live stdio JSON-RPC | `scan`, `audit-server` |
+| Test suite | **264 tests passing** | `pytest` on Python 3.13 (CI covers 3.10–3.13) |
+| Statement coverage | **94%** | `pytest --cov=mcp_doctor` |
 | Coverage gate | **85% required** | `--cov-fail-under=85` in `ci.yml` (a threshold, not a result) |
-| Quality gates | `ruff` and `mypy --strict` clean | CI matrix on Python 3.10 / 3.11 / 3.12 |
+| Quality gates | `ruff`, `ruff format`, `mypy --strict` clean; warnings are errors | CI matrix on Python 3.10 / 3.11 / 3.12 / 3.13 |
 | Runtime dependencies | **0** on Python 3.11+ | `pyproject.toml` (`tomli` only on 3.10) |
 
 Milestones and queued work live in [`.github/roadmap.json`](.github/roadmap.json). Coverage and test counts above are a point-in-time local measurement, not a guarantee; the CI badge is authoritative for a given commit.

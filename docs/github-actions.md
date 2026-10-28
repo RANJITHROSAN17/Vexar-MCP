@@ -5,8 +5,10 @@ Two ways to run Vexar-MCP in CI. Pick based on what you need.
 | | Composite action | CLI in your own step |
 | :--- | :--- | :--- |
 | Setup | One `uses:` line | `pip install` step + `run:` steps |
-| Step outputs (`score`, `grade`, `total-diagnostics`) | ✅ | ✗ (parse JSON yourself) |
+| Step outputs (`score`, `grade`, `risk-index`, `new-findings`, `policy`, `exit-code`) | ✅ | ✗ (parse JSON yourself) |
 | SARIF file written for you | ✅ | ✗ (redirect stdout) |
+| HTML dashboard written for you | ✅ | ✗ |
+| Policy presets and baseline gating | ✅ | ✅ |
 | Job summary written for you | ✅ | ✗ |
 | Inline PR annotations | ✗ | ✅ `--format github` |
 | Full control over pipeline steps | ✗ | ✅ |
@@ -160,3 +162,44 @@ pip install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@v0.1.0"
 - It does not comment on the PR or edit code. Findings are annotations and reports only.
 - It does not block merges by itself. `fail-on` fails the *step*; branch protection decides whether a failed check blocks the merge.
 - It does not execute the scanned server, so it cannot detect runtime-only misconfigurations. See [Limitations](limitations.md).
+
+---
+
+## Full input reference
+
+| Input | Default | Notes |
+| :--- | :--- | :--- |
+| `path` | `.` | File or directory to scan |
+| `policy` | — | `default`, `ci`, `strict-prod`, `enterprise-governance` |
+| `fail-on` | policy default | `error` / `warning` / `info` / `never` |
+| `min-score` | policy default | 0–100 floor |
+| `max-tokens` | policy default | Per-tool token budget |
+| `ignore` | — | Comma-separated rule IDs; rejected if the policy protects them |
+| `baseline` | — | Committed baseline file; gate on new findings only |
+| `rule-packs` | — | Comma-separated TOML/JSON paths or trusted module paths |
+| `config` | — | Explicit `vexar-mcp.toml` path |
+| `sarif-output` | — | Write SARIF for Code Scanning |
+| `html-output` | — | Write the standalone HTML report |
+| `step-summary` | `true` | Append the Markdown report to the job summary |
+
+Outputs: `score`, `grade`, `risk-index`, `total-diagnostics`, `new-findings`, `policy`,
+`exit-code`.
+
+`exit-code` is the number CI should trust: `0` passed, `1` a gate failed, `2` the scan or
+configuration was invalid. The action propagates it, so a misconfigured policy fails the job
+loudly instead of passing quietly.
+
+## Live auditing in CI
+
+`audit-server` needs the server to start in the runner. Use it as a separate job so a server
+that cannot boot does not mask the static gate:
+
+```yaml
+      - name: Live audit
+        run: |
+          vexar-mcp audit-server --policy strict-prod --format sarif \
+            --output live.sarif --timeout 120 -- python -m my_server
+```
+
+Treat exit `2` here as a real failure: it means the server could not be audited, which is not
+the same as the server being clean. See [live-audit.md](live-audit.md).

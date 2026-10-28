@@ -78,3 +78,59 @@ Vexar-MCP is a four-stage static analysis pipeline. It has zero mandatory runtim
 - **New reporter:** pure function `ScanReport -> str`, exported from `reporters/__init__.py`, wired into `cli.py`.
 
 Both workflows are documented in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+---
+
+## Platform layer (0.2.0)
+
+The 0.1 pipeline was `loaders → rules → engine → reporters`. The platform layer wraps that
+core without diluting it: rules still only see normalized tools, and reporters still only
+see a `ScanReport`.
+
+```
+                       ┌──────────────────────────────────────────┐
+   files ──loaders──►  │              rule catalog                │
+                       │  built-in (MCP001-MCP011, MCP013)        │
+   live server         │  + opt-in rule packs (rules/plugin.py)   │
+   ──live.py────►      └───────────────┬──────────────────────────┘
+   (stdio JSON-RPC)                    │  tools + diagnostics
+                                       ▼
+                        engine.assemble_report()
+                        ├── inline suppression filtering
+                        ├── risk.apply_risk()      → risk per finding + risk_index
+                        └── score / grade / summary
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    ▼                  ▼                  ▼
+              reporters          baseline.compare()   gate evaluation
+        terminal/json/sarif/     (delta: new vs accepted)  (policy presets,
+        markdown/github/html                              min score, fail-on)
+```
+
+### Module responsibilities
+
+| Module | Responsibility | Does not |
+| :--- | :--- | :--- |
+| `live.py` | Launch a server, speak JSON-RPC, normalize responses | Decide policy or format output |
+| `policies.py` | Named presets, precedence, protected-rule invariant | Detect anything |
+| `baseline.py` | Fingerprints, snapshots, delta comparison | Mutate a report |
+| `risk.py` | Deterministic per-finding risk and aggregate index | Know about rules' internals |
+| `rules/plugin.py` | Load and validate opt-in packs | Load anything implicitly |
+| `engine.py` | Orchestration and the single report-shaping path | Read files itself (loaders do) |
+| `config.py` | Resolve files, presets, and CLI overrides into one `ScanConfig` | Enforce gates |
+| `cli.py` | Argparse, dispatch, exit codes | Contain detection logic |
+
+### Invariants worth preserving
+
+1. **One report path.** Static scans and live audits both end in
+   `engine.assemble_report()`, so scores, grades, and risk are comparable across modes.
+2. **Rules stay pure.** A rule receives `(tools, config)` and returns diagnostics. No I/O,
+   no network, no filesystem — which is what keeps the rule set testable and safe.
+3. **Fail closed on configuration.** Unknown keys, invalid enums, unknown rule IDs, and
+   malformed baselines are errors (exit `2`), never silently ignored.
+4. **A policy cannot be quietly weakened.** Protected categories are enforced at
+   configuration resolution time, in one place (`policies.apply_policy`).
+5. **Nothing is executed unless the operator asked for it.** Static scans never import
+   scanned code; the two features that run code (`audit-server`, Python rule packs) are
+   explicit, opt-in, and documented as trust boundaries.
+6. **Exit codes are API.** `0` pass, `1` gate failure, `2` usage/config/IO error.

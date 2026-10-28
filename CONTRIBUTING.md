@@ -66,3 +66,56 @@ Our **PR Governance Bot** enforces [Conventional Commits](https://www.convention
 - `feat(parsers): support TypeScript MCP SDK`
 - `fix(ast): handle async generator tools cleanly`
 - `docs: clarify SARIF upload example`
+
+---
+
+## Rule IDs, policies, and rule packs
+
+### Adding a built-in rule
+
+1. Rule IDs come from the `MCP` namespace and are allocated in order: `MCP001`–`MCP011`,
+   `MCP013` are static rules, `MCP012` is live-only. `MCP012` is skipped by design in the
+   static modules — do not reuse it.
+2. Register with `@register_rule(...)` in the appropriate module under
+   `src/mcp_doctor/rules/` (`security_rules.py`, `schema_rules.py`, `token_rules.py`,
+   `contract_rules.py`).
+3. Add the rule to the table in `README.md`, a section in `docs/rules.md` (with a
+   remediation example and at least one false-positive case), and tests in
+   `tests/test_rules.py`.
+4. If the rule can emit an error, consider whether it belongs in a protected category. Add
+   it to the relevant presets in `src/mcp_doctor/policies.py` and say so in the PR.
+
+### Changing a policy preset
+
+Presets are a public contract: tightening one changes other people's build outcomes.
+
+- Tightening within a minor release requires a `CHANGELOG.md` "Policy changes" note and a
+  rationale in the PR.
+- Loosening any preset is reviewed as a **security-relevant** change.
+- Adding a preset is additive and needs docs only.
+
+### Adding a rule pack
+
+Organization rules belong in a pack ([docs/rule-packs.md](docs/rule-packs.md)), not in the
+built-in catalog. Packs may not use the `MCP` prefix — that namespace is reserved so a pack
+can never impersonate a built-in check. Declarative (TOML/JSON) packs are strongly preferred
+over Python packs, because they are data and cannot run code.
+
+### Adding a reporter or changing report output
+
+- Report fields are **additive only** inside `vexar-mcp-report/v1`. Never rename or retype an
+  existing key; bump the schema instead and document the migration.
+- Every reporter must render a report with zero tools, zero findings, and unreasonably long
+  messages without breaking.
+
+### Touching the live audit path
+
+`src/mcp_doctor/live.py` runs a child process. Keep these invariants:
+
+- argv lists only, never a shell;
+- one total deadline covering handshake and pagination;
+- bounded response size and page count;
+- terminate the child **before** closing pipes (closing first can deadlock the reader
+  threads);
+- add a fixture-based test using `tests/fixtures/mock_mcp_server.py` rather than requiring
+  a real third-party server.

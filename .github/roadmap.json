@@ -141,7 +141,9 @@
         "Register rule `MCP009` (`hardcoded-secret-in-tool`, severity `ERROR`, category `SECURITY`) via `@register_rule`.",
         "Ignore placeholder strings such as `YOUR_API_KEY`, `example`, `<token>`, or empty strings (`os.environ[...]`).",
         "Add unit tests covering both positive detections and placeholder/env-var non-triggers."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.1.0"
     },
     {
       "id": "RM-002",
@@ -217,11 +219,13 @@
         "Properly escape `%`, `\\r`, and `\\n` in workflow command messages per GitHub Actions spec.",
         "Wire `--format github` into `vexar-mcp scan` CLI choices.",
         "Add CLI tests verifying exact annotation lines."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.1.0"
     },
     {
       "id": "RM-005",
-      "title": "feat(rules): add MCP012 rule when tool parameters have no description",
+      "title": "feat(rules): add MCP014 rule when tool parameters have no description",
       "labels": [
         "good first issue",
         "help wanted",
@@ -230,7 +234,7 @@
         "area/rules",
         "type/feature"
       ],
-      "summary": "Emit an `INFO`-level diagnostic (`MCP012`, `undocumented-parameter`) when a tool parameter lacks a docstring `Args:` entry or JSON Schema `description`.",
+      "summary": "Flag tool parameters whose schema omits a description, which degrades the model's ability to fill arguments correctly. Uses rule ID MCP014 \u2014 MCP012 is reserved for live protocol findings.",
       "motivation": "Even when a tool has a top-level description, undocumented parameters (like `mode: str` or `flags: int`) force agents to guess valid values and semantics.",
       "files": [
         "src/mcp_doctor/loaders/python_ast.py",
@@ -238,10 +242,10 @@
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
-        "Support extracting parameter descriptions from `Annotated[T, Field(description='...')]` in `python_ast.py` in addition to `Args:` / `:param:` docstrings.",
-        "Register `MCP012` (`undocumented-parameter`, severity `INFO`, category `SCHEMA`).",
-        "Verify `examples/clean_server.py` and `examples/tools_manifest.json` remain warning/info-clean.",
-        "Add unit tests for documented vs undocumented parameters in both Python and JSON manifests."
+        "Register rule `MCP014` (severity `INFO`, category `SCHEMA`) via `@register_rule`.",
+        "Emit at most one finding per tool, listing the undocumented parameters, to avoid noise on wide schemas.",
+        "Do not fire when the tool itself has fewer than two parameters (ambiguity is low).",
+        "Document the rule in `README.md` and `docs/rules.md`, and add tests for both loaders."
       ]
     },
     {
@@ -266,7 +270,9 @@
         "Register `.ts` and `.js` extensions in `discover_candidate_files` and `scan_paths`.",
         "Ignore `*.d.ts` declaration files and `node_modules`.",
         "Add fixture-based tests covering clean and vulnerable TypeScript MCP servers."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.1.0"
     },
     {
       "id": "RM-007",
@@ -313,7 +319,9 @@
         "Detect unsafe deserialization calls in `python_ast.py`, treating `yaml.safe_load(...)` and `yaml.load(..., Loader=yaml.SafeLoader)` as safe.",
         "Register `MCP013` (`unsafe-deserialization`, severity `ERROR`, category `SECURITY`).",
         "Add unit tests verifying `yaml.load(data)` triggers `MCP013` while `yaml.safe_load(data)` passes."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.1.0"
     },
     {
       "id": "RM-009",
@@ -647,6 +655,109 @@
       "acceptance_criteria": [
         "Document the plugin trust boundary and require explicit opt-in.",
         "Reject duplicate rule IDs and test disabled plugins and load errors."
+      ]
+    },
+    {
+      "id": "RM-023",
+      "title": "feat(release): publish Vexar-MCP to PyPI via trusted publishing",
+      "labels": [
+        "roadmap",
+        "help wanted",
+        "area/ci",
+        "area/docs",
+        "type/feature",
+        "difficulty/medium",
+        "size/M"
+      ],
+      "summary": "Configure OIDC trusted publishing so `pip install vexar-mcp` works and every tagged release is reproducible without long-lived secrets.",
+      "motivation": "Packaging is complete and `publish-pypi.yml` exists, but adoption is blocked on a real index release. This is the single highest-leverage remaining item.",
+      "files": [
+        ".github/workflows/publish-pypi.yml",
+        "pyproject.toml",
+        "docs/release-management.md"
+      ],
+      "acceptance_criteria": [
+        "A tagged `vX.Y.Z` release publishes an sdist and wheel to PyPI using OIDC trusted publishing (no `PYPI_API_TOKEN`).",
+        "The workflow fails closed if the built version does not match the git tag.",
+        "`pip install vexar-mcp` followed by `vexar-mcp --version` is verified in a clean environment inside the workflow.",
+        "SECURITY.md and docs/usage.md no longer tell users to install from git."
+      ]
+    },
+    {
+      "id": "RM-024",
+      "title": "feat(cli): enumerate and audit multiple MCP servers from a registry file",
+      "labels": [
+        "roadmap",
+        "help wanted",
+        "area/cli",
+        "type/feature",
+        "difficulty/hard",
+        "size/L"
+      ],
+      "summary": "Add `vexar-mcp audit-registry <file>` that reads a list of server commands (or a Claude/Cursor MCP config), audits each one with the live stdio client, and emits a single combined report.",
+      "motivation": "Teams run several MCP servers, often defined in one client config. Auditing them one command at a time is the difference between a tool used daily and a tool used once.",
+      "files": [
+        "src/mcp_doctor/live.py",
+        "src/mcp_doctor/cli.py",
+        "docs/live-audit.md"
+      ],
+      "acceptance_criteria": [
+        "A registry file schema is documented and validated with fail-closed errors.",
+        "Each server is audited in isolation; one server failing to start does not abort the run and is reported as exit-worthy.",
+        "Reports aggregate per-server scores plus a fleet-level summary, in terminal/JSON/HTML.",
+        "Fixture-based tests cover a broken server, a clean server, and a partially failing fleet."
+      ]
+    },
+    {
+      "id": "RM-025",
+      "title": "feat(policies): support organization and team policy inheritance",
+      "labels": [
+        "roadmap",
+        "help wanted",
+        "area/rules",
+        "area/cli",
+        "type/feature",
+        "difficulty/hard",
+        "size/L"
+      ],
+      "summary": "Allow a policy file to extend a built-in preset and layer team overrides, with deterministic precedence and an auditable resolution chain.",
+      "motivation": "Enterprises need one org standard with narrow, reviewable team exceptions. Today that means copy-pasted TOML that silently drifts.",
+      "files": [
+        "src/mcp_doctor/policies.py",
+        "src/mcp_doctor/config.py",
+        "docs/policies.md"
+      ],
+      "acceptance_criteria": [
+        "Policies can declare `extends = \"strict-prod\"` plus explicit overrides.",
+        "Protected categories cannot be re-enabled for ignoring by a child policy.",
+        "`--print-config` shows the full resolution chain and which file contributed each setting.",
+        "Deterministic precedence is covered by tests, including conflicting layers."
+      ]
+    },
+    {
+      "id": "RM-026",
+      "title": "feat(policies): enforce server-wide token budget as its own gate",
+      "labels": [
+        "roadmap",
+        "help wanted",
+        "area/rules",
+        "area/cli",
+        "type/feature",
+        "difficulty/medium",
+        "size/M"
+      ],
+      "summary": "Turn `max-server-tokens` into an enforced finding instead of a reported configuration value, so a server cannot silently exceed its aggregate context budget.",
+      "motivation": "Per-tool budgets are enforced; the aggregate budget that actually drives per-turn cost is not. Teams hit the aggregate limit first.",
+      "files": [
+        "src/mcp_doctor/rules/token_rules.py",
+        "src/mcp_doctor/models.py",
+        "docs/rules.md"
+      ],
+      "acceptance_criteria": [
+        "A rule (new ID, documented) fires when total estimated tokens exceed `max-server-tokens`.",
+        "Presets set the budget consistently with their per-tool values.",
+        "The finding appears in terminal/JSON/SARIF output and can be baselined.",
+        "Tests cover just-under, exactly-at, and over-budget servers."
       ]
     }
   ]

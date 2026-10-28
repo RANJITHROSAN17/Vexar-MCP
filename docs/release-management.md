@@ -110,3 +110,27 @@ The project is strongest when it combines:
 - strong quality gates
 - transparent change communication
 - steady product evolution without breakage
+
+---
+
+## Release 0.2.0 — what changed in the process
+
+0.2.0 is the first release where the process below is enforced by machinery rather than by
+intention:
+
+| Control | How it is enforced |
+| :--- | :--- |
+| Additive-only report fields | `schema` keys `vexar-mcp-report/v1` and `vexar-mcp-baseline/v1`, documented contract in `CHANGELOG.md` |
+| No accidental gate weakening | Protected categories in `policies.py`; loosening a preset requires a changelog note and security review |
+| Behaviour changes are visible | CI matrix (3.10–3.13) runs lint, format, `mypy --strict`, tests with an 85% coverage gate, and warnings-as-errors |
+| The product actually works | Product dogfood jobs gate a clean server at `strict-prod`, exercise the baseline flow, assert protected rules cannot be ignored, run a live audit against a fixture server, load a rule pack, and assert exit code `2` for configuration errors |
+| Release artefacts are inspectable | CI uploads SARIF and the HTML report from the dogfood run |
+
+### Release checklist
+
+1. `CHANGELOG.md` has a section for the version, with any "Policy changes" note.
+2. `pyproject.toml` and `src/mcp_doctor/__init__.py` versions match.
+3. CI green on all supported Python versions.
+4. Dogfood jobs green — including the intentional exit-`1` assertion.
+5. Tag `vX.Y.Z`, publish, and verify `pip install` plus `vexar-mcp --version` in a clean
+   environment.

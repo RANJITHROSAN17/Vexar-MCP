@@ -240,3 +240,38 @@ The product should not just detect bad patterns. It should help teams:
 - and scale secure AI-tool adoption safely.
 
 That is the best long-term product direction for Vexar-MCP.
+
+---
+
+## Delivery status
+
+The roadmap above was written as product direction. This section records what has actually
+shipped, so the document stays honest as a plan rather than a wish list.
+
+### Shipped in 0.2.0
+
+| Pillar | Delivered | Where |
+| :--- | :--- | :--- |
+| Policy and governance | Four versioned presets, precedence rules, protected-rule invariant, `--print-config`, strict config validation | `policies.py`, `docs/policies.md` |
+| Baseline adoption | `--baseline`, `--write-baseline`, `baseline write\|show`, stable fingerprints, fail-closed parsing | `baseline.py`, `docs/baseline.md` |
+| Live auditing | stdio JSON-RPC introspection, `initialize` + `tools/list` with pagination, protocol validation (`MCP012`), bounded and sandboxable | `live.py`, `docs/live-audit.md` |
+| Insight | `risk_index` and per-finding risk, HTML dashboard with filters/search/sparkline, SARIF `security-severity` and fingerprints, baseline deltas in every reporter | `risk.py`, `reporters/html_report.py` |
+| Extensibility | Declarative rule packs, trusted Python packs, reserved ID namespace, duplicate rejection, scoped loading | `rules/plugin.py`, `docs/rule-packs.md` |
+| Release discipline | Semver contract, `CHANGELOG.md`, versioned report and baseline schemas, CI matrix on 3.10–3.13, product dogfood jobs | `CHANGELOG.md`, `.github/workflows/ci.yml` |
+
+### Still ahead
+
+- **PyPI publication** — packaging is ready; the release workflow needs a trusted-publisher
+  setup and a first signed release. This remains the highest-value unblocker for adoption.
+- **Registry introspection** — enumerate tools across many servers from a registry file
+  instead of one command per server.
+- **Server-wide and multi-server budget enforcement** — `max_server_tokens` is loaded and
+  reported but not yet gated as its own rule.
+- **Multi-team policy inheritance** — organization → team → repo composition.
+- **Signed rule packs** — signature verification for shared packs.
+- **Historical trend storage** — `--history` covers per-job sparklines; cross-run storage and
+  per-team scorecards need a persistence layer.
+- **Compliance templates** — named bundles mapping policy output onto control frameworks.
+
+The sequencing principle stays the same as in the original roadmap: adoption first (packaging,
+baselines, CI), then depth (live auditing, analytics), then ecosystem.

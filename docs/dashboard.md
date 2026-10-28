@@ -1,5 +1,11 @@
 # Dashboard
 
+> **Prefer `--format html` for a single-file report.** `vexar-mcp scan . --format html --output
+> report.html` produces a self-contained dashboard with scorecards, severity filters, search,
+> a tool catalogue, and a trend sparkline — no separate data file and no static host needed.
+> The JSON-driven viewer described below is still supported for the published GitHub Pages
+> dashboard.
+
 `assets/dashboard.html` is a single-file report viewer for Vexar-MCP JSON output. It is a static page: no build step, no framework, no CDN, no third-party scripts, and no network calls other than reading the report file next to it.
 
 ## Generate a report
