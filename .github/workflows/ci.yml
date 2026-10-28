@@ -59,32 +59,58 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Run composite action on clean examples
-        id: audit
+      - name: Clean server must pass the action under strict-prod
+        id: clean
+        uses: ./
+        with:
+          path: examples/clean_server.py
+          policy: strict-prod
+          sarif-output: vexar-clean.sarif
+          html-output: vexar-clean.html
+
+      - name: Assert the clean run passed with an A+ score
+        env:
+          SCORE: ${{ steps.clean.outputs.score }}
+          GRADE: ${{ steps.clean.outputs.grade }}
+          RISK: ${{ steps.clean.outputs.risk-index }}
+          EXIT_CODE: ${{ steps.clean.outputs.exit-code }}
+        run: |
+          set -euo pipefail
+          test "${EXIT_CODE}" = "0" || { echo "expected exit 0 on a clean server, got ${EXIT_CODE}"; exit 1; }
+          test "${SCORE}" = "100" || { echo "expected score 100, got ${SCORE}"; exit 1; }
+          test "${GRADE}" = "A+" || { echo "expected grade A+, got ${GRADE}"; exit 1; }
+          test "${RISK}" = "0" || { echo "expected risk 0, got ${RISK}"; exit 1; }
+          echo "clean run: score=${SCORE} grade=${GRADE} risk=${RISK}"
+
+      # examples/ contains an intentionally insecure server, so a `ci` gate must fail.
+      # This step is expected to fail: it proves the action propagates the gate result
+      # instead of reporting success. The assertion below checks the output it produced.
+      - name: Insecure example must be gated by the action
+        id: gate
+        continue-on-error: true
         uses: ./
         with:
           path: examples/
           policy: ci
           sarif-output: vexar.sarif
           html-output: vexar-report.html
-          step-summary: "true"
 
-      - name: Verify Action outputs and artefacts
+      - name: Assert the action propagated the gate failure
         env:
-          SCORE: ${{ steps.audit.outputs.score }}
-          GRADE: ${{ steps.audit.outputs.grade }}
-          RISK: ${{ steps.audit.outputs.risk-index }}
-          EXIT_CODE: ${{ steps.audit.outputs.exit-code }}
+          OUTCOME: ${{ steps.gate.outcome }}
+          EXIT_CODE: ${{ steps.gate.outputs.exit-code }}
+          NEW_FINDINGS: ${{ steps.gate.outputs.new-findings }}
+          POLICY: ${{ steps.gate.outputs.policy }}
         run: |
           set -euo pipefail
-          # examples/vulnerable_server.py is intentionally insecure, so a CI gate at
-          # `warning` must fail: exit-code 1 proves the composite action propagates the
-          # gate result instead of swallowing it.
-          test "${EXIT_CODE}" = "1" || { echo "expected gate failure exit 1, got ${EXIT_CODE}"; exit 1; }
+          test "${OUTCOME}" = "failure" || { echo "expected the gated run to fail, got ${OUTCOME}"; exit 1; }
+          test "${EXIT_CODE}" = "1" || { echo "expected gate exit 1, got ${EXIT_CODE}"; exit 1; }
+          test "${POLICY}" = "ci" || { echo "expected policy 'ci', got ${POLICY}"; exit 1; }
           test -s vexar.sarif
           test -s vexar-report.html
           grep -q "<!doctype html>" vexar-report.html
-          echo "score=${SCORE} grade=${GRADE} risk=${RISK}"
+          grep -q '"version": "2.1.0"' vexar.sarif
+          echo "gate propagated correctly: exit=${EXIT_CODE} policy=${POLICY} new=${NEW_FINDINGS}"
 
       - name: Upload reports
         if: always()
@@ -92,6 +118,8 @@ jobs:
         with:
           name: vexar-reports
           path: |
+            vexar-clean.sarif
+            vexar-clean.html
             vexar.sarif
             vexar-report.html
 

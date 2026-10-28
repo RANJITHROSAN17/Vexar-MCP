@@ -29,6 +29,10 @@ vexar-mcp scan . --print-config  # exactly what will be enforced, and from which
 Presets are ordered: each step tightens the threshold, raises the floor, and shrinks the
 budget. `vexar-mcp policy --format json` gives the same data machine-readably.
 
+`--fail-on never` means **report only**: it disables every gate, including the score floor,
+so a pipeline can generate SARIF or HTML artefacts without the job failing. To gate on the
+floor alone, keep the default threshold and set `--min-score`.
+
 ## Precedence
 
 Highest wins:

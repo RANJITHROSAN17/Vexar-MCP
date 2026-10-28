@@ -344,3 +344,51 @@ def test_audit_server_without_command_is_a_usage_error(
 def test_token_report(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["token-report", str(EXAMPLES)]) == 0
     assert "EST. TOKENS" in capsys.readouterr().out
+
+
+def test_fail_on_never_disables_the_score_floor_too(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--fail-on never` is report-only: it must not fail on the score floor either."""
+    out_file = tmp_path / "report.sarif"
+    code = main(
+        [
+            "scan",
+            VULNERABLE,
+            "--policy",
+            "strict-prod",
+            "--fail-on",
+            "never",
+            "--output",
+            str(out_file),
+            "--format",
+            "sarif",
+        ]
+    )
+    assert code == 0
+    assert out_file.is_file()
+    capsys.readouterr()
+
+
+def test_score_floor_fails_the_run_when_threshold_is_active(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "warn_only.py"
+    target.write_text(
+        '''
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("warn-only")
+
+
+@mcp.tool()
+def list_reports(limit: int) -> str:
+    """List reports, bounded by an explicit limit so the agent cannot flood context."""
+    return str(limit)
+''',
+        encoding="utf-8",
+    )
+    # Informational drift alone is not an error, so the default threshold passes...
+    assert main(["scan", str(target), "--fail-on", "error", "--min-score", "99"]) == 1
+    out = capsys.readouterr()
+    assert "score" in out.err or "below" in out.err

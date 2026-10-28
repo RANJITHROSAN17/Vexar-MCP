@@ -289,18 +289,22 @@ def _gate_failures(
     delta_new: Sequence[Diagnostic] | None,
 ) -> list[str]:
     """Return human-readable gate failure reasons; empty means the run passed."""
+    # `--fail-on never` means "report only": it disables every gate, including the score
+    # floor, so CI can generate SARIF/HTML artefacts without a second failing pass.
+    if config.fail_on is None:
+        return []
+
     reasons: list[str] = []
     findings: Sequence[Diagnostic] = delta_new if delta_new is not None else report.diagnostics
 
-    if config.fail_on is not None:
-        threshold = config.fail_on
-        breached = [d for d in findings if d.severity.rank >= threshold.rank]
-        if breached:
-            label = "new finding(s)" if delta_new is not None else "finding(s)"
-            reasons.append(
-                f"{len(breached)} {label} at or above '{threshold.value}' "
-                f"(policy '{config.policy_name}')"
-            )
+    threshold = config.fail_on
+    breached = [d for d in findings if d.severity.rank >= threshold.rank]
+    if breached:
+        label = "new finding(s)" if delta_new is not None else "finding(s)"
+        reasons.append(
+            f"{len(breached)} {label} at or above '{threshold.value}' "
+            f"(policy '{config.policy_name}')"
+        )
 
     # A score floor is meaningless in delta mode: the backlog is accepted risk by design.
     if delta_new is None and report.summary.score < config.min_score:
