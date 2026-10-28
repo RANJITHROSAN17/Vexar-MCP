@@ -268,6 +268,9 @@ Three behaviours are worth knowing, because YAML is the one format where most fi
 - **A missing PyYAML is a failure, not a skip.** If a manifest-shaped file cannot be read because PyYAML is absent, the scan reports a `missing_dependency` parse issue, withholds the grade, and exits `3`. Quietly skipping a manifest full of vulnerable tools and reporting A+ is the exact false confidence the scoring model exists to prevent.
 - **Findings carry the real line number.** A tool starting on line 40 of a manifest is reported at line 40, so a finding in a long manifest points somewhere you can look. (JSON manifests fall back to the entry's position in the array, because a decoded document has no line information.)
 
+The composite GitHub Action installs this extra for you, so a workflow that runs
+`uses: RANJITHROSAN17/Vexar-MCP@main` analyses YAML manifests without further configuration.
+
 Malformed YAML produces an `invalid_yaml` parse issue with the offending line, and — like any unreadable input — makes the result `PARTIAL` rather than clean.
 
 If a target does not exist, the CLI exits with status `2` and an error message.
