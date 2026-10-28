@@ -251,3 +251,58 @@ def test_every_workflow_that_scans_this_repository_can_read_every_format() -> No
         if not any("[yaml]" in line or "[dev]" in line for line in installs):
             offenders.append(path.name)
     assert not offenders, f"workflow(s) scan YAML manifests but install no yaml extra: {offenders}"
+
+
+class TestActionPinConsistency:
+    """One major per action, across every workflow.
+
+    Drift is not caught by any workflow run: two jobs using `checkout@v4` and `checkout@v7`
+    both pass, and the difference only shows up when one of them starts behaving
+    differently. That is how `setup-python` ended up split across v5, v6 and v7 -- a
+    Dependabot PR was closed unmerged and four files were bumped by hand instead, so the
+    five it did not touch stayed behind.
+
+    This is a ratchet. The allowlist names the actions still carrying drift, so the test is
+    green today; fixing one makes it fail until the entry is deleted, which keeps the list
+    from going stale.
+    """
+
+    # Tracked in RM-035. Delete entries as they are unified -- do not add new ones.
+    KNOWN_DRIFT = frozenset({"actions/checkout", "actions/github-script"})
+
+    def _pins(self) -> dict[str, set[str]]:
+        pins: dict[str, set[str]] = {}
+        sources = [*(ROOT / ".github" / "workflows").glob("*.y*ml"), ROOT / "action.yml"]
+        for path in sources:
+            for match in re.finditer(
+                r"uses:\s*([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)@(\S+)", path.read_text(encoding="utf-8")
+            ):
+                pins.setdefault(match.group(1), set()).add(match.group(2))
+        return {action: refs for action, refs in pins.items() if len(refs) > 1}
+
+    def test_no_action_is_pinned_to_two_majors_outside_the_known_list(self) -> None:
+        drift = self._pins()
+        unexpected = {
+            action: sorted(refs) for action, refs in drift.items() if action not in self.KNOWN_DRIFT
+        }
+        assert not unexpected, f"action(s) pinned to more than one ref: {unexpected}"
+
+    def test_the_allowlist_has_no_stale_entries(self) -> None:
+        fixed = self.KNOWN_DRIFT - set(self._pins())
+        assert not fixed, (
+            f"these actions no longer drift, so remove them from KNOWN_DRIFT: {sorted(fixed)}"
+        )
+
+    def test_setup_python_is_uniform(self) -> None:
+        """The specific drift this PR fixed; a one-line guard against regression."""
+        pins = {
+            ref
+            for path in (ROOT / ".github" / "workflows").glob("*.y*ml")
+            for ref in re.findall(r"actions/setup-python@(\S+)", path.read_text(encoding="utf-8"))
+        }
+        pins |= set(
+            re.findall(
+                r"actions/setup-python@(\S+)", (ROOT / "action.yml").read_text(encoding="utf-8")
+            )
+        )
+        assert pins == {"v7"}, f"setup-python pins should all be v7, found {sorted(pins)}"
