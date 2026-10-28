@@ -74,26 +74,66 @@ def extract_known_roadmap_ids(issues: list[dict[str, Any]]) -> tuple[set[str], i
     return seen, open_count
 
 
+def count_open_starters(existing_issues: list[dict[str, Any]]) -> int:
+    """Count open issues labelled ``good first issue``.
+
+    A quiet beginner on-ramp is invisible in every metric except the one that matters: nobody
+    new ever opens a PR. Counting it explicitly lets the queue defend it.
+    """
+    return sum(
+        1
+        for issue in existing_issues
+        if "pull_request" not in issue
+        and issue.get("state") == "open"
+        and any(
+            (label.get("name") if isinstance(label, dict) else label) == "good first issue"
+            for label in issue.get("labels", [])
+        )
+    )
+
+
+def _is_starter(item: dict[str, Any]) -> bool:
+    return "good first issue" in item.get("labels", [])
+
+
 def select_items_to_open(
     roadmap: dict[str, Any],
     existing_issues: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Determine which queued roadmap items should be opened to refill the contributor queue."""
+    """Determine which queued roadmap items should be opened to refill the contributor queue.
+
+    Two budgets, deliberately independent:
+
+    * ``max_open_roadmap_issues`` caps how much open work a single maintainer is asked to
+      triage — the ceiling that keeps the queue honest.
+    * ``min_open_good_first_issues`` is a floor for the beginner on-ramp. It may push the queue
+      one or two items past the ceiling, because a newcomer who finds nothing they can finish
+      does not come back, and that cost is paid silently.
+    """
     max_open = int(roadmap.get("max_open_roadmap_issues", 8))
+    starter_floor = int(roadmap.get("min_open_good_first_issues", 0))
+
     seen_ids, current_open = extract_known_roadmap_ids(existing_issues)
     slots_available = max(0, max_open - current_open)
-    if slots_available == 0:
-        return []
+
+    queued = [
+        item
+        for item in roadmap.get("items", [])
+        if item["id"] not in seen_ids and item.get("status") != "shipped"
+    ]
 
     to_open: list[dict[str, Any]] = []
-    for item in roadmap.get("items", []):
-        if item["id"] in seen_ids:
-            continue
-        if item.get("status") == "shipped":
+    # Starters first when the on-ramp is short, so a beginner-facing task is never stuck behind
+    # a hard one in the manifest order.
+    if count_open_starters(existing_issues) < starter_floor:
+        to_open.extend([item for item in queued if _is_starter(item)][:starter_floor])
+
+    for item in queued:
+        if len(to_open) >= max(slots_available, len(to_open)):
+            break
+        if item in to_open:
             continue
         to_open.append(item)
-        if len(to_open) >= slots_available:
-            break
     return to_open
 
 

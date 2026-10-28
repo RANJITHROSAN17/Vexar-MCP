@@ -148,3 +148,15 @@ A new loader takes `(path, *, issues=None)` and must:
 
 `score` is `int | None`. Do not "fix" a null score by defaulting it to `100` or `0` — that
 reintroduces the exact bug the project was rebuilt to remove.
+
+### Where the work comes from
+
+The issue queue is generated from [`.github/roadmap.json`](.github/roadmap.json) and refreshed
+weekly. Two things are worth knowing before you pick something up:
+
+- **Starter work is guaranteed.** The curator bot keeps at least `min_open_good_first_issues`
+  beginner-friendly issues open, even when the queue is otherwise full. If you can't find one,
+  that is a bug worth reporting.
+- **Shipped work is closed automatically**, with a comment naming the release. If an issue is
+  open, it is genuinely unimplemented — the manifest is checked against the code by CI rather
+  than trusted.

@@ -204,3 +204,76 @@ def test_closing_shipped_issues_frees_queue_slots_immediately() -> None:
     remaining = [i for i in issues if i["number"] not in closed]
     opened = bot_mod.select_items_to_open(roadmap, remaining)
     assert [item["id"] for item in opened] == ["RM-002"]
+
+
+def _issue(number: int, item_id: str, labels: list[str] | None = None) -> dict:
+    return {
+        "number": number,
+        "state": "open",
+        "body": f"<!-- roadmap-id: {item_id} -->",
+        "labels": [{"name": name} for name in (labels or [])],
+    }
+
+
+class TestStarterFloor:
+    """The queue has two budgets: a ceiling for the maintainer, a floor for newcomers."""
+
+    def _roadmap(self) -> dict:
+        return {
+            "max_open_roadmap_issues": 2,
+            "min_open_good_first_issues": 2,
+            "items": [
+                {
+                    "id": "RM-001",
+                    "title": "easy",
+                    "summary": "s",
+                    "motivation": "m",
+                    "labels": ["good first issue"],
+                },
+                {
+                    "id": "RM-002",
+                    "title": "hard",
+                    "summary": "s",
+                    "motivation": "m",
+                    "labels": ["difficulty/hard"],
+                },
+                {
+                    "id": "RM-003",
+                    "title": "easy2",
+                    "summary": "s",
+                    "motivation": "m",
+                    "labels": ["good first issue"],
+                },
+            ],
+        }
+
+    def test_full_queue_still_admits_a_starter(self) -> None:
+        # Queue is at its ceiling (2 open) and neither open issue is beginner-friendly.
+        existing = [
+            _issue(1, "RM-900", ["difficulty/hard"]),
+            _issue(2, "RM-901", ["difficulty/hard"]),
+        ]
+        opened = bot_mod.select_items_to_open(self._roadmap(), existing)
+        assert [item["id"] for item in opened] == ["RM-001", "RM-003"]
+
+    def test_floor_already_met_means_ceiling_applies(self) -> None:
+        existing = [
+            _issue(1, "RM-900", ["good first issue"]),
+            _issue(2, "RM-901", ["good first issue"]),
+        ]
+        assert bot_mod.select_items_to_open(self._roadmap(), existing) == []
+
+    def test_starter_is_preferred_over_harder_work_when_both_fit(self) -> None:
+        roadmap = self._roadmap()
+        roadmap["max_open_roadmap_issues"] = 3
+        roadmap["min_open_good_first_issues"] = 1
+        opened = bot_mod.select_items_to_open(roadmap, [])
+        assert opened[0]["labels"] == ["good first issue"]
+
+    def test_count_open_starters_ignores_closed_and_ships(self) -> None:
+        issues = [
+            _issue(1, "RM-001", ["good first issue"]),
+            {**_issue(2, "RM-002", ["good first issue"]), "state": "closed"},
+            {"number": 3, "state": "open", "body": "x", "labels": [], "pull_request": {"url": "u"}},
+        ]
+        assert bot_mod.count_open_starters(issues) == 1

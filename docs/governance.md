@@ -199,6 +199,17 @@ every `shipped_in` present in `CHANGELOG.md`, and every queued item carrying fil
 acceptance criteria. Shipping a feature is therefore a small, reviewable diff: set
 `status`/`shipped_in`, add the changelog entry, push, and let the bot close the issue.
 
+The queue has **two independent budgets**, and they exist for different people:
+
+| Key | Protects | Behaviour |
+| :--- | :--- | :--- |
+| `max_open_roadmap_issues` | the maintainer | ceiling on open work to triage |
+| `min_open_good_first_issues` | the newcomer | floor for beginner-friendly work; may push the queue past the ceiling |
+
+The floor is allowed to break the ceiling on purpose. A newcomer who finds nothing they can
+finish does not come back, and that loss is silent — no metric records it. A maintainer who is
+briefly two issues over budget notices immediately.
+
 This exists because it went wrong. Before 0.2.1, nineteen of thirty items were marked queued
 while the code was on `main`; five issues stayed open advertising delivered work, and two
 proposed rule IDs that other rules had already claimed.

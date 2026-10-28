@@ -884,6 +884,31 @@
         "A test fails when any entry is older than a configured review window.",
         "`simulate` warns in output when the table is past its review window."
       ]
+    },
+    {
+      "id": "RM-031",
+      "title": "docs(usage): walk through policy + baseline in a CI job",
+      "labels": [
+        "roadmap",
+        "good first issue",
+        "area/docs",
+        "type/feature",
+        "difficulty/easy",
+        "size/S"
+      ],
+      "summary": "Add a copy-pasteable section to docs/usage.md showing a full GitHub Actions job that scans with `--policy ci`, adopts a baseline on the first run, and gates only new findings.",
+      "motivation": "The two most common support questions are 'how do I turn this on without failing on day one?' and 'why did my score change?'. Both are answered by one worked example, which is cheaper to write than to keep answering.",
+      "files": [
+        "docs/usage.md",
+        "docs/baseline.md"
+      ],
+      "acceptance_criteria": [
+        "The example runs as written against `examples/` in a fresh checkout.",
+        "It shows both the adopting run (`--write-baseline`) and the enforcing run (`--baseline`).",
+        "Every command in the snippet is checked by a test or CI step, or is marked as illustrative.",
+        "It states what happens on the second run when nothing changed."
+      ]
     }
-  ]
+  ],
+  "min_open_good_first_issues": 2
 }

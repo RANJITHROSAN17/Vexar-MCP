@@ -47,6 +47,12 @@ stays 0.2.1.
   becomes a dead end. Pure function, 14 tests.
 - README "Easy wins" table and a contributor landing paragraph, so a first-time visitor sees
   four tasks they can finish today instead of a wall of feature documentation.
+- **A guaranteed beginner on-ramp.** The curator bot now tracks
+  `min_open_good_first_issues` (default 2) separately from `max_open_roadmap_issues`. The queue
+  ceiling protects the maintainer; the starter floor protects the newcomer, and is allowed to
+  exceed the ceiling because a beginner who finds nothing finishable leaves silently, while a
+  maintainer two issues over budget notices immediately. Added RM-031 (a worked CI example) so
+  the floor is fillable with genuinely easy work rather than a stretched "hard" label.
 
 ---
 
