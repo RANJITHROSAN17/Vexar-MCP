@@ -84,7 +84,7 @@ jobs:
           echo "PASSED=$OVERALL" >> $GITHUB_OUTPUT
           echo "--- FULL LOG (truncated to 3500 chars for comment) ---" >> review_result.md
           # Append full log snippet already written above; comment step will truncate
-          echo "Log written to review_result.md ($(wc -l < review_result.md) lines)" >> $GITHUB_OUTPUT
+          echo "log_lines=$(wc -l < review_result.md)" >> $GITHUB_OUTPUT
           echo "--- FILE CONTENTS ---"
           cat review_result.md
 
@@ -126,6 +126,12 @@ jobs:
                 ? `✅ **Ready for Final Merge Bot.** Only @RANJITHROSAN17 approves (ruleset prevents auto-merge).`
                 : `❌ **Fix required.** Re-push after correcting above failures. Bot will reply again automatically.`);
 
+            // A push to main has no issue or PR in context; posting would 404.
+            if (!context.issue || !context.issue.number) {
+              core.info(`No issue/PR in context (event: ${context.eventName}); review log kept as an artifact only.`);
+              core.summary.addRaw(body).write();
+              return;
+            }
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number,

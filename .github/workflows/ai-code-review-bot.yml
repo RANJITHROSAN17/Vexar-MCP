@@ -37,7 +37,7 @@ jobs:
             '🤖 **AI Code Reviewer + Enhancer (Vexar-MCP)**',
             '',
             f'**Score:** {results.summary.score}/100  |  **Grade:** {results.summary.grade}',
-            f'**Errors:** {results.summary.errors}  |  **Warnings:** {results.summary.warnings}  |  **Info:** {results.summary.info}',
+            f'**Errors:** {results.summary.errors}  |  **Warnings:** {results.summary.warnings}  |  **Info:** {results.summary.infos}',
             '',
             '| Rule | Severity | Line | Source | Remediation |',
             '|---|---|---|---|---|',
@@ -56,7 +56,7 @@ jobs:
           if sch:
             lines.append('- **Schema**: Add bounds (`max_length`, `le=`) to parameters.')
           lines.append('- **Token footprint**: Check `estimate_tool_tokens`; consider reducing parameter descriptions if >250 tokens.')
-          lines.append('- **Next**: Run `vexar-mcp audit --format sarif` for CI integration.')
+          lines.append('- **Next**: Run `vexar-mcp scan --format sarif` for CI integration.')
           Path('ai_review_report.md').write_text('\\n'.join(lines))
           print('Report written to ai_review_report.md')
           "

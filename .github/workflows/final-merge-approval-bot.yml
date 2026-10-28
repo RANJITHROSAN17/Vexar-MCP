@@ -11,7 +11,9 @@ jobs:
   approve:
     # Only runs when a review is submitted; only notifies YOU (not contributors, not bots)
     runs-on: ubuntu-latest
-    if: (github.event.review && github.event.review.state == "approved" && github.event.review.user.login == "RANJITHROSAN17") || github.event_name == "push"
+    # Only a review submission can trigger this workflow; the old `|| event_name == "push"`
+    # clause referenced an event this workflow never receives.
+    if: github.event.review && github.event.review.state == 'approved' && github.event.review.user.login == 'RANJITHROSAN17'
     steps:
       - name: Confirm all gates passed
         id: gates
@@ -25,6 +27,11 @@ jobs:
           script: |
             // ONLY YOU get notified — never @mentions contributors; never auto-merges
             const maintainer = "RANJITHROSAN17";
+            // workflow_dispatch has no issue/PR in context; commenting would 404.
+            if (!context.issue || !context.issue.number) {
+              core.info(`No issue/PR in context (event: ${context.eventName}); nothing to comment on.`);
+              return;
+            }
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number,
