@@ -21,7 +21,7 @@ All twelve built-in diagnostics. Run `vexar-mcp rules` for this list from the CL
 
 Severity affects the health score (error −15, warning −6, info −2) and the `--fail-on` gate.
 
-Thirteen rules run on static scans. `MCP012` is the fourteenth and runs only under
+Fourteen rules run on static scans. `MCP012` is the fifteenth and runs only under
 `vexar-mcp audit-server`, because protocol conformance can only be observed on a live
 connection — it is documented [at the end of this page](#mcp012--live-protocol-violation).
 

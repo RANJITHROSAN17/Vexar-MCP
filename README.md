@@ -79,7 +79,7 @@ flowchart LR
     B --> D
     C --> D
 
-    D --> E["14 rules<br/>security · schema · contract · tokens"]
+    D --> E["15 rules<br/>security · schema · contract · tokens"]
     E --> F["Policy<br/>fail-on · score floor · budgets"]
     F --> G["ScanReport<br/>status + coverage + findings"]
 
@@ -129,7 +129,7 @@ That is the whole on-ramp. If step 2 prints findings and step 3 exits `1`, it is
 vexar-mcp scan .                                   # scan the current repository
 vexar-mcp scan tools.json                          # a JSON / OpenAI-style tool manifest
 vexar-mcp token-report .                           # what your catalog costs per request
-vexar-mcp rules                                    # the 14 rules, and what they mean
+vexar-mcp rules                                    # the 15 rules, and what they mean
 vexar-mcp audit-server -- python my_server.py      # audit a running server over stdio
 ```
 </details>
