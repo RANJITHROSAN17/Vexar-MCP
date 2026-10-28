@@ -704,3 +704,293 @@ def test_mcp015_is_in_the_public_catalog() -> None:
     assert definition.severity is Severity.INFO
     assert definition.slug == "undocumented-parameter"
     assert definition.check is check_undocumented_parameters
+
+
+# ------------------------------------------------- 1-hop helper taint propagation
+# Production MCP servers delegate to private helpers (`_run_cmd(cmd)`, `_fetch(url)`), so a
+# tool that shells out through a helper used to look clean. These tests cover the recall
+# gain and, more importantly, the noise it must not create.
+
+_TAINT_SERVER = """
+import os
+import subprocess
+
+import requests
+
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("taint")
+
+
+def _run_cmd(cmd):
+    return subprocess.run(cmd, shell=True)
+
+
+def _constant_command():
+    return os.system("ls -la")
+
+
+def _fetch(url):
+    return requests.get(url)
+
+
+def _fetch_guarded(url):
+    if not url.startswith(("https://",)):
+        raise ValueError("https only")
+    return requests.get(url)
+
+
+def _ping(x):
+    return _pong(x)
+
+
+def _pong(y):
+    return _ping(y)
+"""
+
+
+def _scan_source(tmp_path: Path, body: str) -> list:
+    path = tmp_path / "server.py"
+    path.write_text(_TAINT_SERVER + body, encoding="utf-8")
+    report = scan_paths([path], ScanConfig())
+    return list(report.diagnostics)
+
+
+def _rules_for(diagnostics: list, tool: str) -> set[str]:
+    return {d.rule_id for d in diagnostics if d.tool_name == tool}
+
+
+def test_sink_inside_a_helper_is_attributed_to_the_calling_tool(tmp_path: Path) -> None:
+    """The headline case: the tool passes a parameter into `_run_cmd`, which shells out."""
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+@mcp.tool()
+def run_via_helper(command: str) -> str:
+    """Run a command through a module-local helper."""
+    return _run_cmd(command)
+''',
+    )
+    shell = [d for d in diagnostics if d.rule_id == "MCP005"]
+    assert len(shell) == 1
+    assert shell[0].tool_name == "run_via_helper"
+    # Reported against the parameter the *caller* controls, not the helper's own name.
+    assert "'command'" in shell[0].message
+    assert "'cmd'" not in shell[0].message
+
+
+def test_the_finding_points_at_the_sink_inside_the_helper(tmp_path: Path) -> None:
+    """A finding must point at the line that causes it, even when that line is elsewhere."""
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+@mcp.tool()
+def run_via_helper(command: str) -> str:
+    """Run a command through a module-local helper."""
+    return _run_cmd(command)
+''',
+    )
+    shell = next(d for d in diagnostics if d.rule_id == "MCP005")
+    source = (tmp_path / "server.py").read_text(encoding="utf-8").splitlines()
+    assert "subprocess.run(cmd, shell=True)" in source[shell.line - 1]
+
+
+def test_a_helper_called_without_tool_input_stays_silent(tmp_path: Path) -> None:
+    """`_constant_command()` runs a fixed command; the tool does not control it.
+
+    Without the taint requirement, every tool calling this helper would inherit the
+    finding -- noise that trains people to ignore the rule.
+    """
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+@mcp.tool()
+def list_files(directory: str) -> str:
+    """Delegate to a helper that runs a constant command."""
+    return _constant_command() + directory
+''',
+    )
+    assert "MCP005" not in _rules_for(diagnostics, "list_files")
+
+
+def test_keyword_arguments_propagate(tmp_path: Path) -> None:
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+def _kw_run(cmd):
+    return subprocess.run(cmd, shell=True)
+
+
+@mcp.tool()
+def via_keyword(command: str) -> str:
+    """Pass the parameter by keyword."""
+    return _kw_run(cmd=command)
+''',
+    )
+    assert "MCP005" in _rules_for(diagnostics, "via_keyword")
+
+
+def test_mutual_recursion_terminates_and_still_finds_one_hop_sinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_ping -> _pong -> _ping` must not loop, even with the hop limit raised.
+
+    The visited set is the real guard; the hop limit is a scope decision. Testing at a
+    raised limit keeps the recursion protection honest if that limit is ever changed.
+    """
+    import mcp_doctor.loaders.python_ast as python_ast
+
+    monkeypatch.setattr(python_ast, "_HELPER_HOP_LIMIT", 8)
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+def _loop_shell(cmd):
+    subprocess.run(cmd, shell=True)
+    return _loop_back(cmd)
+
+
+def _loop_back(cmd):
+    return _loop_shell(cmd)
+
+
+@mcp.tool()
+def recursing(command: str) -> str:
+    """Delegates into mutually recursive helpers."""
+    return _loop_shell(command)
+''',
+    )
+    shell = [d for d in diagnostics if d.rule_id == "MCP005" and d.tool_name == "recursing"]
+    assert len(shell) == 1, f"expected exactly one finding, got {len(shell)}"
+
+
+def test_a_method_call_is_not_traced(tmp_path: Path) -> None:
+    """`self._run(...)` needs type inference; a guessed trace would be unexplainable."""
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+class Runner:
+    def _run(self, cmd):
+        return subprocess.run(cmd, shell=True)
+
+    @mcp.tool()
+    def run_method(self, command: str) -> str:
+        """Delegate to a bound method rather than a module function."""
+        return self._run(command)
+''',
+    )
+    assert "MCP005" not in _rules_for(diagnostics, "run_method")
+
+
+def test_an_imported_helper_is_not_traced(tmp_path: Path) -> None:
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+import shlex
+
+
+@mcp.tool()
+def split_command(command: str) -> list[str]:
+    """Call an imported function; its body is not in this module."""
+    return shlex.split(command)
+''',
+    )
+    assert not _rules_for(diagnostics, "split_command")
+
+
+def test_a_name_shadowed_by_a_parameter_is_not_traced(tmp_path: Path) -> None:
+    """A parameter named like the helper means the call is not the module function."""
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+@mcp.tool()
+def shadow(_run_cmd: str) -> str:
+    """`_run_cmd` here is the caller's string, not the module helper."""
+    return _run_cmd
+''',
+    )
+    assert "MCP005" not in _rules_for(diagnostics, "shadow")
+
+
+def test_propagation_stops_at_one_hop(tmp_path: Path) -> None:
+    """Two hops needs inter-procedural dataflow; the limit is documented, not accidental."""
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+def _inner(cmd):
+    return subprocess.run(cmd, shell=True)
+
+
+def _outer(cmd):
+    return _inner(cmd)
+
+
+@mcp.tool()
+def two_hops(command: str) -> str:
+    """Reaches the sink through two helpers."""
+    return _outer(command)
+''',
+    )
+    assert "MCP005" not in _rules_for(diagnostics, "two_hops")
+
+
+def test_a_guard_in_the_caller_covers_the_helper_sink(tmp_path: Path) -> None:
+    """Validating before delegating is real validation, even though the sink is inside."""
+    diagnostics = _scan_source(
+        tmp_path,
+        '''
+@mcp.tool()
+def guarded_then_delegate(url: str) -> str:
+    """Validate with urlparse here, delegate the request to a helper."""
+    from urllib.parse import urlparse
+
+    if not urlparse(url).hostname:
+        raise ValueError("bad url")
+    return _fetch(url)
+''',
+    )
+    assert "MCP006" not in _rules_for(diagnostics, "guarded_then_delegate")
+
+
+def test_helper_findings_match_what_the_inline_version_reports(tmp_path: Path) -> None:
+    """Fidelity: propagating must not invent findings the inline analysis would not make.
+
+    A helper-derived finding should be indistinguishable from the same code written directly
+    in the tool body. If these ever disagree, the propagation path is generating noise.
+    """
+    delegate = _scan_source(
+        tmp_path,
+        '''
+@mcp.tool()
+def delegated(url: str) -> str:
+    """Fetch through a helper."""
+    return _fetch(url)
+''',
+    )
+    inline = _scan_source(
+        tmp_path,
+        '''
+@mcp.tool()
+def delegated(url: str) -> str:
+    """Fetch inline."""
+    return requests.get(url)
+''',
+    )
+    assert _rules_for(delegate, "delegated") == _rules_for(inline, "delegated")
+
+
+def test_the_helper_delegation_example_matches_its_documented_findings() -> None:
+    """`examples/helper_delegation_server.py` states what it should produce; hold it to that.
+
+    The file is scanned by CI, so its docstring is a claim users can check by running one
+    command. Deriving the expectations from the same scan keeps the claim honest.
+    """
+    example = Path(__file__).resolve().parent.parent / "examples" / "helper_delegation_server.py"
+    report = scan_paths([example], ScanConfig())
+    by_tool: dict[str, set[str]] = {}
+    for diagnostic in report.diagnostics:
+        by_tool.setdefault(diagnostic.tool_name or "", set()).add(diagnostic.rule_id)
+
+    assert by_tool["run_backup"] == {"MCP005"}, "shell sink delegated to _run_cmd"
+    assert by_tool["download_report"] == {"MCP006", "MCP010"}, "SSRF sink delegated to _fetch"
+    assert "read_note" not in by_tool, "the helper confines the path itself"
+    assert "rotate_logs" not in by_tool, "the helper runs a constant command"

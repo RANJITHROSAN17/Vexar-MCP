@@ -507,7 +507,9 @@
         "Index top-level helper functions in the same AST module and detect sinks reachable when a tool passes a parameter into a helper call.",
         "Avoid infinite recursion on mutually recursive helpers.",
         "Add unit tests verifying sinks inside `_helper(url)` are attributed to the calling `@mcp.tool()`."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.2.6"
     },
     {
       "id": "RM-016",

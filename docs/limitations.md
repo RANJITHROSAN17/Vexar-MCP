@@ -40,11 +40,33 @@ Suppress individual findings with [`noqa` or `ignore`](usage.md#suppressing-a-fi
 
 The Python loader reads the AST of each file **independently**:
 
-- **No cross-module data flow.** A parameter passed through three helper modules before reaching a sink is not traced.
-- **No interprocedural taint.** Helpers that validate in a different function may not be recognised, which inflates `MCP006` / `MCP007` false positives.
+- **No cross-module data flow.** A parameter passed into a helper in another file is not traced. Only helpers defined in the same module are followed.
+- **Taint propagation is one hop.** A parameter passed into `_run_cmd(cmd)` in the same file is followed and the sink inside that helper is attributed to the tool (see below). A sink two helpers away (`tool -> _outer -> _inner`) is not reached: that needs inter-procedural dataflow rather than name matching.
+- **Helpers are only followed when they consume the parameter.** A helper containing `os.system("ls")` that the tool calls with no arguments produces no finding, because the tool does not control that command.
+- **Methods, classes, and imports are not traced.** `self._run(cmd)`, a closure defined inside the tool, and a function imported from another module all end the trace — following them needs type or inter-module analysis, and a guessed trace produces findings nobody can explain from the code shown next to them.
 - **`MCP011` needs the interpolation at the call site.** A statement assigned to a variable first (`q = f"SELECT ... {x}"`, then `cur.execute(q)`) is not traced, so this rule under-reports rather than over-reports.
 - **No execution, no imports.** This is deliberate: scanned code cannot run during a scan. It also means dynamic constructs (`getattr`, decorators applied at runtime, factory-built tool registries, `exec`-generated handlers) are invisible.
 - **Framework coverage is pattern-based.** FastMCP, the official `mcp` SDK `@server.tool()` style, and `Tool(...)` objects are recognised. Unusual registration helpers may not be detected — a file that yields zero tools is silently skipped, so check that the tool count in the summary looks right.
+
+### What one-hop helper propagation does and does not cover
+
+Rules `MCP005`–`MCP007` (plus `MCP011` and `MCP013`) attribute a sink found inside a module-local helper to the tool that passes a tainted parameter in:
+
+```python
+def _run_cmd(cmd):
+    return subprocess.run(cmd, shell=True)  # <- the sink
+
+
+@mcp.tool()
+def deploy(command: str) -> str:
+    return _run_cmd(command)  # <- MCP005 reported here, for 'command'
+```
+
+The finding names the tool's own parameter, not the helper's, and points at the sink's line. Guards are inherited: validating a URL in the tool body before delegating keeps the helper's request from being reported as `MCP006`, and a guard inside the helper covers its own sinks.
+
+Argument mapping is positional and by keyword. A call whose mapping cannot be determined — a `*args`/`**kwargs` spread, or a keyword that the helper does not declare — is **skipped rather than guessed**, so a sink attributed to the wrong parameter is not a failure mode. The cost of that choice is recall: passing user input through an untyped `**kwargs` helper will not be traced.
+
+The trace is deliberately shallow. Each additional hop multiplies the chance of a finding that cannot be explained by the code beside it, and an unexplainable finding is one that gets suppressed wholesale.
 
 ## TypeScript and JavaScript coverage
 
