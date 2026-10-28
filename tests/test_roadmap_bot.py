@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -93,3 +94,58 @@ def test_shipped_issues_are_closed_and_others_left_alone() -> None:
     assert [number for number, _ in to_close] == [10]
     comment = bot_mod.render_shipped_comment(to_close[0][1])
     assert "0.2.1" in comment
+
+
+def test_drifted_open_issues_are_refreshed_and_shipped_ones_are_not() -> None:
+    roadmap = {
+        "items": [
+            {"id": "RM-001", "title": "new title", "summary": "s", "motivation": "m"},
+            {
+                "id": "RM-002",
+                "title": "shipped one",
+                "summary": "s",
+                "motivation": "m",
+                "status": "shipped",
+            },
+        ]
+    }
+    issues = [
+        {
+            "number": 1,
+            "state": "open",
+            "title": "old title",
+            "body": "<!-- roadmap-id: RM-001 -->\nold",
+        },
+        {"number": 2, "state": "open", "title": "ship", "body": "<!-- roadmap-id: RM-002 -->"},
+        {
+            "number": 3,
+            "state": "open",
+            "title": "new title",
+            "body": bot_mod.render_issue_body(roadmap["items"][0]),
+        },
+    ]
+    stale = bot_mod.select_issues_to_refresh(roadmap, issues)
+    assert [number for number, _ in stale] == [1]
+
+
+def test_roadmap_never_proposes_a_rule_id_that_already_exists() -> None:
+    """A queued item proposing a live rule ID asks a contributor to rebuild shipped work.
+
+    Mentions of existing rules in passing ("taint propagation to strengthen MCP005") are fine;
+    what must not drift is an item that *proposes to add* an ID that is already taken.
+    """
+    from mcp_doctor.rules import get_rule_catalog
+
+    roadmap = json.loads((ROOT / ".github" / "roadmap.json").read_text(encoding="utf-8"))
+    live_ids = set(get_rule_catalog())
+    offenders = []
+    for item in roadmap["items"]:
+        if item.get("status") == "shipped":
+            continue
+        for rule_id in set(re.findall(r"MCP\d{3}", item["title"])):
+            proposes = re.search(rf"add\s+{rule_id}\b", item["title"]) or re.search(
+                rf"{rule_id}\s+rule", item["title"]
+            )
+            if proposes and rule_id in live_ids:
+                offenders.append((item["id"], rule_id))
+    assert not offenders, f"queued roadmap items propose already-registered rules: {offenders}"

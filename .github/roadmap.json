@@ -168,7 +168,9 @@
         "Register rule `MCP010` (`missing-network-timeout`, severity `WARNING`, category `SECURITY`).",
         "Ensure `examples/clean_server.py` continues to score `100/100 (A+)` (it already passes `timeout=5`).",
         "Add unit tests for `requests.get(url)` (flagged) vs `requests.get(url, timeout=10)` (clean)."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.1.0"
     },
     {
       "id": "RM-003",
@@ -193,7 +195,9 @@
         "Register `MCP011` (`sql-string-interpolation`, severity `ERROR`, category `SECURITY`).",
         "Allow parameterized queries (`cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))`) without false positives.",
         "Add unit tests for f-string SQL vs parameterized SQL."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.1.0"
     },
     {
       "id": "RM-004",
@@ -225,7 +229,7 @@
     },
     {
       "id": "RM-005",
-      "title": "feat(rules): add MCP014 rule when tool parameters have no description",
+      "title": "feat(rules): add MCP015 rule when tool parameters have no description",
       "labels": [
         "good first issue",
         "help wanted",
@@ -234,8 +238,8 @@
         "area/rules",
         "type/feature"
       ],
-      "summary": "Flag tool parameters whose schema omits a description, which degrades the model's ability to fill arguments correctly. Uses rule ID MCP014 \u2014 MCP012 is reserved for live protocol findings.",
-      "motivation": "Even when a tool has a top-level description, undocumented parameters (like `mode: str` or `flags: int`) force agents to guess valid values and semantics.",
+      "summary": "Flag tool parameters that carry no description, so an agent cannot infer when to supply them. MCP001 covers the tool description; parameter-level docs are unchecked.",
+      "motivation": "Rule IDs are a public contract and MCP012 now means live protocol/transport validation. This item originally requested MCP012, then MCP014, and both were claimed by other rules -- so the next available ID is MCP015. Check `vexar-mcp rules` before claiming an ID.",
       "files": [
         "src/mcp_doctor/loaders/python_ast.py",
         "src/mcp_doctor/rules/schema_rules.py",
@@ -246,7 +250,8 @@
         "Emit at most one finding per tool, listing the undocumented parameters, to avoid noise on wide schemas.",
         "Do not fire when the tool itself has fewer than two parameters (ambiguity is low).",
         "Document the rule in `README.md` and `docs/rules.md`, and add tests for both loaders."
-      ]
+      ],
+      "status": "queued"
     },
     {
       "id": "RM-006",
@@ -347,7 +352,7 @@
     },
     {
       "id": "RM-010",
-      "title": "feat(cli): add `vexar-mcp inspect --stdio <cmd>` live MCP server introspection",
+      "title": "feat(cli): add `vexar-mcp audit-server -- <cmd>` live MCP server introspection",
       "labels": [
         "help wanted",
         "roadmap",
@@ -366,7 +371,9 @@
         "Implement minimal stdlib `subprocess` JSON-RPC 2.0 `initialize` -> `notifications/initialized` -> `tools/list` client with configurable timeout.",
         "Feed returned `tools` array through existing `json_manifest` normalizer and scan engine.",
         "Test against a tiny mock stdio Python script in `tests/`."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.2.0"
     },
     {
       "id": "RM-011",
@@ -390,11 +397,13 @@
         "Emit valid self-contained HTML5 with inline CSS and escaped diagnostic strings (`html.escape`).",
         "Include health score badge, per-tool token breakdown table, and severity filter toggles.",
         "Add unit tests verifying HTML escaping and CLI `--format html` execution."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.2.0"
     },
     {
       "id": "RM-012",
-      "title": "feat(cli): add `--baseline <path>` support to suppress pre-existing findings during incremental adoption",
+      "title": "feat(cli): add `--baseline <path>` to suppress pre-existing findings",
       "labels": [
         "good first issue",
         "help wanted",
@@ -414,7 +423,9 @@
         "Support `--write-baseline .mcp-doctor-baseline.json` and `--baseline .mcp-doctor-baseline.json`.",
         "Match baseline entries by `(rule_id, tool_name, source_file)` fingerprint rather than brittle line numbers.",
         "Add CLI tests demonstrating existing findings suppressed while new findings fail."
-      ]
+      ],
+      "status": "shipped",
+      "shipped_in": "0.2.0"
     },
     {
       "id": "RM-013",
@@ -488,10 +499,10 @@
     },
     {
       "id": "RM-016",
-      "status": "queued",
+      "status": "shipped",
       "priority": "high",
       "linked_issue": null,
-      "title": "feat(rules): add MCP009 protocol / transport validation",
+      "title": "feat(rules): add MCP012 live protocol and transport validation",
       "labels": [
         "help wanted",
         "roadmap",
@@ -499,8 +510,8 @@
         "area/rules",
         "type/feature"
       ],
-      "summary": "Validate MCP protocol and transport configuration with actionable diagnostics.",
-      "motivation": "Transport and protocol mismatches should be visible before deployment.",
+      "summary": "Validate a running server's handshake and tools/list response: unsupported protocol revision, missing `tools` capability, malformed entries, pagination.",
+      "motivation": "The original item reserved MCP009 for this, but MCP009 ended up as hardcoded secrets and protocol validation shipped as the live-only MCP012. Rule IDs are a public contract, so the manifest follows the code rather than the reverse.",
       "files": [
         "src/mcp_doctor/rules/mcp009_protocol.py",
         "tests/test_rules.py"
@@ -508,7 +519,8 @@
       "acceptance_criteria": [
         "Use a non-conflicting rule ID and document supported protocol assumptions.",
         "Test supported and unsupported transport configurations without executing a server."
-      ]
+      ],
+      "shipped_in": "0.2.0"
     },
     {
       "id": "RM-017",

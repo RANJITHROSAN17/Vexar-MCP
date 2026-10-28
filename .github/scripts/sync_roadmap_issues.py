@@ -137,6 +137,33 @@ def render_shipped_comment(item: dict[str, Any]) -> str:
     )
 
 
+def select_issues_to_refresh(
+    roadmap: dict[str, Any],
+    existing_issues: list[dict[str, Any]],
+) -> list[tuple[int, dict[str, Any]]]:
+    """Return `(issue_number, item)` for open issues whose rendered text no longer matches.
+
+    Drift is silent otherwise: a title can reference a rule ID that another rule has since
+    claimed, and contributors read the issue, not the JSON.
+    """
+    items = {item["id"]: item for item in roadmap.get("items", []) if item.get("id")}
+    stale: list[tuple[int, dict[str, Any]]] = []
+    for issue in existing_issues:
+        if "pull_request" in issue or issue.get("state") != "open":
+            continue
+        match = ROADMAP_MARKER_RE.search(issue.get("body") or "")
+        if not match:
+            continue
+        item = items.get(match.group(1))
+        if item is None or item.get("status") == "shipped":
+            continue
+        if issue.get("title") != item["title"] or (issue.get("body") or "") != render_issue_body(
+            item
+        ):
+            stale.append((int(issue["number"]), item))
+    return stale
+
+
 class GitHubClient:
     """Minimal zero-dependency GitHub REST API v3 client."""
 
@@ -197,6 +224,9 @@ class GitHubClient:
         )
         return res
 
+    def update_issue(self, number: int, title: str, body: str) -> None:
+        self.request("PATCH", f"/issues/{number}", {"title": title, "body": body})
+
     def close_issue(self, number: int, comment: str) -> None:
         self.request("POST", f"/issues/{number}/comments", {"body": comment})
         self.request("PATCH", f"/issues/{number}", {"state": "closed", "state_reason": "completed"})
@@ -250,6 +280,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         client.sync_labels(roadmap.get("labels", []))
         existing = client.list_all_issues()
+        for number, item in select_issues_to_refresh(roadmap, existing):
+            client.update_issue(number, item["title"], render_issue_body(item))
+            print(f"[roadmap-bot] Refreshed #{number}: {item['id']} text had drifted")
         for number, item in select_shipped_issues_to_close(roadmap, existing):
             client.close_issue(number, render_shipped_comment(item))
             print(f"[roadmap-bot] Closed #{number}: {item['id']} shipped")
