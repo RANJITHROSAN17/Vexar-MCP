@@ -23,6 +23,11 @@ _GOOGLE_ARG_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s*:\
 
 _SKIP_PARAM_NAMES = frozenset({"self", "cls", "ctx", "context"})
 
+# How many module-local helper calls deep taint is followed. One hop covers the common
+# `_run_cmd(param)` / `_fetch(url)` delegation pattern; each further hop multiplies the
+# chance of a finding nobody can explain from the code shown next to it.
+_HELPER_HOP_LIMIT = 1
+
 _SHELL_CALLS = frozenset({"os.system", "os.popen", "pty.spawn", "eval", "exec"})
 _SUBPROCESS_CALLS = frozenset(
     {
@@ -547,128 +552,286 @@ def _extract_secret_literals(
     return tuple(findings)
 
 
+def _classify_call(
+    node: ast.Call,
+    qual: str,
+    tainted: dict[str, str],
+    aliases: dict[str, str],
+    has_url_guard: bool,
+    has_path_guard: bool,
+    *,
+    require_taint: bool = False,
+) -> CodeSink | None:
+    """Apply the sink table to a call whose qualifying name is already known."""
+    used_params = sorted({tainted[name] for name in _referenced_names(node) if name in tainted})
+    first_param = used_params[0] if used_params else None
+    if require_taint and first_param is None:
+        return None
+
+    if _unsafe_deserialization(node, aliases):
+        return CodeSink(
+            kind="deserialization",
+            call_name=qual,
+            line=node.lineno,
+            uses_param=first_param,
+        )
+    if _is_sql_execute_call(node):
+        statement = _interpolated_statement(node)
+        if statement is not None:
+            tainted_args = sorted(
+                {tainted[name] for name in _referenced_names(statement) if name in tainted}
+            )
+            if tainted_args and _is_sql_statement(statement, qual):
+                return CodeSink(
+                    kind="sql",
+                    call_name=qual,
+                    line=node.lineno,
+                    uses_param=tainted_args[0],
+                )
+        return None
+    if qual in _SHELL_CALLS:
+        return CodeSink(
+            kind="shell",
+            call_name=qual,
+            line=node.lineno,
+            uses_param=first_param,
+            validated=False,
+        )
+    if qual in _SUBPROCESS_CALLS:
+        shell_true = any(
+            kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+            for kw in node.keywords
+        )
+        if shell_true:
+            return CodeSink(
+                kind="shell",
+                call_name=f"{qual}(shell=True)",
+                line=node.lineno,
+                uses_param=first_param,
+                validated=False,
+            )
+        return None
+    if (qual in _HTTP_CALLS or qual.endswith((".get", ".post"))) and first_param:
+        if qual in _HTTP_CALLS or any(
+            client in qual for client in ("requests", "httpx", "urllib", "client", "session")
+        ):
+            timeout_missing = True
+            for kw in node.keywords:
+                if kw.arg == "timeout":
+                    if isinstance(kw.value, ast.Constant) and kw.value.value is None:
+                        timeout_missing = True
+                    else:
+                        timeout_missing = False
+                    break
+            return CodeSink(
+                kind="ssrf",
+                call_name=qual,
+                line=node.lineno,
+                uses_param=first_param,
+                validated=has_url_guard,
+                timeout_missing=timeout_missing,
+            )
+        return None
+    if qual == "open" and first_param:
+        is_write = False
+        if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+            mode = str(node.args[1].value)
+            is_write = any(flag in mode for flag in ("w", "a", "x", "+"))
+        for kw in node.keywords:
+            if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                mode = str(kw.value.value)
+                is_write = any(flag in mode for flag in ("w", "a", "x", "+"))
+        # Even read-mode open on unvalidated user paths can leak `/etc/passwd` or secrets
+        return CodeSink(
+            kind="filesystem",
+            call_name="open(write)" if is_write else "open",
+            line=node.lineno,
+            uses_param=first_param,
+            validated=has_path_guard,
+        )
+    if (
+        qual in _FS_DESTRUCTIVE_CALLS or qual.endswith((".write_text", ".write_bytes", ".unlink"))
+    ) and first_param:
+        return CodeSink(
+            kind="filesystem",
+            call_name=qual,
+            line=node.lineno,
+            uses_param=first_param,
+            validated=has_path_guard,
+        )
+    return None
+
+
+def _index_module_helpers(tree: ast.AST) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Index module-level functions so tool bodies can be traced into them.
+
+    Only top-level ``def``/``async def`` statements are indexed. Methods reachable through
+    ``self.``, closures defined inside a tool, and functions imported from other modules are
+    deliberately out of scope: following them requires type or inter-module analysis, and a
+    guessed trace produces findings that cannot be explained to the person reading them.
+    """
+    helpers: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    for node in getattr(tree, "body", []):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            helpers[node.name] = node
+    return helpers
+
+
+def _helper_bindings(
+    call: ast.Call,
+    helper: ast.FunctionDef | ast.AsyncFunctionDef,
+    tainted: dict[str, str],
+) -> dict[str, str]:
+    """Map the helper's parameters to the tool parameters passed into this call.
+
+    Returns a mapping of *helper* parameter name to the *tool* parameter name it receives.
+    Calls are matched positionally and by keyword. Anything the analysis cannot map — a
+    ``*args``/``**kwargs`` spread whose target parameter is unknown — is skipped rather than
+    guessed, because attributing a sink to the wrong parameter is worse than missing it.
+    """
+    positional = list(helper.args.posonlyargs) + list(helper.args.args)
+    bindings: dict[str, str] = {}
+    for index, value in enumerate(call.args):
+        if isinstance(value, ast.Starred) or index >= len(positional):
+            continue
+        names = sorted({tainted[name] for name in _referenced_names(value) if name in tainted})
+        if names:
+            bindings[positional[index].arg] = names[0]
+    declared = {arg.arg for arg in positional} | {arg.arg for arg in helper.args.kwonlyargs}
+    for keyword in call.keywords:
+        if keyword.arg is None or keyword.arg not in declared:
+            continue
+        names = sorted(
+            {tainted[name] for name in _referenced_names(keyword.value) if name in tainted}
+        )
+        if names:
+            bindings[keyword.arg] = names[0]
+    return bindings
+
+
+def _resolve_helper(
+    call: ast.Call,
+    helpers: dict[str, ast.FunctionDef | ast.AsyncFunctionDef],
+    aliases: dict[str, str],
+    tainted: dict[str, str],
+) -> tuple[str, ast.FunctionDef | ast.AsyncFunctionDef] | None:
+    """Return the module-local helper a call targets, if it targets one.
+
+    A bare ``Name`` is required: an attribute such as ``self._run`` is a method, not a
+    module-level helper. A name that is bound by an import, or shadowed by a tool parameter,
+    is not the module function and must not be traced.
+    """
+    func = call.func
+    if not isinstance(func, ast.Name):
+        return None
+    name = func.id
+    if name in aliases or name in tainted or name not in helpers:
+        return None
+    return name, helpers[name]
+
+
 def _extract_sinks(
     func: ast.FunctionDef | ast.AsyncFunctionDef,
     param_names: set[str],
     module_aliases: dict[str, str],
+    helpers: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] | None = None,
 ) -> tuple[CodeSink, ...]:
+    """Extract sinks from a tool body, following calls into module-local helpers.
+
+    Propagates taint one hop: when a tool passes a parameter into ``_run_cmd(cmd)`` and that
+    helper contains a sink consuming its parameter, the sink is attributed to the tool under
+    the parameter the tool's caller controls. Production MCP servers routinely delegate to
+    private helpers, and without this a tool that shells out through ``_run_cmd`` looked
+    clean.
+
+    Three limits keep the result trustworthy:
+
+    * **One hop.** The helper's own calls are scanned for sinks but not followed further.
+      Deeper traces need inter-procedural dataflow, not name matching.
+    * **Taint is required.** A sink inside a helper is only reported when it consumes a
+      parameter the tool actually passed in. Otherwise every tool that calls a helper
+      containing a constant ``os.system("ls")`` would inherit that finding.
+    * **Recursion terminates.** ``visited`` records the helpers already expanded on this
+      path, so mutually recursive helpers (``_a -> _b -> _a``) cannot loop even if the hop
+      limit is raised later.
+    """
+    return tuple(
+        _collect_sinks(func, {name: name for name in param_names}, module_aliases, helpers or {})
+    )
+
+
+def _collect_sinks(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+    tainted: dict[str, str],
+    module_aliases: dict[str, str],
+    helpers: dict[str, ast.FunctionDef | ast.AsyncFunctionDef],
+    *,
+    visited: frozenset[str] = frozenset(),
+    depth: int = 0,
+    inherited_guards: frozenset[str] = frozenset(),
+) -> list[CodeSink]:
+    """Walk one function, returning its sinks and those of one hop of helpers."""
     sinks: list[CodeSink] = []
-    has_url_guard = _body_has_url_validation(func)
-    has_path_guard = _body_has_path_confinement(func)
+    has_url_guard = _body_has_url_validation(func) or "ssrf" in inherited_guards
+    has_path_guard = _body_has_path_confinement(func) or "filesystem" in inherited_guards
     # Local imports belong to this handler only; do not leak aliases between tools.
-    aliases = {name: value for name, value in module_aliases.items() if name not in param_names}
+    aliases = {name: value for name, value in module_aliases.items() if name not in tainted}
     aliases.update(_import_aliases(func.body))
+    require_taint = depth > 0
 
     for node in ast.walk(func):
         if not isinstance(node, ast.Call):
             continue
-        qual = _call_qualname(node.func)
-        used_params = sorted(_referenced_names(node) & param_names)
-        first_param = used_params[0] if used_params else None
+        sink = _classify_call(
+            node,
+            _call_qualname(node.func),
+            tainted,
+            aliases,
+            has_url_guard,
+            has_path_guard,
+            require_taint=require_taint,
+        )
+        if sink is not None:
+            sinks.append(sink)
 
-        if _unsafe_deserialization(node, aliases):
-            sinks.append(
-                CodeSink(
-                    kind="deserialization",
-                    call_name=qual,
-                    line=node.lineno,
-                    uses_param=first_param,
-                )
+        if depth >= _HELPER_HOP_LIMIT:
+            continue
+        resolved = _resolve_helper(node, helpers, aliases, tainted)
+        if resolved is None:
+            continue
+        helper_name, helper = resolved
+        if helper_name in visited:
+            continue
+        bindings = _helper_bindings(node, helper, tainted)
+        if not bindings:
+            # The tool passed no parameter into the helper, so nothing is tainted downstream.
+            continue
+        sinks.extend(
+            _collect_sinks(
+                helper,
+                bindings,
+                module_aliases,
+                helpers,
+                visited=visited | {helper_name},
+                depth=depth + 1,
+                # A guard in the caller covers the callee: validating a URL before calling
+                # `_fetch(url)` is real validation, even though the sink is inside `_fetch`.
+                inherited_guards=inherited_guards
+                | ({"ssrf"} if has_url_guard else frozenset())
+                | ({"filesystem"} if has_path_guard else frozenset()),
             )
-        elif _is_sql_execute_call(node):
-            statement = _interpolated_statement(node)
-            if statement is not None:
-                tainted = sorted(_referenced_names(statement) & param_names)
-                if tainted and _is_sql_statement(statement, qual):
-                    sinks.append(
-                        CodeSink(
-                            kind="sql",
-                            call_name=qual,
-                            line=node.lineno,
-                            uses_param=tainted[0],
-                        )
-                    )
-        elif qual in _SHELL_CALLS:
-            sinks.append(
-                CodeSink(
-                    kind="shell",
-                    call_name=qual,
-                    line=node.lineno,
-                    uses_param=first_param,
-                    validated=False,
-                )
-            )
-        elif qual in _SUBPROCESS_CALLS:
-            shell_true = any(
-                kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True
-                for kw in node.keywords
-            )
-            if shell_true:
-                sinks.append(
-                    CodeSink(
-                        kind="shell",
-                        call_name=f"{qual}(shell=True)",
-                        line=node.lineno,
-                        uses_param=first_param,
-                        validated=False,
-                    )
-                )
-        elif (qual in _HTTP_CALLS or qual.endswith((".get", ".post"))) and first_param:
-            if qual in _HTTP_CALLS or any(
-                client in qual for client in ("requests", "httpx", "urllib", "client", "session")
-            ):
-                timeout_missing = True
-                for kw in node.keywords:
-                    if kw.arg == "timeout":
-                        if isinstance(kw.value, ast.Constant) and kw.value.value is None:
-                            timeout_missing = True
-                        else:
-                            timeout_missing = False
-                        break
-                sinks.append(
-                    CodeSink(
-                        kind="ssrf",
-                        call_name=qual,
-                        line=node.lineno,
-                        uses_param=first_param,
-                        validated=has_url_guard,
-                        timeout_missing=timeout_missing,
-                    )
-                )
-        elif qual == "open" and first_param:
-            is_write = False
-            if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
-                mode = str(node.args[1].value)
-                is_write = any(flag in mode for flag in ("w", "a", "x", "+"))
-            for kw in node.keywords:
-                if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
-                    mode = str(kw.value.value)
-                    is_write = any(flag in mode for flag in ("w", "a", "x", "+"))
-            # Even read-mode open on unvalidated user paths can leak `/etc/passwd` or secrets
-            sinks.append(
-                CodeSink(
-                    kind="filesystem",
-                    call_name="open(write)" if is_write else "open",
-                    line=node.lineno,
-                    uses_param=first_param,
-                    validated=has_path_guard,
-                )
-            )
-        elif (
-            qual in _FS_DESTRUCTIVE_CALLS
-            or qual.endswith((".write_text", ".write_bytes", ".unlink"))
-        ) and first_param:
-            sinks.append(
-                CodeSink(
-                    kind="filesystem",
-                    call_name=qual,
-                    line=node.lineno,
-                    uses_param=first_param,
-                    validated=has_path_guard,
-                )
-            )
+        )
 
-    return tuple(sinks)
+    # A helper called twice with different parameters yields two honest findings; the same
+    # sink reached twice along one call path does not.
+    seen: set[tuple[str, str, int, str | None]] = set()
+    unique: list[CodeSink] = []
+    for sink in sinks:
+        key = (sink.kind, sink.call_name, sink.line, sink.uses_param)
+        if key not in seen:
+            seen.add(key)
+            unique.append(sink)
+    return unique
 
 
 def _extract_suppressions(lines: list[str], start_line: int, end_line: int) -> frozenset[str]:
@@ -796,6 +959,9 @@ def load_python_file(path: Path, *, issues: list[ParseIssue] | None = None) -> l
         return []
     base_index = _build_base_index(tree)
     module_aliases = _import_aliases(tree.body)
+    # Sinks delegated to module-local helpers are attributed to the tool that passes the
+    # parameter in, so the index is built once per file rather than per tool.
+    module_helpers = _index_module_helpers(tree)
 
     tools: list[ToolSpec] = []
 
@@ -874,7 +1040,7 @@ def load_python_file(path: Path, *, issues: list[ParseIssue] | None = None) -> l
                         )
                     )
 
-            sinks = _extract_sinks(node, user_param_names, module_aliases)
+            sinks = _extract_sinks(node, user_param_names, module_aliases, module_helpers)
             # MCP009: scan the same tool body for hardcoded credential literals.
             secret_literals = _extract_secret_literals(node)
             end_lineno = getattr(node, "end_lineno", node.lineno) or node.lineno

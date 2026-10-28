@@ -247,7 +247,7 @@ vexar-mcp scan . --baseline .vexar-baseline.json --policy strict-prod
 
 | Extension | Parser | What is extracted |
 | :--- | :--- | :--- |
-| `.py` | `ast.parse` (never imported) | `@mcp.tool()` / `@server.tool()` decorated functions, `Tool(...)` objects, `FastMCP` builders; parameter names, annotations, defaults, bounds; sink calls inside the function body |
+| `.py` | `ast.parse` (never imported) | `@mcp.tool()` / `@server.tool()` decorated functions, `Tool(...)` objects, `FastMCP` builders; parameter names, annotations, defaults, bounds; sink calls inside the function body, plus one hop of module-local helpers that receive a tool parameter |
 | `.ts`, `.js`, `.jsx` | Static text/AST scan, no Node runtime | TypeScript MCP SDK `server.tool(...)` registrations |
 | `.json` | `json.loads` | MCP `tools/list` payloads, OpenAI and Anthropic tool manifests |
 | `.yaml`, `.yml` | `yaml.safe_load` (optional PyYAML) | The same manifest shapes as JSON, wrapped in YAML |

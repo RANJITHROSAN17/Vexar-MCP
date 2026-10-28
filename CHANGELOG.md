@@ -22,6 +22,63 @@ Versioning contract, so upgrades are predictable:
 
 ---
 
+## [0.2.6] - 2026-10-28
+
+Security rules now see through module-local helper functions, closing
+[issue #44](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/44). A tool that shells out
+through a private `_run_cmd(cmd)` helper used to scan as clean, because the sink was in
+another function in the same file. This is the shape most production MCP servers have.
+
+### Added
+
+- **One-hop taint propagation** for `MCP005`–`MCP007`, `MCP011` and `MCP013`. When a tool
+  passes one of its parameters into a module-level helper, sinks inside that helper are
+  attributed to the tool — reported against *the tool's* parameter name, at the helper's
+  line, so the finding points at the code that causes it.
+
+  ```python
+  def _run_cmd(cmd):
+      return subprocess.run(cmd, shell=True)  # <- the sink
+
+
+  @mcp.tool()
+  def deploy(command: str) -> str:
+      return _run_cmd(command)  # <- MCP005, for 'command'
+  ```
+
+  Four behaviours keep this from becoming noise:
+
+  - **Taint is required.** A helper containing `os.system("ls")` that the tool calls with no
+    arguments produces nothing, because the tool cannot influence that command.
+  - **Guards are inherited, both ways.** Validating a URL in the tool body before delegating
+    suppresses `MCP006` for the helper's request; a guard inside the helper covers its own
+    sinks.
+  - **Mapping is positional and by keyword, never guessed.** An unmappable `*args`/`**kwargs`
+    spread is skipped rather than attributed to the wrong parameter.
+  - **One hop, and recursion-safe.** `tool -> _outer -> _inner` is out of scope; a visited set
+    bounds mutual recursion independently of the hop limit, so raising it later cannot loop.
+
+  Methods (`self._run`), closures and imported functions end the trace: following them needs
+  type or inter-module analysis, and a guessed trace produces findings nobody can explain.
+
+- `examples/helper_delegation_server.py`, scanned by CI, showing four delegated tools: two
+  with findings, one whose helper confines its own path, and one whose helper runs a command
+  the tool cannot influence. A test holds each of those outcomes.
+
+### Changed
+
+- The sink classifier is now one function (`_classify_call`) shared by direct analysis and
+  helper tracing, so a helper-derived finding and the same code written inline cannot drift
+  apart. A test asserts the two produce identical rule sets.
+
+### Notes
+
+- No change to existing findings: `examples/` and the clean reference server score exactly as
+  before this release, and the whole existing suite passes untouched.
+
+
+---
+
 ## [0.2.5] - 2026-10-28
 
 Adds YAML tool manifests, closing [issue #40](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/40).
