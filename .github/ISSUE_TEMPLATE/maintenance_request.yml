@@ -1,0 +1,63 @@
+name: Maintenance / Operations Request
+about: Report repository maintenance, governance, release, or process issues
+title: "[maintenance] "
+labels: ["help wanted", "roadmap", "area/ci", "type/feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve repository health and governance.
+        Please keep requests clear, actionable, and scoped to maintenance or process work.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Maintenance area
+      description: What part of the repository needs attention?
+      options:
+        - Release process
+        - CI or automation
+        - Governance / standards
+        - Documentation
+        - Dependency upkeep
+        - Repository hygiene
+        - Security process
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or maintenance need
+      description: Describe the issue, gap, or operational problem.
+      placeholder: "Example: Release notes are inconsistent across patch releases..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and urgency
+      description: Explain the operational impact or risk.
+      placeholder: "Example: PR merge quality is inconsistent and contributors are unsure about release expectations."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: Suggest the fix or process change.
+      placeholder: "Example: add a release checklist and versioning policy doc, plus signed-off release flow."
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Suggested acceptance criteria
+      description: List what a successful fix would look like.
+      placeholder: "- release docs added\n- checklist documented\n- CI validation documented"
+    validations:
+      required: false
