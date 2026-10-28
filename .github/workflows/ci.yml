@@ -51,6 +51,11 @@ jobs:
       - name: Validate Roadmap Bot Manifest
         run: python .github/scripts/sync_roadmap_issues.py --dry-run
 
+      # An invalid workflow file shows up on GitHub as a failed run with no jobs, which
+      # looks like a bot malfunction rather than a syntax error. Fail here instead.
+      - name: Validate workflow and action manifests
+        run: python .github/scripts/validate_workflows.py
+
   dogfood-github-action:
     name: Dogfood Composite Action
     runs-on: ubuntu-latest

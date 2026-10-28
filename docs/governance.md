@@ -109,6 +109,16 @@ Maintainers should review:
 - runtime and packaging compatibility
 - backlog quality and issue hygiene
 
+### Repository automation hygiene
+
+- Workflow and composite-action manifests are validated in CI
+  (`.github/scripts/validate_workflows.py`), including YAML validity and permission-scope
+  names. An invalid workflow is reported by GitHub as a failed run with **no jobs**, which
+  is easy to mistake for a bot malfunction and then ignore; the linter turns that into a
+  normal failed check with a file and line number.
+- A workflow that fails on every push is a governance problem, not background noise: it
+  trains maintainers to ignore the Actions tab. Fix or disable it.
+
 ### Documentation hygiene
 
 User-facing changes should update at least one of the following when relevant:

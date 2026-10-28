@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  pull_requests: read  # only reads; never approves itself
+  pull-requests: read  # only reads; never approves itself
   issues: write
 
 jobs:

@@ -82,6 +82,14 @@ opt-in rule pack system.
 
 ### Fixed
 
+- Repaired three governance workflows that were failing on every push at startup (GitHub
+  reported a failed run with no jobs, which reads as a bot malfunction):
+  `code-review-bot.yml` had an unquoted `: ` inside two step names, which is invalid YAML,
+  and `code-review-bot.yml`, `ai-code-review-bot.yml` and `final-merge-approval-bot.yml`
+  used the permission scope `pull_requests` instead of the real scope `pull-requests`.
+- Added `.github/scripts/validate_workflows.py`, wired into CI, so an invalid workflow or
+  action manifest fails a normal check with a file-and-line message instead of poisoning
+  the Actions tab.
 - Removed the orphaned `rules/mcp009_protocol.py`, which was never imported but would have
   overwritten `MCP009` (hardcoded secret detection) with a silent no-op had anyone wired it
   up. Its `protocol-legacy-transport` intent is now covered by `MCP012` against live

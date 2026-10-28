@@ -7,7 +7,7 @@ on:
   push: {branches: [main]}
 
 permissions:
-  pull_requests: write
+  pull-requests: write
   contents: read
   issues: write
 
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install package + dev tools (fix: venv gone / runner bare)
+      - name: "Install package + dev tools (fix: venv gone / runner bare)"
         run: |
           python -m venv .venv
           .venv/bin/pip install --quiet -e ".[dev]"
@@ -26,7 +26,7 @@ jobs:
           .venv/bin/mypy --version | head -1
           .venv/bin/pytest --version | head -1
 
-      - name: Run Full Review + Capture Results (fix: reference venv binaries)
+      - name: "Run Full Review + Capture Results (fix: reference venv binaries)"
         id: result
         shell: bash
         run: |
