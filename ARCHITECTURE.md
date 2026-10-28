@@ -48,15 +48,16 @@ Vexar-MCP is a four-stage static analysis pipeline. It has zero mandatory runtim
 | `engine.py` | File discovery, suppression application, scoring, report assembly |
 | `config.py` | TOML discovery (`vexar-mcp.toml`, legacy `.mcp-doctor.toml`, `[tool.vexar-mcp]` in `pyproject.toml`) and CLI overrides |
 | `tokens.py` | Deterministic offline token estimation |
-| `cli.py` | `scan`, `token-report`, `rules` subcommands and exit-code policy |
+| `cli.py` | Subcommand wiring and exit-code policy |
 | `loaders/` | Source → `ToolSpec` normalization per input format |
 | `rules/` | `@register_rule`-decorated check functions plus the registry |
-| `reporters/` | `ScanReport` → one of five output formats |
-| `simulate/cost_model.py`, `cli_simulate.py` | Experimental cost projection; not wired into the CLI |
+| `reporters/` | `ScanReport` → one of six output formats (`terminal`, `json`, `sarif`, `markdown`, `github`, `html`) |
+| `simulate/` | Model price table, token→cost projection, and the `simulate` CLI surface |
+| `scaffold.py` | `vexar-mcp init`: generated config + workflow text, self-validated before writing |
 
 ## Scoring
 
-`score = max(0, 100 - errors*15 - warnings*6 - infos*2)`; `100` when no tools are found. Grades: `A+` ≥ 97, `A` ≥ 90, `B` ≥ 80, `C` ≥ 70, `D` ≥ 55, else `F`. The formula lives in `engine.py` and is intentionally simple and reviewable.
+`score = max(0, 100 - errors*15 - warnings*6 - infos*2)`, and no score at all when nothing was analyzed or the analysis was incomplete — a perfect number over unread files is the failure mode the score exists to avoid. Grades: `A+` ≥ 97, `A` ≥ 90, `B` ≥ 80, `C` ≥ 70, `D` ≥ 55, else `F`. The formula lives in `engine.py` and is intentionally simple and reviewable.
 
 ## Suppression resolution
 
@@ -119,6 +120,7 @@ see a `ScanReport`.
 | `engine.py` | Orchestration and the single report-shaping path | Read files itself (loaders do) |
 | `config.py` | Resolve files, presets, and CLI overrides into one `ScanConfig` | Enforce gates |
 | `cli.py` | Argparse, dispatch, exit codes | Contain detection logic |
+| `scaffold.py` | Generate a starter config and CI workflow | Decide findings, or write a config it could not load |
 
 ### Invariants worth preserving
 

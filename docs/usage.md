@@ -50,7 +50,7 @@ python -m mcp_doctor.cli scan .
 ## Commands
 
 ```text
-vexar-mcp [--version] {scan,audit-server,baseline,policy,rules,token-report,simulate} ...
+vexar-mcp [--version] {scan,audit-server,baseline,init,policy,rules,token-report,simulate} ...
 ```
 
 ### `vexar-mcp scan [paths...]`
@@ -124,6 +124,53 @@ Three deliberate behaviours:
 - **An incomplete scan is a lower bound (exit 3)**, matching `scan`. Removing that warning
   would make an understated bill look authoritative.
 - **No tools found exits 4** rather than printing a confident `$0.00`.
+
+### `vexar-mcp init [directory]`
+
+Writes a commented `vexar-mcp.toml` so a project does not start from a blank page, and with
+`--github-action` a workflow that gates every push and pull request.
+
+```console
+$ vexar-mcp init . --github-action
+wrote vexar-mcp.toml
+wrote .github/workflows/vexar-mcp.yml
+
+Next:
+  1. vexar-mcp scan . --print-config   # confirm the effective settings
+  2. vexar-mcp scan .                  # see what it finds today
+  3. vexar-mcp baseline write          # optional: gate only on new findings
+  4. git add vexar-mcp.toml .github/workflows/vexar-mcp.yml && git commit
+```
+
+| Flag | Meaning |
+| :--- | :--- |
+| `directory` | Project directory to scaffold. Defaults to the current directory; must already exist. |
+| `--github-action` | Also write `.github/workflows/vexar-mcp.yml`. |
+| `--policy` | Preset whose gate values are written into the config (`default` unless given). |
+| `--action-ref` | Ref of `RANJITHROSAN17/Vexar-MCP` the workflow calls. Defaults to `main`. |
+| `--force` | Overwrite existing files instead of refusing. |
+| `--dry-run` | Print the files without writing anything. |
+
+Four behaviours are deliberate:
+
+- **The generated config is validated before it is written.** It is parsed back through the
+  real configuration loader, so `init` cannot hand you a file the next scan rejects.
+- **A refusal writes nothing at all.** If any target exists and `--force` was not passed, the
+  command exits `2` and leaves the directory untouched — no half-scaffolded projects.
+- **An existing configuration is never shadowed silently.** The loader prefers
+  `vexar-mcp.toml` over `.mcp-doctor.toml` and pyproject tables, so writing one next to an
+  existing config would change how the project is scanned without saying so. `init` names the
+  file it found and refuses.
+- **`ignore` and `exclude` are generated empty.** A scaffold that pre-silences findings
+  produces a clean report, not a clean server.
+
+The workflow tracks `@main` by default, as the roadmap item specifies — which means your CI
+changes whenever upstream does. `init` says so on stderr, and `--action-ref` pins it to a
+released tag or a commit SHA instead:
+
+```bash
+vexar-mcp init . --github-action --action-ref v0.2.4
+```
 
 ### `vexar-mcp policy [--format terminal|json]`
 
@@ -219,8 +266,8 @@ Human-readable scorecard, one block per finding with a suggested fix.
 ```console
 $ vexar-mcp scan examples/vulnerable_server.py
 ==============================================================================
-Vexar-MCP  |  Health Score: 8/100 (F)  |  Tools: 2 across 1 file(s)
-Context Footprint: ~105 tokens  |  Errors: 4  Warnings: 5  Info: 1
+Vexar-MCP  |  Health Score: 4/100 (F)  |  Tools: 2 across 1 file(s)
+Context Footprint: ~105 tokens  |  Errors: 4  Warnings: 5  Info: 3
 ==============================================================================
 
 [ERROR] MCP005 (dangerous-shell-execution) at examples/vulnerable_server.py:25 [run]
@@ -253,8 +300,9 @@ A compact table for `$GITHUB_STEP_SUMMARY` or a sticky PR comment.
 ```console
 $ vexar-mcp scan examples/vulnerable_server.py --format markdown
 ## Vexar-MCP Audit Summary
-| Health Score | Grade | Tools Audited | Est. Context Tax | Errors | Warnings | Info |
-| **8/100** | **F** | 2 | ~105 tokens | 4 | 5 | 1 |
+| Health Score | Grade | Risk | Tools Audited | Est. Context Tax | Errors | Warnings | Info |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **4/100** | **F** | 98 (critical) | 2 | ~105 tokens | 4 | 5 | 3 |
 ```
 
 ### HTML

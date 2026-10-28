@@ -130,6 +130,7 @@ vexar-mcp scan .                                   # scan the current repository
 vexar-mcp scan tools.json                          # a JSON / OpenAI-style tool manifest
 vexar-mcp token-report .                           # what your catalog costs per request
 vexar-mcp rules                                    # the 15 rules, and what they mean
+vexar-mcp init . --github-action                   # config + CI workflow, ready to commit
 vexar-mcp audit-server -- python my_server.py      # audit a running server over stdio
 ```
 </details>
@@ -171,8 +172,8 @@ Real output from `vexar-mcp scan examples/vulnerable_server.py`, run against the
 ```console
 $ vexar-mcp scan examples/vulnerable_server.py
 ==============================================================================
-Vexar-MCP  |  Health Score: 8/100 (F)  |  Tools: 2 across 1 file(s)
-Context Footprint: ~105 tokens  |  Errors: 4  Warnings: 5  Info: 1
+Vexar-MCP  |  Health Score: 4/100 (F)  |  Tools: 2 across 1 file(s)
+Context Footprint: ~105 tokens  |  Errors: 4  Warnings: 5  Info: 3
 ==============================================================================
 
 [ERROR] MCP001 (missing-tool-description) at examples/vulnerable_server.py:23 [run]
