@@ -23,6 +23,15 @@ stays 0.2.1.
 
 ### Fixed
 
+- **`docs/rules.md` claimed `MCP012` was unimplemented** while documenting it thirty lines
+  later, and omitted `MCP014` entirely. Both corrected; `MCP014` now has a full section.
+- **Every rule link in the `docs/rules.md` index was dead.** The table linked to `#mcp001` while
+  the headings slugify to `#mcp001--missing-tool-description`. Links are now derived from the
+  headings and verified by `scripts/check_docs.py`.
+- **`docs/WEEKLY_UPGRADE_PLAN.md` cited three files that never existed** (`docs/POLICY_ENGINE.md`,
+  `tests/test_risk_score.py`, `tests/test_protocol_009.py`). It is marked historical, so the
+  references stay, but each is now annotated with what actually shipped instead.
+
 - **The stale bot did nothing.** `stale-bot.yml` was a scheduled job whose only step echoed a
   string, while `CONTRIBUTOR_RULES.md` claimed stale management was active. It now nudges
   after 60 days, never closes anything, and exempts pinned/roadmap/help-wanted/
@@ -40,6 +49,29 @@ stays 0.2.1.
   **a bot may never close a contributor's thread or guess a difficulty label**.
 
 ### Added
+
+- **An animated demo generated from real output.** `assets/demo.svg` is produced by
+  `scripts/make_demo_svg.py`, which runs the scanner, captures stdout, and renders two scenes: a
+  scan that finds real problems, and a scan that refuses to grade a file it could not parse.
+  CI runs it with `--check`, so the README cannot show behaviour this version does not have.
+  Pure CSS animation, no script and no external assets, with a `prefers-reduced-motion` path and
+  a static fallback that is readable when animation is stripped.
+- **`assets/social-preview.png`** (1280x640), composed by `scripts/make_social_preview.py` from
+  the same terminal capture. This is the image every link unfurl shows. GitHub has no API for
+  it, so uploading it under *Settings → Social preview* remains a manual step, documented in
+  [`docs/first-impression.md`](docs/first-impression.md).
+- **`QUICKSTART.md`**: a guided four-step on-ramp with the output to expect at each step, a
+  table of every exit code and what it means, and a "nothing was found, why?" section. A test
+  asserts every subcommand it mentions exists and that it quotes the current version.
+- **`scripts/check_docs.py`**: resolves every relative link and `#anchor` across all Markdown in
+  CI, including GitHub's exact slug rules and `<a id>` anchors. On first run it found 20 real
+  problems, below.
+- **`docs/first-impression.md`**: the design constraints of the first sixty seconds, the
+  patterns borrowed from fast-growing projects and why, and an honest note that a good README
+  raises conversion but does not create the traffic that trending measures.
+- README restructured: the demo and a plain-language **What this is** now sit above the fold,
+  the quick start is three commands instead of a list, and adoption, Actions and "not sure where
+  to point it" moved into collapsed sections.
 
 - **`issue-labeler.yml`** with `.github/scripts/auto_label_issue.py`: routes a new issue to
   `area/*` and `type/*` from its text and paths. Deliberately refuses to apply `difficulty/*`

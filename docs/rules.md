@@ -4,24 +4,28 @@ All twelve built-in diagnostics. Run `vexar-mcp rules` for this list from the CL
 
 | ID | Severity | Category | Slug |
 | :--- | :--- | :--- | :--- |
-| [`MCP001`](#mcp001) | error | contract | `missing-tool-description` |
-| [`MCP002`](#mcp002) | warning | tokens | `excessive-tool-tokens` |
-| [`MCP003`](#mcp003) | warning | schema | `untyped-or-any-parameter` |
-| [`MCP004`](#mcp004) | info | schema | `unbounded-collection-or-limit` |
-| [`MCP005`](#mcp005) | error | security | `dangerous-shell-execution` |
-| [`MCP006`](#mcp006) | warning | security | `unvalidated-ssrf-sink` |
-| [`MCP007`](#mcp007) | warning | security | `unconfined-filesystem-access` |
-| [`MCP008`](#mcp008) | error | contract | `ambiguous-or-duplicate-tool-name` |
-| [`MCP009`](#mcp009) | error | security | `hardcoded-secret-in-tool` |
-| [`MCP010`](#mcp010) | warning | security | `missing-network-timeout` |
-| [`MCP011`](#mcp011) | error | security | `sql-string-interpolation` |
-| [`MCP013`](#mcp013) | error | security | `unsafe-deserialization` |
+| [`MCP001`](#mcp001--missing-tool-description) | error | contract | `missing-tool-description` |
+| [`MCP002`](#mcp002--excessive-tool-tokens) | warning | tokens | `excessive-tool-tokens` |
+| [`MCP003`](#mcp003--untyped-or-any-parameter) | warning | schema | `untyped-or-any-parameter` |
+| [`MCP004`](#mcp004--unbounded-collection-or-limit) | info | schema | `unbounded-collection-or-limit` |
+| [`MCP005`](#mcp005--dangerous-shell-execution) | error | security | `dangerous-shell-execution` |
+| [`MCP006`](#mcp006--unvalidated-ssrf-sink) | warning | security | `unvalidated-ssrf-sink` |
+| [`MCP007`](#mcp007--unconfined-filesystem-access) | warning | security | `unconfined-filesystem-access` |
+| [`MCP008`](#mcp008--ambiguous-or-duplicate-tool-name) | error | contract | `ambiguous-or-duplicate-tool-name` |
+| [`MCP009`](#mcp009--hardcoded-secret-in-tool) | error | security | `hardcoded-secret-in-tool` |
+| [`MCP010`](#mcp010--missing-network-timeout) | warning | security | `missing-network-timeout` |
+| [`MCP011`](#mcp011--sql-string-interpolation) | error | security | `sql-string-interpolation` |
+| [`MCP013`](#mcp013--unsafe-deserialization) | error | security | `unsafe-deserialization` |
 
 Severity affects the health score (error −15, warning −6, info −2) and the `--fail-on` gate.
 
-`MCP012` is not implemented. The ID is reserved by a roadmap item and skipped so existing ignore lists and SARIF results stay stable if it lands later.
+Thirteen rules run on static scans. `MCP012` is the fourteenth and runs only under
+`vexar-mcp audit-server`, because protocol conformance can only be observed on a live
+connection — it is documented [at the end of this page](#mcp012--live-protocol-violation).
 
 ---
+
+<a id="MCP001"></a>
 
 ## MCP001 — missing-tool-description
 
@@ -52,6 +56,8 @@ def list_cluster_pods(namespace: str, limit: int = 50) -> str:
 
 ---
 
+<a id="MCP002"></a>
+
 ## MCP002 — excessive-tool-tokens
 
 **warning** · tokens
@@ -63,6 +69,8 @@ def list_cluster_pods(namespace: str, limit: int = 50) -> str:
 **Fix:** trim prose, drop redundant examples, or raise the budget deliberately if the tool genuinely needs it. See [token estimation limits](limitations.md#token-estimates-are-approximations).
 
 ---
+
+<a id="MCP003"></a>
 
 ## MCP003 — untyped-or-any-parameter
 
@@ -81,6 +89,8 @@ def fetch(payload: dict): ...  # MCP003
 
 ---
 
+<a id="MCP004"></a>
+
 ## MCP004 — unbounded-collection-or-limit
 
 **info** · schema
@@ -92,6 +102,8 @@ def fetch(payload: dict): ...  # MCP003
 **Fix:** `Field(le=200)`, `maximum: 200` in JSON Schema, or clamp with `min(limit, MAX_LIMIT)`.
 
 ---
+
+<a id="MCP005"></a>
 
 ## MCP005 — dangerous-shell-execution
 
@@ -110,6 +122,8 @@ def run(cmd: str) -> str:
 
 ---
 
+<a id="MCP006"></a>
+
 ## MCP006 — unvalidated-ssrf-sink
 
 **warning** · security
@@ -121,6 +135,8 @@ def run(cmd: str) -> str:
 **Fix:** parse with `urlparse`, require `https`, check a host allowlist, and reject private/link-local addresses.
 
 ---
+
+<a id="MCP007"></a>
 
 ## MCP007 — unconfined-filesystem-access
 
@@ -138,6 +154,8 @@ if not candidate.is_relative_to(BASE_DIR):
 
 ---
 
+<a id="MCP008"></a>
+
 ## MCP008 — ambiguous-or-duplicate-tool-name
 
 **error** · contract
@@ -149,6 +167,8 @@ if not candidate.is_relative_to(BASE_DIR):
 **Fix:** use action-oriented `snake_case` — `list_cluster_pods`, not `run`.
 
 ---
+
+<a id="MCP009"></a>
 
 ## MCP009 — hardcoded-secret-in-tool
 
@@ -164,6 +184,8 @@ if not candidate.is_relative_to(BASE_DIR):
 
 ---
 
+<a id="MCP010"></a>
+
 ## MCP010 — missing-network-timeout
 
 **warning** · security
@@ -175,6 +197,8 @@ if not candidate.is_relative_to(BASE_DIR):
 **Fix:** pass an explicit timeout to every outbound call.
 
 ---
+
+<a id="MCP011"></a>
 
 ## MCP011 — sql-string-interpolation
 
@@ -199,6 +223,8 @@ cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))  # clean
 
 ---
 
+<a id="MCP013"></a>
+
 ## MCP013 — unsafe-deserialization
 
 **error** · security
@@ -208,6 +234,29 @@ cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))  # clean
 **Why it matters:** `pickle` payloads execute arbitrary code on load — a remote code execution primitive reachable from model input.
 
 **Fix:** use JSON for untrusted payloads, or `yaml.safe_load`. Never unpickle untrusted data.
+
+---
+
+## MCP014 — excessive-server-tokens
+
+**warning** · tokens
+
+**Detects:** the summed token footprint of *every* tool on a server exceeds
+`max-server-tokens` (default `8000`). `MCP002` polices one bloated tool; this polices the
+catalog as a whole, which is what actually reaches the model.
+
+**Why it matters:** the tool catalog is re-sent on every request. Twenty reasonable tools can
+cost more context than the conversation they are meant to support, and the bill scales with
+call volume. [`vexar-mcp simulate`](usage.md#vexar-mcp-simulate-paths---model-name) turns that
+into money per month.
+
+```python
+# 40 tools x ~250 tokens each = ~10,000 tokens/turn -> MCP014
+```
+
+**Fix:** remove tools the model never uses, shorten descriptions, and push rarely-needed tools
+behind a single dispatcher tool. The finding names the total, the budget, and the largest
+contributing tools.
 
 ---
 

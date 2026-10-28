@@ -21,14 +21,14 @@ Bot automation: `feature-upgrade-bot.yml` probes queued roadmap daily; `roadmap-
 - [ ] Add severity model (Critical / High / Medium / Low) to all findings
 - [ ] Update `engine.py` to output `severity` + `exploitability` + `mitigation`
 - [ ] Update `MCP001`–`MCP009` rules with metadata (confidence, fix guidance, references)
-- [ ] Write `tests/test_risk_score.py`
+- [ ] Write `tests/test_risk_score.py` — *never created; risk scoring shipped in `src/mcp_doctor/risk.py` with tests in `tests/test_risk.py`*
 
 Bot automation: `issue-raise-bot.yml` opens new contributor issue `RM-016` (good first issue / risk engine) when queued.
 
 ---
 
 ## Week 3 (Phase 1 — Policy As-Code)
-- [ ] Write `docs/POLICY_ENGINE.md` (already done) → turn into `.github/policies/` JSON templates
+- [ ] Write `docs/policies.md` (already done) → turn into `.github/policies/` JSON templates
 - [ ] Create `strict-prod`, `startup-safe`, `enterprise-gov` policy files
 - [ ] Update CI gate to enforce policy-file presence on PRs adding new rules
 
@@ -48,7 +48,7 @@ Bot automation: `issue-resolve-bot.yml` promotes next queued issue when baseline
 ## Week 5 (Phase 2 — MCP Protocol / Transport)
 - [ ] Expand `MCP009` to cover stdio / SSE / Streamable HTTP / WebSocket / auth validation
 - [ ] Update `loaders/` with transport-layer checks
-- [ ] Add `tests/test_protocol_009.py`
+- [ ] Add `tests/test_protocol_009.py` — *never created; protocol validation shipped as live-only `MCP012`, covered by `tests/test_live.py`*
 
 Bot automation: `feature-upgrade-bot.yml` proposes `RM-017` (protocol validation) from roadmap when previous closes.
 

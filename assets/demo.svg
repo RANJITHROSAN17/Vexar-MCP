@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="780" viewBox="0 0 1060 780" role="img" aria-label="Vexar-MCP scanning an insecure example server, then refusing to grade a file it could not parse">
+  <title>Vexar-MCP: findings on an insecure server, then "nothing to grade" on an unparseable one</title>
+  <desc>Terminal recording generated from real output: a scan of examples/ reports findings and a health score of 8/100; a scan of an unparseable file reports "Health Score: n/a", Status ERROR, and exit code 3.</desc>
+  <style>
+    text { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; }
+      @keyframes k0 { 0%, 24.16% { opacity: 0 } 24.76%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t0 { animation: k0 8.07s linear infinite; }
+      @keyframes k1 { 0%, 25.22% { opacity: 0 } 25.82%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t1 { animation: k1 8.07s linear infinite; }
+      @keyframes k2 { 0%, 26.27% { opacity: 0 } 26.87%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t2 { animation: k2 8.07s linear infinite; }
+      @keyframes k3 { 0%, 27.32% { opacity: 0 } 27.92%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t3 { animation: k3 8.07s linear infinite; }
+      @keyframes k4 { 0%, 28.38% { opacity: 0 } 28.98%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t4 { animation: k4 8.07s linear infinite; }
+      @keyframes k5 { 0%, 29.43% { opacity: 0 } 30.03%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t5 { animation: k5 8.07s linear infinite; }
+      @keyframes k6 { 0%, 30.48% { opacity: 0 } 31.08%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t6 { animation: k6 8.07s linear infinite; }
+      @keyframes k7 { 0%, 31.54% { opacity: 0 } 32.14%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t7 { animation: k7 8.07s linear infinite; }
+      @keyframes k8 { 0%, 32.59% { opacity: 0 } 33.19%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t8 { animation: k8 8.07s linear infinite; }
+      @keyframes k9 { 0%, 33.64% { opacity: 0 } 34.24%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t9 { animation: k9 8.07s linear infinite; }
+      @keyframes k10 { 0%, 34.70% { opacity: 0 } 35.30%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t10 { animation: k10 8.07s linear infinite; }
+      @keyframes k11 { 0%, 35.75% { opacity: 0 } 36.35%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t11 { animation: k11 8.07s linear infinite; }
+      @keyframes k12 { 0%, 36.80% { opacity: 0 } 37.40%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t12 { animation: k12 8.07s linear infinite; }
+      @keyframes k13 { 0%, 37.86% { opacity: 0 } 38.46%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t13 { animation: k13 8.07s linear infinite; }
+      @keyframes k14 { 0%, 38.91% { opacity: 0 } 39.51%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t14 { animation: k14 8.07s linear infinite; }
+      @keyframes k15 { 0%, 39.96% { opacity: 0 } 40.56%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t15 { animation: k15 8.07s linear infinite; }
+      @keyframes k16 { 0%, 41.02% { opacity: 0 } 41.62%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t16 { animation: k16 8.07s linear infinite; }
+      @keyframes k17 { 0%, 42.07% { opacity: 0 } 42.67%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t17 { animation: k17 8.07s linear infinite; }
+      @keyframes k18 { 0%, 43.12% { opacity: 0 } 43.72%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t18 { animation: k18 8.07s linear infinite; }
+      @keyframes k19 { 0%, 44.18% { opacity: 0 } 44.78%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t19 { animation: k19 8.07s linear infinite; }
+      @keyframes k20 { 0%, 45.23% { opacity: 0 } 45.83%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t20 { animation: k20 8.07s linear infinite; }
+      @keyframes k21 { 0%, 46.28% { opacity: 0 } 46.88%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t21 { animation: k21 8.07s linear infinite; }
+      @keyframes k22 { 0%, 47.34% { opacity: 0 } 47.94%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t22 { animation: k22 8.07s linear infinite; }
+      @keyframes k23 { 0%, 48.39% { opacity: 0 } 48.99%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t23 { animation: k23 8.07s linear infinite; }
+      @keyframes k24 { 0%, 49.44% { opacity: 0 } 50.04%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t24 { animation: k24 8.07s linear infinite; }
+      @keyframes k25 { 0%, 50.50% { opacity: 0 } 51.10%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t25 { animation: k25 8.07s linear infinite; }
+      @keyframes k26 { 0%, 51.55% { opacity: 0 } 52.15%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t26 { animation: k26 8.07s linear infinite; }
+      @keyframes k27 { 0%, 52.60% { opacity: 0 } 53.20%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t27 { animation: k27 8.07s linear infinite; }
+      @keyframes k28 { 0%, 53.66% { opacity: 0 } 54.26%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t28 { animation: k28 8.07s linear infinite; }
+      @keyframes k29 { 0%, 54.71% { opacity: 0 } 55.31%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t29 { animation: k29 8.07s linear infinite; }
+      @keyframes k30 { 0%, 55.76% { opacity: 0 } 56.36%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t30 { animation: k30 8.07s linear infinite; }
+      @keyframes k31 { 0%, 56.82% { opacity: 0 } 57.42%, 99.40% { opacity: 1 } 100% { opacity: 1 } }
+      .t31 { animation: k31 8.07s linear infinite; }
+    .cursor { animation: blink 1.05s steps(1) infinite; }
+    @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+    @media (prefers-reduced-motion: reduce) {
+      text { animation: none !important; opacity: 1 !important; }
+      .cursor { animation: none !important; }
+    }
+  </style>
+  <rect x="0" y="0" width="1060" height="780" rx="14" fill="#0b1220"/>
+  <rect x="0" y="0" width="1060" height="780" rx="14" fill="none" stroke="#1e293b"/>
+  <path d="M0 44 H1060" stroke="#1e293b"/>
+  <circle cx="24" cy="22" r="6" fill="#f87171"/><circle cx="46" cy="22" r="6" fill="#fbbf24"/><circle cx="68" cy="22" r="6" fill="#34d399"/>
+  <text x="530" y="27" fill="#64748b" text-anchor="middle">vexar-mcp — generated by scripts/make_demo_svg.py from real output</text>
+      <text class="t0" x="26" y="74" fill="#34d399" font-weight="600" xml:space="preserve">$ vexar-mcp scan examples/ --policy strict-prod</text>
+      <text class="t1" x="26" y="95" fill="#64748b" font-weight="400" xml:space="preserve">==============================================================================</text>
+      <text class="t2" x="26" y="116" fill="#f8fafc" font-weight="600" xml:space="preserve">Vexar-MCP  |  Health Score: 8/100 (F)  |  Tools: 5 across 3 file(s)</text>
+      <text class="t3" x="26" y="137" fill="#cbd5e1" font-weight="400" xml:space="preserve">Context Footprint: ~530 tokens  |  Errors: 4  Warnings: 5  Info: 1</text>
+      <text class="t4" x="26" y="158" fill="#cbd5e1" font-weight="400" xml:space="preserve">Policy: strict-prod  |  Risk Index: 97/100 (critical)  |  Status: FINDINGS</text>
+      <text class="t5" x="26" y="179" fill="#cbd5e1" font-weight="400" xml:space="preserve">Coverage: 3 candidate file(s), 3 analyzed, 0 failed, 3 with tools</text>
+      <text class="t6" x="26" y="200" fill="#64748b" font-weight="400" xml:space="preserve">==============================================================================</text>
+      <text class="t7" x="26" y="221" fill="#2dd4bf" font-weight="600" xml:space="preserve">FINDINGS - analyzed everything, issues reported</text>
+      <text class="t9" x="26" y="263" fill="#f87171" font-weight="400" xml:space="preserve">[ERROR] MCP001 (missing-tool-description) at examples/vulnerable_server.py:23 [run] risk=45</text>
+      <text class="t10" x="26" y="284" fill="#cbd5e1" font-weight="400" xml:space="preserve">Tool 'run' has an empty or overly brief description (0 chars; minimum 12 recommended).</text>
+      <text class="t11" x="26" y="305" fill="#64748b" font-weight="400" xml:space="preserve">Fix: Document purpose, inputs, and side effects in the tool docstring or `description`.</text>
+      <text class="t12" x="26" y="326" fill="#f87171" font-weight="400" xml:space="preserve">[ERROR] MCP008 (ambiguous-or-duplicate-tool-name) at examples/vulnerable_server.py:23 [run] risk=45</text>
+      <text class="t13" x="26" y="347" fill="#cbd5e1" font-weight="400" xml:space="preserve">Tool name 'run' is overly generic or violates `[a-z][a-z0-9_-]{2,63}`.</text>
+      <text class="t14" x="26" y="368" fill="#64748b" font-weight="400" xml:space="preserve">Fix: Use specific `verb_noun` `snake_case` naming such as `fetch_invoice_summary`.</text>
+      <text class="t15" x="26" y="389" fill="#fbbf24" font-weight="400" xml:space="preserve">[WARN ] MCP003 (untyped-or-any-parameter) at examples/vulnerable_server.py:23 [run] risk=22</text>
+      <text class="t16" x="26" y="410" fill="#cbd5e1" font-weight="400" xml:space="preserve">Parameter 'cmd' in tool 'run' has no type annotation.</text>
+      <text class="t17" x="26" y="431" fill="#64748b" font-weight="400" xml:space="preserve">Fix: Provide an explicit scalar, `Literal[...]`, `TypedDict`, or Pydantic `BaseModel` type.</text>
+      <text class="t18" x="26" y="452" fill="#64748b" font-weight="400" xml:space="preserve">... 21 more lines from the same findings (run it to see all)</text>
+      <text class="t20" x="26" y="494" fill="#64748b" font-weight="400" xml:space="preserve"># a file the scanner could not parse</text>
+      <text class="t21" x="26" y="515" fill="#34d399" font-weight="600" xml:space="preserve">$ vexar-mcp scan broken_server.py</text>
+      <text class="t22" x="26" y="536" fill="#f8fafc" font-weight="600" xml:space="preserve">Vexar-MCP  |  Health Score: n/a (nothing to grade)  |  Tools: 0 across 0 file(s)</text>
+      <text class="t23" x="26" y="557" fill="#cbd5e1" font-weight="400" xml:space="preserve">Coverage: 1 candidate file(s), 0 analyzed, 1 failed, 0 with tools</text>
+      <text class="t24" x="26" y="578" fill="#2dd4bf" font-weight="600" xml:space="preserve">ERROR - nothing could be analyzed</text>
+      <text class="t25" x="26" y="599" fill="#2dd4bf" font-weight="600" xml:space="preserve">ANALYSIS ISSUES (these inputs were NOT checked)</text>
+      <text class="t26" x="26" y="620" fill="#cbd5e1" font-weight="400" xml:space="preserve">[syntax_error] broken_server.py:1</text>
+      <text class="t27" x="26" y="641" fill="#f87171" font-weight="400" xml:space="preserve">SyntaxError: invalid syntax</text>
+      <text class="t28" x="26" y="662" fill="#fbbf24" font-weight="600" xml:space="preserve">No MCP tools or agent tool manifests discovered in target path(s). Nothing was graded — this is not a clean bill of</text>
+      <text class="t29" x="26" y="683" fill="#fbbf24" font-weight="600" xml:space="preserve">    health.</text>
+      <text class="t30" x="26" y="704" fill="#34d399" font-weight="600" xml:space="preserve">$ echo $?</text>
+      <text class="t31" x="26" y="725" fill="#2dd4bf" font-weight="600" xml:space="preserve">3</text>
+  <rect class="cursor" x="26" y="742" width="8" height="15" fill="#2dd4bf"/>
+</svg>

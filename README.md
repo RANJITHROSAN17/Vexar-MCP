@@ -17,6 +17,7 @@
 </p>
 
 <p align="center">
+  <a href="QUICKSTART.md">Quickstart</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#see-it-work">Example output</a> ·
   <a href="#what-it-checks">Rules</a> ·
@@ -30,72 +31,102 @@
 
 ---
 
-Vexar-MCP analyzes MCP servers and enforces a policy over them. Static scans read Python source with `ast.parse` and JSON tool manifests with the standard library — **your code is never imported or executed**. It also tells you the difference between "this code is clean" and "this code could not be read": every report separates **findings** from **analysis status and coverage**, and a scan that could not parse your files is never graded. See [scan status](docs/scan-status.md). `audit-server` goes further and introspects a *running* server over stdio JSON-RPC, because generated and feature-flagged tools are invisible to static analysis.
+<p align="center">
+  <img src="assets/demo.svg" alt="Vexar-MCP scanning an insecure example server, then refusing to grade a file it could not parse" width="100%" style="max-width:1100px">
+</p>
 
-Findings are reported as shell output, JSON, SARIF, GitHub Markdown, inline Pull Request annotations, or a standalone HTML dashboard — and gated by a named policy so the same standard applies on a laptop and in CI.
+<p align="center">
+  <sub>Generated from real output by <a href="scripts/make_demo_svg.py"><code>scripts/make_demo_svg.py</code></a> — if the tool changes, so does this animation. CI fails when it drifts.</sub>
+</p>
 
-It does not replace a security review. It catches a specific set of well-known MCP failure modes early, and it makes the standard you enforce explicit and reviewable. [What it cannot do](docs/limitations.md) is documented explicitly.
+## What this is
+
+An MCP server is a program an AI model can call. Every tool it exposes becomes part of the
+model's context, and every tool argument becomes an input an attacker can try to control. That
+creates two failure modes that are easy to ship and hard to notice:
+
+- **Security.** A tool that pipes its argument into `shell=True`, fetches an attacker-chosen URL,
+  writes to a user-supplied path, or interpolates into SQL.
+- **Ergonomics and cost.** Schemas so thin the model cannot pick the right tool, or so large
+  every request pays for them in tokens.
+
+Vexar-MCP finds both, statically, in one command — and then keeps them from coming back by
+gating the result in CI under a named policy.
+
+**Three things make it different from a generic linter:**
+
+| | |
+| :--- | :--- |
+| **It reads, never runs.** | Python is parsed with `ast.parse`, manifests with the standard library. Your server is never imported, so auditing someone else's code is safe. |
+| **It refuses to guess.** | A scan that could not parse your files is never graded. You get `Health Score: n/a`, `Status: ERROR`, and **exit `3`** — not a comforting `100/100`. See [scan status](docs/scan-status.md). |
+| **It gates, not just reports.** | One policy name (`strict-prod`, `enterprise-governance`) applies the same fail-on threshold, score floor and token budget on a laptop and in CI. |
+
+It does not replace a security review. It catches a specific, documented set of MCP failure
+modes early, and it makes the standard you enforce explicit and reviewable. [What it cannot
+do](docs/limitations.md) is written down rather than implied.
 
 ---
 
 ## Quick start
 
 **Requirements:** Python 3.10+. No runtime dependencies on Python 3.11+.
+**Time:** about two minutes. New to the project? [`QUICKSTART.md`](QUICKSTART.md) walks the
+same path with the output you should expect at each step.
 
 ```bash
 # 1. Install (from source — there is no PyPI release of this package yet)
 pip install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main"
 
-# 2. Scan a server, a directory, or a tool manifest
-vexar-mcp scan path/to/your_mcp_server
+# 2. See it catch real problems in an intentionally broken example
+vexar-mcp scan examples/
 
-# 3. Enforce a policy instead of ad-hoc flags
-vexar-mcp scan . --policy strict-prod
-
-# 4. Adopt on an existing codebase without failing on day one
-vexar-mcp scan . --write-baseline .vexar-baseline.json
-vexar-mcp scan . --baseline .vexar-baseline.json --policy strict-prod
-
-# 5. Audit a running server over stdio JSON-RPC
-vexar-mcp audit-server -- python my_server.py
-
-# 6. Get a machine-readable report for CI, or a self-contained HTML dashboard
-vexar-mcp scan . --format sarif --output vexar.sarif
-vexar-mcp scan . --format html  --output vexar-report.html
+# 3. Point it at your own server and enforce a policy
+vexar-mcp scan path/to/your_mcp_server --policy strict-prod
 ```
 
-Try it against the bundled examples without installing anything into your project:
-
-```bash
-git clone https://github.com/RANJITHROSAN17/Vexar-MCP.git && cd Vexar-MCP
-python -m venv .venv && . .venv/bin/activate && pip install -e .
-vexar-mcp scan examples/vulnerable_server.py    # 10 findings, exit code 1
-vexar-mcp scan examples/clean_server.py examples/tools_manifest.json   # 100/100, exit code 0
-```
+That is the whole on-ramp. If step 2 prints findings and step 3 exits `1`, it is working.
 
 <details>
-<summary>Other installation methods</summary>
+<summary><strong>Not sure where to point it first?</strong></summary>
 
 ```bash
-# Isolated CLI install
-pipx install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main"
-
-# Editable install for contributing
-git clone https://github.com/RANJITHROSAN17/Vexar-MCP.git && cd Vexar-MCP
-pip install -e ".[dev]"
-
-# Pre-commit hook
-# .pre-commit-config.yaml
-repos:
-  - repo: https://github.com/RANJITHROSAN17/Vexar-MCP
-    rev: main
-    hooks:
-      - id: vexar-mcp
+vexar-mcp scan .                                   # scan the current repository
+vexar-mcp scan tools.json                          # a JSON / OpenAI-style tool manifest
+vexar-mcp token-report .                           # what your catalog costs per request
+vexar-mcp rules                                    # the 14 rules, and what they mean
+vexar-mcp audit-server -- python my_server.py      # audit a running server over stdio
 ```
-
 </details>
 
----
+<details>
+<summary><strong>Adopting this on a codebase that already has findings</strong></summary>
+
+Do not fix everything before you turn the gate on. Record today's findings as accepted, then
+fail only on new ones:
+
+```bash
+vexar-mcp scan . --write-baseline .vexar-baseline.json   # adopt: snapshot what exists today
+vexar-mcp scan . --baseline .vexar-baseline.json --policy strict-prod
+```
+
+The second command passes on the current state of the code and fails the moment someone adds a
+new violation. See [baselines](docs/baseline.md).
+</details>
+
+<details>
+<summary><strong>Wiring it into GitHub Actions</strong></summary>
+
+```yaml
+- uses: RANJITHROSAN17/Vexar-MCP@main
+  with:
+    paths: .
+    policy: strict-prod
+    allow-incomplete: false   # a scan that could not read your code fails the job
+```
+
+Adds inline PR annotations and a SARIF upload, and exposes `status`, `score`,
+`analysis-complete` and `files-failed` as step outputs. See [the action docs](docs/github-actions.md).
+</details>
 
 ## See it work
 
@@ -424,6 +455,7 @@ The repository publishes this viewer to GitHub Pages on every push to `main`: `d
 | Render a report in the dashboard | [`docs/dashboard.md`](docs/dashboard.md) |
 | Understand the internals | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Contribute a rule, loader, or reporter | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| Understand how the README and demo are maintained | [`docs/first-impression.md`](docs/first-impression.md) |
 | See what's planned | [`.github/roadmap.json`](.github/roadmap.json) |
 | Report a security issue | [`SECURITY.md`](SECURITY.md) |
 
