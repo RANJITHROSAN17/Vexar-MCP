@@ -1,4 +1,4 @@
-"""Unit tests covering every built-in rule (MCP001 through MCP013) and suppressions."""
+"""Unit tests covering every built-in rule (MCP001-MCP011, MCP013-MCP015) and suppressions."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 
 from mcp_doctor.engine import scan_paths
-from mcp_doctor.models import ScanConfig
+from mcp_doctor.models import Category, ParameterSpec, ScanConfig, Severity, ToolSpec
+from mcp_doctor.rules import get_all_rules, get_rule_catalog
+from mcp_doctor.rules.schema_rules import check_undocumented_parameters
 
 
 def test_clean_example_scores_100() -> None:
@@ -32,6 +34,7 @@ def test_vulnerable_example_triggers_all_expected_rules() -> None:
         "MCP007",
         "MCP008",
         "MCP010",
+        "MCP015",
     }
     assert report.summary.errors >= 3
 
@@ -523,3 +526,181 @@ def no_arguments() -> str:
 
     report = scan_paths([srv])
     assert [d for d in report.diagnostics if d.rule_id == "MCP011"] == []
+
+
+# --------------------------------------------------------------------------- MCP015
+# Undocumented tool parameters. Three properties matter and each has its own test: one finding
+# per tool (not per parameter), silence below two parameters, and silence when documented.
+
+
+def _tool_with_params(*pairs: tuple[str, str]) -> ToolSpec:
+    return ToolSpec(
+        name="search",
+        description="Search the corpus.",
+        source_file="server.py",
+        line=10,
+        parameters=tuple(
+            ParameterSpec(name=name, type_name="str", description=desc, line=11 + index)
+            for index, (name, desc) in enumerate(pairs)
+        ),
+    )
+
+
+def test_mcp015_one_finding_per_tool_listing_every_undocumented_parameter() -> None:
+    tool = _tool_with_params(("q", ""), ("n", ""), ("mode", ""))
+    findings = check_undocumented_parameters([tool], ScanConfig())
+    assert len(findings) == 1, "a wide schema is one documentation problem, not three"
+    finding = findings[0]
+    assert finding.rule_id == "MCP015"
+    assert finding.severity is Severity.INFO
+    assert finding.category is Category.SCHEMA
+    assert "3 of 3 parameters" in finding.message
+    for name in ("q", "n", "mode"):
+        assert f"'{name}'" in finding.message
+
+
+def test_mcp015_silent_for_a_single_parameter() -> None:
+    # A single argument has nothing to disambiguate, so firing would be noise.
+    assert check_undocumented_parameters([_tool_with_params(("x", ""))], ScanConfig()) == []
+
+
+def test_mcp015_fires_on_a_single_undocumented_parameter_among_documented_ones() -> None:
+    # The threshold is on parameter count, not on how many are undocumented: naming the one
+    # neglected argument is the most useful message the rule can produce.
+    findings = check_undocumented_parameters(
+        [_tool_with_params(("x", "Why x."), ("y", ""), ("z", "Why z."))], ScanConfig()
+    )
+    assert len(findings) == 1
+    assert "1 of 3 parameters" in findings[0].message
+    assert "'y'" in findings[0].message
+
+
+def test_mcp015_silent_when_every_parameter_is_documented() -> None:
+    tool = _tool_with_params(("q", "Query text."), ("n", "Max results."))
+    assert check_undocumented_parameters([tool], ScanConfig()) == []
+
+
+def test_mcp015_lists_only_the_undocumented_ones() -> None:
+    tool = _tool_with_params(("q", "Query text."), ("n", ""), ("mode", ""))
+    findings = check_undocumented_parameters([tool], ScanConfig())
+    assert len(findings) == 1
+    assert "2 of 3 parameters" in findings[0].message
+    assert "'q'" not in findings[0].message
+
+
+def test_mcp015_truncates_a_very_wide_schema() -> None:
+    tool = _tool_with_params(*[(f"p{i}", "") for i in range(9)])
+    finding = check_undocumented_parameters([tool], ScanConfig())[0]
+    assert "9 of 9 parameters" in finding.message
+    assert "and 4 more" in finding.message, "the message must stay bounded"
+
+
+def test_mcp015_whitespace_is_not_a_description() -> None:
+    tool = _tool_with_params(("q", "   "), ("n", "\n\t"))
+    assert len(check_undocumented_parameters([tool], ScanConfig())) == 1
+
+
+def test_mcp015_anchors_on_the_first_undocumented_parameter() -> None:
+    tool = _tool_with_params(("q", "Documented."), ("n", ""))
+    finding = check_undocumented_parameters([tool], ScanConfig())[0]
+    assert finding.line == 12, "should point at the undocumented parameter, not the tool"
+
+
+def test_mcp015_fires_through_the_python_loader(tmp_path: Path) -> None:
+    """End-to-end through `ast.parse` + docstring `Args:` extraction."""
+    server = tmp_path / "srv.py"
+    server.write_text(
+        '''
+from mcp.server.fastmcp import FastMCP
+mcp = FastMCP("s")
+
+@mcp.tool()
+def documented(customer_id: str, region: str) -> str:
+    """Fetch a customer record.
+
+    Args:
+        customer_id: The numeric customer identifier.
+        region: Two-letter data-residency region.
+    """
+    return customer_id + region
+
+@mcp.tool()
+def bare(alpha: str, beta: int) -> str:
+    """Seven kinds of ambiguity with no argument documentation."""
+    return str(alpha) + str(beta)
+''',
+        encoding="utf-8",
+    )
+    report = scan_paths([server], ScanConfig())
+    mcp015 = [d for d in report.diagnostics if d.rule_id == "MCP015"]
+    assert len(mcp015) == 1, "only the undocumented tool should fire"
+    assert mcp015[0].tool_name == "bare"
+    assert b"customer" not in mcp015[0].message.encode()
+
+
+def test_mcp015_fires_through_the_json_manifest_loader(tmp_path: Path) -> None:
+    """JSON Schema `description` on a property is what silences the rule."""
+    manifest = tmp_path / "tools.json"
+    manifest.write_text(
+        """
+{
+  "tools": [
+    {"name": "documented_manifest", "description": "Reads a file from disk.",
+     "inputSchema": {"type": "object", "properties": {
+        "path": {"type": "string", "description": "Filesystem path to read."},
+        "mode": {"type": "string", "description": "Read mode: text or binary."}}}},
+    {"name": "bare_manifest", "description": "Reads a file from disk.",
+     "inputSchema": {"type": "object", "properties": {
+        "path": {"type": "string"}, "mode": {"type": "string"}}}}
+  ]
+}
+""",
+        encoding="utf-8",
+    )
+    report = scan_paths([manifest], ScanConfig())
+    fired = {d.tool_name for d in report.diagnostics if d.rule_id == "MCP015"}
+    assert fired == {"bare_manifest"}
+
+
+def test_mcp015_fires_through_the_typescript_loader(tmp_path: Path) -> None:
+    """Both SDK idioms: the Zod raw-shape form and `registerTool` with an `inputSchema`."""
+    server = tmp_path / "server.ts"
+    server.write_text(
+        """
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+
+const server = new McpServer({ name: "ts", version: "1.0.0" });
+
+server.tool("described", "Reads a file.", {
+  path: z.string().describe("Filesystem path to read."),
+  mode: z.string().describe("Read mode."),
+}, async () => ({ content: [] }));
+
+server.tool("undescribed", "Reads a file.", {
+  path: z.string(), mode: z.string(),
+}, async () => ({ content: [] }));
+
+server.registerTool("registered_described", {
+  description: "Fetches a URL.",
+  inputSchema: z.object({
+    url: z.string().describe("Target URL."),
+    timeout: z.number().describe("Seconds."),
+  }),
+}, async () => ({ content: [] }));
+""",
+        encoding="utf-8",
+    )
+    report = scan_paths([server], ScanConfig())
+    fired = {d.tool_name for d in report.diagnostics if d.rule_id == "MCP015"}
+    assert fired == {"undescribed"}, (
+        "`.describe()` documents a Zod param; a bare `z.string()` does not"
+    )
+
+
+def test_mcp015_is_in_the_public_catalog() -> None:
+    assert get_rule_catalog()["MCP015"] is Category.SCHEMA
+    definition = next(rule for rule in get_all_rules() if rule.rule_id == "MCP015")
+    assert definition.severity is Severity.INFO
+    assert definition.slug == "undocumented-parameter"
+    assert definition.check is check_undocumented_parameters

@@ -17,6 +17,8 @@ from pathlib import Path
 import pytest
 
 from mcp_doctor import __version__
+from mcp_doctor.engine import scan_paths
+from mcp_doctor.models import ScanConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -72,7 +74,14 @@ class TestDemoAsset:
 
     def test_demo_shows_both_the_findings_and_the_refusal(self) -> None:
         svg = (ROOT / "assets" / "demo.svg").read_text(encoding="utf-8")
-        assert "Health Score: 8/100" in svg, "should show a real findings scan"
+        # Derived from an actual scan rather than hardcoded: the score moves whenever a rule
+        # is added or reweighted, and a literal here would rot silently until someone
+        # noticed the README showing a score the tool no longer produces.
+        report = scan_paths([ROOT / "examples" / "vulnerable_server.py"], ScanConfig())
+        assert report.summary.score is not None
+        assert f"Health Score: {report.summary.score}/100" in svg, (
+            "should show a real findings scan"
+        )
         assert "n/a (nothing to grade)" in svg, "should show the incomplete-analysis refusal"
         assert "exit 3" in svg or ">3<" in svg
 

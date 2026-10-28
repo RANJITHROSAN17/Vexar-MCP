@@ -16,6 +16,8 @@ All twelve built-in diagnostics. Run `vexar-mcp rules` for this list from the CL
 | [`MCP010`](#mcp010--missing-network-timeout) | warning | security | `missing-network-timeout` |
 | [`MCP011`](#mcp011--sql-string-interpolation) | error | security | `sql-string-interpolation` |
 | [`MCP013`](#mcp013--unsafe-deserialization) | error | security | `unsafe-deserialization` |
+| [`MCP014`](#mcp014--excessive-server-tokens) | warning | tokens | `excessive-server-tokens` |
+| [`MCP015`](#mcp015--undocumented-parameter) | info | schema | `undocumented-parameter` |
 
 Severity affects the health score (error −15, warning −6, info −2) and the `--fail-on` gate.
 
@@ -257,6 +259,55 @@ into money per month.
 **Fix:** remove tools the model never uses, shorten descriptions, and push rarely-needed tools
 behind a single dispatcher tool. The finding names the total, the budget, and the largest
 contributing tools.
+
+---
+
+## MCP015 — undocumented-parameter
+
+**info** · schema
+
+**Detects:** a tool with **two or more** parameters where at least one has no description.
+Emits one finding per tool, naming the undocumented parameters.
+
+**Why it matters:** a parameter name alone is often ambiguous — `q`, `n`, `mode`, `target`. The
+model sees the name and the type, not your intent. `MCP001` covers the tool's own description;
+this covers its arguments. It is `info` rather than `warning` because the effect is worse tool
+selection, not a broken contract.
+
+Exactly one finding per tool by design: a schema with eight bare parameters is one documentation
+problem, not eight. Tools with a single parameter are skipped, because there is nothing to
+disambiguate.
+
+```python
+@mcp.tool()
+def search(q: str, n: int) -> list[str]:
+    """Search the corpus."""  # both params undescribed -> MCP015
+    ...
+
+
+@mcp.tool()
+def search_documented(q: str, n: int) -> list[str]:
+    """Search the corpus.
+
+    Args:
+        q: Free-text query, matched case-insensitively.
+        n: Maximum results to return, 1-100.
+    """
+    ...  # clean
+```
+
+In a JSON manifest, put `description` on each property:
+
+```json
+{"name": "search", "inputSchema": {"type": "object", "properties": {
+  "q": {"type": "string", "description": "Free-text query."},
+  "n": {"type": "integer", "description": "Maximum results, 1-100."}
+}}}
+```
+
+**Fix:** describe what each argument means and which values are expected — an `Args:` section in
+a Python docstring, `Field(description=...)` on a Pydantic model, or `description` in JSON
+Schema.
 
 ---
 

@@ -18,6 +18,8 @@ MCP010       missing network timeout                              security
 MCP011       SQL string interpolation                             security
 MCP012       live protocol / transport violation                  live audit
 MCP013       unsafe deserialization                               security
+MCP014       server-wide token budget exceeded                    tokens
+MCP015       undocumented tool parameter                          schema
 ===========  ===================================================  =========
 
 ``MCP012`` is emitted by :mod:`mcp_doctor.live` during live introspection, which is why

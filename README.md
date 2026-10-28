@@ -225,6 +225,7 @@ Fourteen rules across four categories — thirteen static, plus `MCP012` for liv
 | `MCP012` | warning | contract | Live audit only: unsupported protocol revision, missing `tools` capability, malformed `tools/list` entries, runaway pagination |
 | `MCP013` | error | security | `pickle.loads`, `yaml.load` without `SafeLoader`, and similar unsafe deserialization |
 | `MCP014` | warning | tokens | The whole tool catalogue exceeds the server-wide token budget, with its largest contributors named |
+| `MCP015` | info | schema | A tool's parameters have no description, so the model must guess what each one means |
 
 Rules are static pattern and data-flow heuristics, not a proof of exploitability — [read the limitations](docs/limitations.md) before treating a finding as a confirmed vulnerability. Per-rule detail and remediation examples: [`docs/rules.md`](docs/rules.md).
 
@@ -519,7 +520,7 @@ contract.
 
 | Verified signal | Value | How it is measured |
 | :--- | :--- | :--- |
-| Diagnostic rules | **14** (`MCP001`–`MCP014`) | `vexar-mcp rules` against the current source |
+| Diagnostic rules | **15** (`MCP001`–`MCP015`) | `vexar-mcp rules` against the current source |
 | Enforcement presets | **4** | `vexar-mcp policy` |
 | Report formats | **6** (terminal, JSON, SARIF, Markdown, annotations, HTML) | `docs/usage.md`, reporter modules |
 | Scan modes | **2** — static files, live stdio JSON-RPC | `scan`, `audit-server` |

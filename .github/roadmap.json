@@ -251,12 +251,13 @@
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
-        "Register rule `MCP014` (severity `INFO`, category `SCHEMA`) via `@register_rule`.",
-        "Emit at most one finding per tool, listing the undocumented parameters, to avoid noise on wide schemas.",
-        "Do not fire when the tool itself has fewer than two parameters (ambiguity is low).",
+        "Register rule `MCP015` (severity `INFO`, category `SCHEMA`) via `@register_rule`.",
+        "Emit at most one finding per tool, listing the undocumented parameters.",
+        "Do not fire when the tool has fewer than two parameters.",
         "Document the rule in `README.md` and `docs/rules.md`, and add tests for both loaders."
       ],
-      "status": "queued"
+      "status": "shipped",
+      "shipped_in": "0.2.3"
     },
     {
       "id": "RM-006",

@@ -22,6 +22,39 @@ Versioning contract, so upgrades are predictable:
 
 ---
 
+## [0.2.3] - 2026-10-28
+
+One new rule, contributed against [issue #5](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/5).
+A patch release: existing rules, exit codes, report fields and policy names are unchanged.
+
+### Added
+
+- **Rule `MCP015` (`undocumented-parameter`, INFO / schema).** Flags a tool whose parameters
+  carry no description, so the model has to guess what an argument means. `MCP001` covers the
+  tool's own description; nothing covered its arguments until now.
+
+  Three deliberate choices:
+
+  - **One finding per tool**, listing every undocumented parameter (capped at five named plus a
+    count), because a schema with eight bare parameters is one documentation problem, not eight.
+  - **Silent below two parameters.** With a single argument there is nothing to disambiguate and
+    firing there is noise with no diagnostic value.
+  - **INFO, not WARNING.** A missing parameter description degrades tool selection; it is not a
+    defect that should fail a default gate.
+
+  No loader work was needed: all three already record per-parameter descriptions (Python
+  docstring `Args:` sections and Pydantic field descriptions, JSON Schema `description`,
+  TypeScript schema literals), so the rule reads data that was being collected and discarded.
+
+### Notes
+
+- `docs/rules.md` gains an `MCP015` section and index row; the rule total is now fourteen
+  static rules plus `MCP012` (live only).
+- The README demo animation was regenerated: the bundled insecure example now trips `MCP015`,
+  and the asset is generated from real output, so it must change when the output does.
+
+---
+
 ## [0.2.2] - 2026-10-28
 
 The protocol-currency release, from a full audit against the MCP specification and the official

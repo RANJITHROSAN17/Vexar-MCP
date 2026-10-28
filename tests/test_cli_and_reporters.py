@@ -59,8 +59,8 @@ def test_cli_rules_and_token_report_subcommands(capsys: pytest.CaptureFixture[st
 
     assert main(["rules", "--format", "json"]) == 0
     rules_json = json.loads(capsys.readouterr().out)
-    # MCP012 is live-only (emitted by audit-server), so the static catalog is 1-11, 13, 14.
-    expected_ids = {f"MCP{i:03d}" for i in range(1, 12)} | {"MCP013", "MCP014"}
+    # MCP012 is live-only (emitted by audit-server), so the static catalog is 1-11, 13-15.
+    expected_ids = {f"MCP{i:03d}" for i in range(1, 12)} | {"MCP013", "MCP014", "MCP015"}
     assert {rule["rule_id"] for rule in rules_json} == expected_ids
     assert len(rules_json) == len(expected_ids)
 
@@ -196,7 +196,7 @@ def test_cli_scan_github_format_emits_inline_annotations(
     assert main(["scan", vuln, "--format", "github"]) == 1
     lines = capsys.readouterr().out.splitlines()
 
-    assert len(lines) == 10
+    assert len(lines) == 12
     assert lines[0] == (
         "::error file=examples/vulnerable_server.py,line=23,"
         "title=MCP001 (missing-tool-description)::[run] Tool 'run' has an empty or overly "
@@ -211,7 +211,9 @@ def test_cli_scan_github_format_emits_inline_annotations(
     ) in lines
     assert sum(1 for line in lines if line.startswith("::error ")) == 4
     assert sum(1 for line in lines if line.startswith("::warning ")) == 5
-    assert sum(1 for line in lines if line.startswith("::notice ")) == 1
+    # Three notices: MCP004 (unbounded `limit`) on `run`, and MCP015 on both tools -- one
+    # finding per tool, listing its undocumented parameters.
+    assert sum(1 for line in lines if line.startswith("::notice ")) == 3
     assert all(_ANNOTATION_RE.match(line) for line in lines)
 
     # The reporter only changes formatting: exit-code policy stays with --fail-on.

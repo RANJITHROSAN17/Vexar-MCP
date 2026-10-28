@@ -1,4 +1,4 @@
-"""Input schema typing and bounds validation rules (MCP003, MCP004)."""
+"""Input schema typing, bounds and documentation rules (MCP003, MCP004, MCP015)."""
 
 from __future__ import annotations
 
@@ -82,4 +82,72 @@ def check_unbounded_parameters(tools: Sequence[ToolSpec], config: ScanConfig) ->
                         remediation="Enforce a strict ceiling (e.g. `Field(default=50, le=200)` or `maxItems: 100`).",
                     )
                 )
+    return out
+
+
+@register_rule(
+    rule_id="MCP015",
+    slug="undocumented-parameter",
+    severity=Severity.INFO,
+    category=Category.SCHEMA,
+    summary="Two or more tool parameters have no description, so an agent must guess their meaning.",
+    remediation=(
+        "Describe each parameter in the docstring `Args:` section, the JSON Schema "
+        "`description`, or the Pydantic `Field(description=...)`."
+    ),
+)
+def check_undocumented_parameters(
+    tools: Sequence[ToolSpec], config: ScanConfig
+) -> list[Diagnostic]:
+    """Report tools whose parameters carry no description.
+
+    Only tools with **two or more** parameters are considered: with a single argument there is
+    nothing to disambiguate, and firing there would be noise with no diagnostic value.
+
+    One finding per tool lists every undocumented parameter, because a wide schema with eight
+    bare parameters is one documentation problem, not eight.
+
+    Args:
+        tools: Statically extracted or live-audited tool definitions.
+        config: Effective scan configuration. Unused: the threshold is fixed at "two or more
+            parameters", which is a product decision rather than a tunable.
+
+    Returns:
+        At most one diagnostic per tool, anchored on the first undocumented parameter.
+    """
+    del config
+    out: list[Diagnostic] = []
+
+    for tool in tools:
+        if len(tool.parameters) < 2:
+            continue
+        undocumented = [p for p in tool.parameters if not (p.description or "").strip()]
+        if not undocumented:
+            continue
+
+        names = [f"'{p.name}'" for p in undocumented]
+        shown = ", ".join(names[:5])
+        if len(names) > 5:
+            shown = f"{shown} and {len(names) - 5} more"
+        total = len(tool.parameters)
+        out.append(
+            Diagnostic(
+                rule_id="MCP015",
+                rule_slug="undocumented-parameter",
+                severity=Severity.INFO,
+                category=Category.SCHEMA,
+                message=(
+                    f"{len(undocumented)} of {total} parameters in tool '{tool.name}' have no "
+                    f"description: {shown}."
+                ),
+                source_file=tool.source_file,
+                line=undocumented[0].line or tool.line,
+                tool_name=tool.name,
+                remediation=(
+                    "Describe what each argument means and what values are expected, so the "
+                    "model can choose them correctly. In a docstring use an `Args:` section; "
+                    "in JSON Schema add `description` to each property."
+                ),
+            )
+        )
     return out
