@@ -1,5 +1,5 @@
-name: "Vexar-MCP — Lint & Security Scan"
-description: "Audit Model Context Protocol (MCP) servers and AI agent tool schemas for security sinks, schema defects, and token bloat."
+name: "Vexar-MCP — Lint, Security & Policy Scan"
+description: "Audit Model Context Protocol (MCP) servers and AI agent tool schemas for security sinks, schema defects, and token bloat, then enforce a named policy."
 author: "Ranjith Rosan"
 branding:
   icon: "shield"
@@ -10,22 +10,50 @@ inputs:
     description: "File or directory path to scan."
     required: false
     default: "."
-  fail-on:
-    description: "Minimum severity that causes a non-zero exit code (error, warning, info, never)."
+  policy:
+    description: "Enforcement preset: default, ci, strict-prod, enterprise-governance. Overrides individual gates."
     required: false
-    default: "error"
+    default: ""
+  fail-on:
+    description: "Minimum severity that causes a non-zero exit code (error, warning, info, never). Overrides the policy default."
+    required: false
+    default: ""
+  min-score:
+    description: "Fail when the health score is below this value (0-100). Overrides the policy default."
+    required: false
+    default: ""
   max-tokens:
     description: "Maximum allowed estimated tokens per tool definition before MCP002 triggers."
     required: false
-    default: "250"
+    default: ""
   ignore:
-    description: "Comma-separated list of rule IDs to ignore (e.g. MCP004,MCP008)."
+    description: "Comma-separated list of rule IDs to ignore (e.g. MCP004,MCP008). Ignoring a rule protected by the active policy is rejected."
+    required: false
+    default: ""
+  baseline:
+    description: "Path to a committed baseline file. When set, only findings introduced after the baseline fail the run."
+    required: false
+    default: ""
+  rule-packs:
+    description: "Comma-separated rule pack specs (TOML/JSON paths or trusted module paths)."
+    required: false
+    default: ""
+  config:
+    description: "Explicit path to a vexar-mcp.toml configuration file."
     required: false
     default: ""
   sarif-output:
-    description: "Optional file path to write SARIF v2.1.0 report for GitHub Code Scanning."
+    description: "Optional file path to write a SARIF v2.1.0 report for GitHub Code Scanning."
     required: false
     default: ""
+  html-output:
+    description: "Optional file path to write a standalone HTML dashboard report."
+    required: false
+    default: ""
+  step-summary:
+    description: "Append the Markdown report to the job step summary."
+    required: false
+    default: "true"
 
 outputs:
   score:
@@ -34,9 +62,21 @@ outputs:
   grade:
     description: "Letter grade (A+ to F)."
     value: ${{ steps.run_scan.outputs.grade }}
+  risk-index:
+    description: "Aggregate risk index (0-100, higher is riskier)."
+    value: ${{ steps.run_scan.outputs.risk_index }}
   total-diagnostics:
     description: "Total number of diagnostics emitted."
     value: ${{ steps.run_scan.outputs.total_diagnostics }}
+  new-findings:
+    description: "Findings not present in the baseline (0 when no baseline is configured)."
+    value: ${{ steps.run_scan.outputs.new_findings }}
+  policy:
+    description: "Policy preset that was enforced."
+    value: ${{ steps.run_scan.outputs.policy }}
+  exit-code:
+    description: "Gate result: 0 = passed, 1 = a gate failed, 2 = configuration or scan error."
+    value: ${{ steps.run_scan.outputs.exit_code }}
 
 runs:
   using: "composite"
@@ -55,51 +95,73 @@ runs:
       shell: bash
       env:
         INPUT_PATH: ${{ inputs.path }}
+        INPUT_POLICY: ${{ inputs.policy }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
         INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
         INPUT_IGNORE: ${{ inputs.ignore }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_RULE_PACKS: ${{ inputs.rule-packs }}
+        INPUT_CONFIG: ${{ inputs.config }}
         INPUT_SARIF_OUTPUT: ${{ inputs.sarif-output }}
+        INPUT_HTML_OUTPUT: ${{ inputs.html-output }}
+        INPUT_STEP_SUMMARY: ${{ inputs.step-summary }}
       run: |
         set -euo pipefail
-        EXTRA_ARGS=()
-        if [[ -n "${INPUT_IGNORE}" ]]; then
-          EXTRA_ARGS+=(--ignore "${INPUT_IGNORE}")
+
+        ARGS=()
+        [[ -n "${INPUT_POLICY}" ]]     && ARGS+=(--policy "${INPUT_POLICY}")
+        [[ -n "${INPUT_FAIL_ON}" ]]    && ARGS+=(--fail-on "${INPUT_FAIL_ON}")
+        [[ -n "${INPUT_MIN_SCORE}" ]]  && ARGS+=(--min-score "${INPUT_MIN_SCORE}")
+        [[ -n "${INPUT_MAX_TOKENS}" ]] && ARGS+=(--max-tokens "${INPUT_MAX_TOKENS}")
+        [[ -n "${INPUT_IGNORE}" ]]     && ARGS+=(--ignore "${INPUT_IGNORE}")
+        [[ -n "${INPUT_BASELINE}" ]]   && ARGS+=(--baseline "${INPUT_BASELINE}")
+        [[ -n "${INPUT_CONFIG}" ]]     && ARGS+=(--config "${INPUT_CONFIG}")
+        if [[ -n "${INPUT_RULE_PACKS}" ]]; then
+          IFS=',' read -r -a PACKS <<< "${INPUT_RULE_PACKS}"
+          for pack in "${PACKS[@]}"; do
+            trimmed="$(echo "${pack}" | xargs)"
+            [[ -n "${trimmed}" ]] && ARGS+=(--rule-pack "${trimmed}")
+          done
         fi
 
+        # Reports never gate here: the JSON run below is the source of truth for outputs.
         if [[ -n "${INPUT_SARIF_OUTPUT}" ]]; then
-          vexar-mcp scan "${INPUT_PATH}" \
-            --format sarif \
-            --fail-on never \
-            --max-tokens "${INPUT_MAX_TOKENS}" \
-            "${EXTRA_ARGS[@]}" > "${INPUT_SARIF_OUTPUT}"
+          vexar-mcp scan "${INPUT_PATH}" --format sarif --fail-on never "${ARGS[@]}" \
+            > "${INPUT_SARIF_OUTPUT}"
+        fi
+
+        if [[ -n "${INPUT_HTML_OUTPUT}" ]]; then
+          vexar-mcp scan "${INPUT_PATH}" --format html --output "${INPUT_HTML_OUTPUT}" \
+            --fail-on never "${ARGS[@]}"
         fi
 
         JSON_REPORT="$(mktemp)"
-        vexar-mcp scan "${INPUT_PATH}" \
-          --format json \
-          --fail-on never \
-          --max-tokens "${INPUT_MAX_TOKENS}" \
-          "${EXTRA_ARGS[@]}" > "${JSON_REPORT}"
+        vexar-mcp scan "${INPUT_PATH}" --format json --fail-on never "${ARGS[@]}" > "${JSON_REPORT}"
 
         python - "${JSON_REPORT}" <<'PY' >> "${GITHUB_OUTPUT}"
         import json, sys
         with open(sys.argv[1], encoding="utf-8") as fh:
             data = json.load(fh)
-        print(f"score={data['summary']['score']}")
-        print(f"grade={data['summary']['grade']}")
-        print(f"total_diagnostics={data['summary']['total_diagnostics']}")
+        summary = data["summary"]
+        baseline = data.get("baseline") or {}
+        print(f"score={summary['score']}")
+        print(f"grade={summary['grade']}")
+        print(f"risk_index={summary.get('risk_index', 0)}")
+        print(f"total_diagnostics={summary['total_diagnostics']}")
+        print(f"new_findings={baseline.get('new', 0)}")
+        print(f"policy={data.get('policy', {}).get('name', 'default')}")
         PY
 
-        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-          vexar-mcp scan "${INPUT_PATH}" \
-            --format markdown \
-            --fail-on never \
-            --max-tokens "${INPUT_MAX_TOKENS}" \
-            "${EXTRA_ARGS[@]}" >> "${GITHUB_STEP_SUMMARY}"
+        if [[ "${INPUT_STEP_SUMMARY}" == "true" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          vexar-mcp scan "${INPUT_PATH}" --format markdown --fail-on never "${ARGS[@]}" \
+            >> "${GITHUB_STEP_SUMMARY}"
         fi
 
-        vexar-mcp scan "${INPUT_PATH}" \
-          --format terminal \
-          --fail-on "${INPUT_FAIL_ON}" \
-          --max-tokens "${INPUT_MAX_TOKENS}" \
-          "${EXTRA_ARGS[@]}"
+        # Final pass: enforce the gate and propagate the real exit code to the job.
+        set +e
+        vexar-mcp scan "${INPUT_PATH}" --format terminal "${ARGS[@]}"
+        CODE=$?
+        set -e
+        echo "exit_code=${CODE}" >> "${GITHUB_OUTPUT}"
+        exit "${CODE}"

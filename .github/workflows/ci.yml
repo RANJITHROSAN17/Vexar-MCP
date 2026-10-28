@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - name: Check out repository
@@ -59,16 +59,122 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Run mcp-doctor composite action on clean example
+      - name: Run composite action on clean examples
         id: audit
         uses: ./
         with:
-          path: examples/clean_server.py
-          fail-on: warning
-          sarif-output: mcp-doctor.sarif
+          path: examples/
+          policy: ci
+          sarif-output: vexar.sarif
+          html-output: vexar-report.html
+          step-summary: "true"
 
-      - name: Verify Action outputs and SARIF artifact
+      - name: Verify Action outputs and artefacts
+        env:
+          SCORE: ${{ steps.audit.outputs.score }}
+          GRADE: ${{ steps.audit.outputs.grade }}
+          RISK: ${{ steps.audit.outputs.risk-index }}
+          EXIT_CODE: ${{ steps.audit.outputs.exit-code }}
         run: |
-          test "${{ steps.audit.outputs.score }}" = "100"
-          test "${{ steps.audit.outputs.grade }}" = "A+"
-          test -s mcp-doctor.sarif
+          set -euo pipefail
+          # examples/vulnerable_server.py is intentionally insecure, so a CI gate at
+          # `warning` must fail: exit-code 1 proves the composite action propagates the
+          # gate result instead of swallowing it.
+          test "${EXIT_CODE}" = "1" || { echo "expected gate failure exit 1, got ${EXIT_CODE}"; exit 1; }
+          test -s vexar.sarif
+          test -s vexar-report.html
+          grep -q "<!doctype html>" vexar-report.html
+          echo "score=${SCORE} grade=${GRADE} risk=${RISK}"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vexar-reports
+          path: |
+            vexar.sarif
+            vexar-report.html
+
+  dogfood-clean-server:
+    name: Gate a clean server end-to-end
+    runs-on: ubuntu-latest
+    needs: quality-and-tests
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Vexar-MCP
+        run: python -m pip install -e "."
+
+      - name: Strict production gate on the clean example
+        run: |
+          vexar-mcp scan examples/clean_server.py --policy strict-prod
+          # A clean server must reach A+ under the strictest scoring.
+          vexar-mcp scan examples/clean_server.py --policy strict-prod \
+            --format json | python -c "import json,sys; d=json.load(sys.stdin)['summary']; assert d['score']==100, d; assert d['grade']=='A+', d"
+
+      - name: Baseline adoption flow
+        run: |
+          set -euo pipefail
+          vexar-mcp scan examples/ --write-baseline baseline.json
+          # With the backlog accepted, the run must pass even under strict-prod.
+          vexar-mcp scan examples/ --baseline baseline.json --policy strict-prod
+          vexar-mcp baseline show baseline.json
+
+      - name: Protected rules cannot be ignored
+        run: |
+          set +e
+          vexar-mcp scan examples/ --policy strict-prod --ignore MCP005
+          code=$?
+          set -e
+          test "${code}" = "2" || { echo "expected exit 2 for protected-rule ignore, got ${code}"; exit 1; }
+
+      - name: Live audit a mock MCP server
+        run: |
+          set +e
+          vexar-mcp audit-server --format json --fail-on never -- \
+            python tests/fixtures/mock_mcp_server.py --paginate > live.json
+          code=$?
+          set -e
+          test "${code}" = "0" || { echo "live audit errored with ${code}"; exit 1; }
+          python - <<'PY'
+          import json
+          with open("live.json", encoding="utf-8") as fh:
+              data = json.load(fh)
+          assert data["summary"]["tools_scanned"] == 3, data["summary"]
+          assert "MCP001" in {d["rule_id"] for d in data["diagnostics"]}
+          print("live audit OK:", data["summary"]["tools_scanned"], "tools")
+          PY
+
+      - name: Rule pack loads and is reported
+        run: |
+          set -euo pipefail
+          cat > /tmp/acme-pack.toml <<'TOML'
+          [[rule]]
+          id = "ACME001"
+          slug = "acme-namespace-required"
+          severity = "warning"
+          category = "contract"
+          summary = "All tools must live in the acme_ namespace."
+          remediation = "Rename the tool with an acme_ prefix."
+          message = "Tool '{tool}' is outside the ACME namespace."
+            [rule.match]
+            name_regex = "^acme_"
+            invert = true
+          TOML
+          vexar-mcp scan examples/clean_server.py --rule-pack /tmp/acme-pack.toml \
+            --fail-on never --format json | python -c "import json,sys; ids={d['rule_id'] for d in json.load(sys.stdin)['diagnostics']}; assert 'ACME001' in ids, ids"
+
+      - name: Configuration errors fail with exit code 2
+        run: |
+          set +e
+          vexar-mcp scan examples/clean_server.py --policy does-not-exist
+          code=$?
+          set -e
+          test "${code}" = "2" || { echo "expected exit 2 for unknown policy, got ${code}"; exit 1; }

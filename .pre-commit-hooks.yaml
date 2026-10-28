@@ -1,7 +1,23 @@
 - id: vexar-mcp
-  name: Vexar-MCP (MCP Server & Agent Tool Auditor)
+  name: Vexar-MCP (MCP server & agent tool auditor)
   description: Lint MCP server Python modules and tool manifests for security sinks, schema gaps, and token bloat.
   entry: vexar-mcp scan
   language: python
   types_or: [python, json]
   pass_filenames: true
+
+- id: vexar-mcp-policy
+  name: Vexar-MCP (policy gate)
+  description: Enforce a named policy preset (strict-prod, enterprise-governance, ci) on MCP tool definitions.
+  entry: vexar-mcp scan --policy strict-prod
+  language: python
+  types_or: [python, json]
+  pass_filenames: true
+
+- id: vexar-mcp-live
+  name: Vexar-MCP (live server audit)
+  description: Audit a running MCP server over stdio JSON-RPC. Not run by default; pass the server command in `args`.
+  entry: vexar-mcp audit-server
+  language: python
+  pass_filenames: false
+  args: ["--"]
