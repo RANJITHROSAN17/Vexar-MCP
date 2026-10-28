@@ -119,3 +119,32 @@ over Python packs, because they are data and cannot run code.
   threads);
 - add a fixture-based test using `tests/fixtures/mock_mcp_server.py` rather than requiring
   a real third-party server.
+
+---
+
+## The one rule that outranks the others
+
+**Never let an incomplete scan look clean.** If you touch a loader, the engine, or a
+reporter, ask: *if this input could not be read, would the result still look like a pass?*
+
+- Loaders must append a `ParseIssue` to the `issues` sink rather than swallowing errors and
+  returning `[]`.
+- The engine must withhold the score (`None`) whenever the status is `partial` or `error`.
+- Reporters must not print "all checks passed" or "zero issues" for an ungraded scan.
+- Exit code `3` (incomplete) must stay distinguishable from `1` (gate failure).
+
+`tests/test_analysis_completeness.py` is the regression suite for this contract. Extend it
+whenever you add an input format, a reporter, or an output mode.
+
+### Adding a new loader
+
+A new loader takes `(path, *, issues=None)` and must:
+
+1. append a `ParseIssue` with an accurate `IssueKind` for every input it cannot read;
+2. return `[]` **only** when the file was read successfully and genuinely contains no tools;
+3. have tests for a valid file, an unreadable file, and a malformed file.
+
+### Changing output fields
+
+`score` is `int | None`. Do not "fix" a null score by defaulting it to `100` or `0` — that
+reintroduces the exact bug the project was rebuilt to remove.

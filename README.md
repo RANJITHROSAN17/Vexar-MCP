@@ -21,6 +21,7 @@
   <a href="#see-it-work">Example output</a> ·
   <a href="#what-it-checks">Rules</a> ·
   <a href="docs/usage.md">Usage</a> ·
+  <a href="docs/scan-status.md">Scan status</a> ·
   <a href="docs/policies.md">Policies</a> ·
   <a href="docs/baseline.md">Baselines</a> ·
   <a href="docs/live-audit.md">Live audit</a> ·
@@ -29,7 +30,7 @@
 
 ---
 
-Vexar-MCP analyzes MCP servers and enforces a policy over them. Static scans read Python source with `ast.parse` and JSON tool manifests with the standard library — **your code is never imported or executed**. `audit-server` goes further and introspects a *running* server over stdio JSON-RPC, because generated and feature-flagged tools are invisible to static analysis.
+Vexar-MCP analyzes MCP servers and enforces a policy over them. Static scans read Python source with `ast.parse` and JSON tool manifests with the standard library — **your code is never imported or executed**. It also tells you the difference between "this code is clean" and "this code could not be read": every report separates **findings** from **analysis status and coverage**, and a scan that could not parse your files is never graded. See [scan status](docs/scan-status.md). `audit-server` goes further and introspects a *running* server over stdio JSON-RPC, because generated and feature-flagged tools are invisible to static analysis.
 
 Findings are reported as shell output, JSON, SARIF, GitHub Markdown, inline Pull Request annotations, or a standalone HTML dashboard — and gated by a named policy so the same standard applies on a laptop and in CI.
 
@@ -139,7 +140,7 @@ All checks passed! Zero security, schema, contract, or token-budget findings.
 
 ## What it checks
 
-Thirteen rules across four categories — twelve static, plus `MCP012` for live protocol validation. Run `vexar-mcp rules` to list them, or `vexar-mcp rules --format json` for the machine-readable catalog.
+Fourteen rules across four categories — thirteen static, plus `MCP012` for live protocol validation. Run `vexar-mcp rules` to list them, or `vexar-mcp rules --format json` for the machine-readable catalog.
 
 | Rule | Severity | Category | Flags |
 | :--- | :--- | :--- | :--- |
@@ -156,6 +157,7 @@ Thirteen rules across four categories — twelve static, plus `MCP012` for live 
 | `MCP011` | error | security | SQL statement built by interpolating tool input into `.execute(...)` / `.executemany(...)` |
 | `MCP012` | warning | contract | Live audit only: unsupported protocol revision, missing `tools` capability, malformed `tools/list` entries, runaway pagination |
 | `MCP013` | error | security | `pickle.loads`, `yaml.load` without `SafeLoader`, and similar unsafe deserialization |
+| `MCP014` | warning | tokens | The whole tool catalogue exceeds the server-wide token budget, with its largest contributors named |
 
 Rules are static pattern and data-flow heuristics, not a proof of exploitability — [read the limitations](docs/limitations.md) before treating a finding as a confirmed vulnerability. Per-rule detail and remediation examples: [`docs/rules.md`](docs/rules.md).
 
@@ -199,6 +201,38 @@ Token counts are a deterministic offline estimate (character- and structure-base
 
 
 ---
+
+## Trustworthy results: status, coverage, exit codes
+
+A passing gate must mean "we read your code and it is fine", not "we found nothing to read".
+Every report therefore carries a status and five coverage counters alongside the findings:
+
+```console
+$ vexar-mcp scan src/servers/
+Vexar-MCP  |  Health Score: n/a (nothing to grade)  |  Tools: 2 across 1 file(s)
+Policy: default  |  Risk Index: 0/100 (none)  |  Status: PARTIAL
+Coverage: 2 candidate file(s), 1 analyzed, 1 failed, 1 with tools
+==============================================================================
+PARTIAL - some inputs could not be analyzed (results incomplete)
+
+ANALYSIS ISSUES (these inputs were NOT checked)
+------------------------------------------------------------------------------
+[syntax_error] src/servers/broken.py:6
+        SyntaxError: invalid syntax
+```
+
+| Status | Meaning | Graded | Exit |
+| :--- | :--- | :---: | :---: |
+| `clean` | Everything analyzed, nothing fired | ✅ | `0` |
+| `findings` | Everything analyzed, issues found | ✅ | `0`/`1` |
+| `partial` | Some files could not be read — **not a clean result** | ❌ | `3` |
+| `no_matches` | Nothing recognizable was found | ❌ | `0` (`4` with `--fail-on-no-matches`) |
+| `error` | Nothing could be analyzed | ❌ | `3` |
+
+Ungraded scans report `score: null` — a grade is a claim about your code, and it is withheld
+when part of your code was never read. Parse errors surface in terminal, Markdown, HTML and
+SARIF (`toolExecutionNotifications`), never as fake findings. Details:
+[`docs/scan-status.md`](docs/scan-status.md).
 
 ## Policies and gates
 
@@ -378,6 +412,7 @@ The repository publishes this viewer to GitHub Pages on every push to `main`: `d
 | :--- | :--- |
 | Install and scan my server | [`docs/usage.md`](docs/usage.md) |
 | Understand a specific finding | [`docs/rules.md`](docs/rules.md) |
+| Understand status, coverage and exit codes | [`docs/scan-status.md`](docs/scan-status.md) |
 | Enforce a team or production standard | [`docs/policies.md`](docs/policies.md) |
 | Adopt the gate on an existing codebase | [`docs/baseline.md`](docs/baseline.md) |
 | Audit a running MCP server | [`docs/live-audit.md`](docs/live-audit.md) |
@@ -396,15 +431,17 @@ The repository publishes this viewer to GitHub Pages on every push to `main`: `d
 
 `0.2.x` — usable, pre-1.0. Rule IDs, exit codes, configuration keys, `vexar-mcp-report/v1`
 and `vexar-mcp-baseline/v1` are stable; anything that changes keeps working with a
-changelog note. See [CHANGELOG.md](CHANGELOG.md) for the versioning contract.
+changelog note. Exit codes `3` (incomplete analysis) and `4` (no matches) were added in
+0.2.1; `0`/`1`/`2` are unchanged. See [CHANGELOG.md](CHANGELOG.md) for the versioning
+contract.
 
 | Verified signal | Value | How it is measured |
 | :--- | :--- | :--- |
-| Diagnostic rules | **13** (`MCP001`–`MCP013`) | `vexar-mcp rules` against the current source |
+| Diagnostic rules | **14** (`MCP001`–`MCP014`) | `vexar-mcp rules` against the current source |
 | Enforcement presets | **4** | `vexar-mcp policy` |
 | Report formats | **6** (terminal, JSON, SARIF, Markdown, annotations, HTML) | `docs/usage.md`, reporter modules |
 | Scan modes | **2** — static files, live stdio JSON-RPC | `scan`, `audit-server` |
-| Test suite | **264 tests passing** | `pytest` on Python 3.13 (CI covers 3.10–3.13) |
+| Test suite | **323 tests passing** | `pytest` on Python 3.13 (CI covers 3.10–3.13) |
 | Statement coverage | **94%** | `pytest --cov=mcp_doctor` |
 | Coverage gate | **85% required** | `--cov-fail-under=85` in `ci.yml` (a threshold, not a result) |
 | Quality gates | `ruff`, `ruff format`, `mypy --strict` clean; warnings are errors | CI matrix on Python 3.10 / 3.11 / 3.12 / 3.13 |

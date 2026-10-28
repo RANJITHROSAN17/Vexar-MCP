@@ -16,6 +16,66 @@ Versioning contract, so upgrades are predictable:
 
 ---
 
+## [0.2.1] - 2026-10-28
+
+The trust release. 0.2.0 added policy, baselines and live auditing on top of a scanner that
+could still report `100/100 (A+)` and exit `0` for a file it had failed to parse. That class
+of false confidence is now closed by construction, pinned by regression tests, and gated in
+CI.
+
+### Fixed
+
+- **Fail-open analysis (P0).** A Python syntax error or malformed JSON produced zero tools,
+  which produced zero findings, which produced a perfect score and a passing exit code.
+  Loaders now report `ParseIssue`s instead of swallowing errors; a scan that could not read
+  its inputs is never graded.
+- **Server-wide token budget was configured but never enforced.** `max-server-tokens` is now
+  enforced by rule **`MCP014`**, which names the total, the budget, and the largest
+  contributor tools. Covered below, exactly-at, and above the limit.
+- **`files_scanned` counted the wrong thing** - it counted files *containing tools* rather
+  than files *analyzed*, so a scan of forty parseable Python files could report `0`.
+- **`@register_rule` did not reject duplicate rule IDs.** Programmatic registration was
+  guarded; the decorator silently replaced an existing rule. Both now share one guard.
+- **Excluded directories were traversed, not pruned.** Discovery called `rglob("*")` and
+  filtered afterwards, so scanning a monorepo walked every file under `node_modules`. The
+  walk is now pruned during traversal, and always skips VCS/cache directories even when a
+  project replaces the default exclude list. A 10,000-file fixture with 50 relevant files
+  discovers in about 4 ms.
+- **The composite action scanned the repository up to four times**, once per output format,
+  so reports could disagree and CI paid for discovery, parsing and rules repeatedly. All
+  artefacts now come from one analysis via `--emit`.
+- The history sparkline could record an ungraded score (`None`) and poison the trend for
+  later runs; only graded runs are recorded now.
+
+### Added
+
+- **Scan status** (`clean`, `findings`, `partial`, `no_matches`, `error`) and **coverage**
+  counters (`candidate_files`, `files_analyzed`, `files_failed`, `files_with_tools`,
+  `tools_analyzed`), reported in terminal, JSON, Markdown, HTML and SARIF.
+- **`ParseIssue`** reporting with kind (`syntax_error`, `invalid_json`, `unreadable`), file
+  and line, surfaced in every reporter and in SARIF `invocations.toolExecutionNotifications`
+  as `executionSuccessful: false`. Never counted as a finding.
+- **Exit codes `3`** (incomplete analysis) and **`4`** (no supported tool found when
+  `--fail-on-no-matches` is set). `0`/`1`/`2` are unchanged.
+- **`--emit FORMAT=PATH`** (repeatable) renders several formats from one scan;
+  `--allow-incomplete` deliberately downgrades the completeness gate; `--fail-on-no-matches`
+  requires a non-empty result.
+- **`score` is now `int | None`.** It is `null`/`n/a` whenever the scan was not graded, so
+  "we measured nothing" cannot be mistaken for `100`. `grade` is `"N/A"` in the same cases.
+- Composite action inputs `allow-incomplete` and outputs `status`, `analysis-complete`,
+  `files-failed`. With `--emit`, `score` is emitted empty for ungraded scans.
+- `docs/scan-status.md` and new CI gates asserting the fail-open regression and the server
+  budget, plus 45 tests covering completeness, coverage, pruning, multi-output and registry
+  integrity.
+
+### Changed
+
+- Terminal, Markdown and HTML reports no longer print "All checks passed" or "Zero issues
+  detected" for a scan that was not complete; they state that the result is not clean.
+- `summary.files_scanned` now means files analyzed (see Fixed).
+
+---
+
 ## [0.2.0] - 2026-10-28
 
 The release that turns a scanner into a policy-driven analysis tool: enforcement presets,

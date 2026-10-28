@@ -143,8 +143,14 @@ Lists every registered rule with its ID, severity, category, slug, and summary. 
 | `--write-baseline <file>` | Record current findings as accepted risk, then exit |
 | `--print-config` | Print the effective configuration and the file it came from, without scanning |
 | `--history <file>` | Score history for the HTML trend sparkline; add `--append-history` to record this run |
+| `--emit FORMAT=PATH` | Render an extra format from the **same** scan (repeatable, `-` for stdout) |
+| `--allow-incomplete` | Do not fail when files cannot be parsed (off by default; exit `3` otherwise) |
+| `--fail-on-no-matches` | Fail with exit `4` when no supported MCP tool is found |
 
 ```bash
+# One analysis, every artefact — never scan the same tree four times
+vexar-mcp scan . --emit sarif=vexar.sarif --emit html=report.html --emit json=report.json
+
 # What will CI actually enforce, and from which file?
 vexar-mcp scan . --policy strict-prod --print-config
 

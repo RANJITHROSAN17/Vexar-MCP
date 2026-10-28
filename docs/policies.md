@@ -93,9 +93,18 @@ scan that quietly ignores a typo is worse than no scan at all.
 | `0` | Scan completed and every gate passed |
 | `1` | Scan completed, a gate failed (severity, score floor, or baseline delta) |
 | `2` | Usage, configuration, I/O, or live-server error — nothing was gated |
+| `3` | Analysis incomplete — files could not be parsed, so findings are unreliable |
+| `4` | No supported MCP tool found (only with `--fail-on-no-matches`) |
 
-CI must distinguish `1` from `2`: `1` means "fix your code", `2` means "fix your
-invocation". Treating both as "build broken" is how teams learn to ignore a gate.
+CI must distinguish these: `1` means "your code has problems", `3` means "we could not read
+your code", `2` means "fix the invocation". Treating them all as "build broken" is how teams
+learn to ignore a gate.
+
+**Completeness is a gate.** By default, a file that cannot be parsed fails the run with exit
+`3`, because a passing gate on code the scanner could not read is meaningless. Use
+`--allow-incomplete` only as a deliberate, temporary downgrade (for example while migrating a
+legacy tree) — and read the `status`/`files_failed` outputs so the gap stays visible. See
+[scan-status.md](scan-status.md).
 
 ## Typical CI wiring
 

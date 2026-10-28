@@ -119,3 +119,30 @@ anything, which is why it is a trust boundary rather than a default.
 **Presets are conservative, not complete.** `enterprise-governance` fails on informational
 findings. That is a deliberate stance for regulated estates and will be noisy for teams that
 have not triaged their backlog — pair it with a baseline.
+
+---
+
+## What "coverage" does and does not mean
+
+`status` and the coverage counters answer **"how much was read?"**, not **"how well was it
+understood?"**. A TypeScript file with valid syntax counts as `files_analyzed` even when it
+registers tools through computed names, external schema modules, or helper functions this
+scanner cannot follow. Those are documented loader limits (see above), not analysis failures.
+
+So:
+
+- `clean` means "no rule fired on what we could read".
+- `partial` / `error` means "do not trust this result at all".
+- Neither means "safe to ship".
+
+### Language coverage contracts
+
+| Loader | Recognizes | Does not recognize |
+| :--- | :--- | :--- |
+| Python (AST) | `@mcp.tool()` / `@server.tool()` decorated functions, `Tool(...)` objects, FastMCP builders, typed parameters with bounds, sinks in the handler body | Tools registered through runtime indirection (registries built from data, decorators applied by name), non-`ast`-parseable syntax, tools defined in non-Python sources |
+| TypeScript / JS | Lexical scan of `server.tool(...)` / `registerTool` calls with literal names, inline object schemas, inline handlers | Computed identifiers, imported schema factories, externally referenced handler bodies, framework-level registration wrappers, full JS lexical semantics |
+| JSON manifests | MCP `tools/list` payloads, OpenAI and Anthropic tool manifests | Manifests produced at runtime, non-JSON formats, references resolved by an external schema registry |
+
+If a construct is outside these contracts, the tool it registers is invisible — and no rule
+can fire on it. Prefer `audit-server` for servers whose catalogue is built at runtime, since
+it reads what the server actually advertises.

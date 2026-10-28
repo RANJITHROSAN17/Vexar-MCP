@@ -204,6 +204,55 @@ jobs:
           vexar-mcp scan examples/clean_server.py --rule-pack /tmp/acme-pack.toml \
             --fail-on never --format json | python -c "import json,sys; ids={d['rule_id'] for d in json.load(sys.stdin)['diagnostics']}; assert 'ACME001' in ids, ids"
 
+      # The fail-open regression gate. A scanner that reports success on code it could not
+      # read is worse than no scanner, so CI asserts the failure modes explicitly.
+      - name: Incomplete analysis must never look clean
+        run: |
+          set -euo pipefail
+          ROOT="$(mktemp -d)"
+          WORK="${ROOT}/target"
+          mkdir -p "${WORK}"
+          printf 'from mcp.server.fastmcp import FastMCP\nmcp = FastMCP("x")\n@mcp.tool()\ndef broken( -> str:\n    return ""\n' > "${WORK}/broken_server.py"
+          cp examples/clean_server.py "${WORK}/clean_server.py"
+
+          # The report is written outside the scanned tree: redirecting into the target
+          # would make the scanner try to parse its own half-written output.
+          set +e
+          vexar-mcp scan "${WORK}" --format json > "${ROOT}/report.json"
+          code=$?
+          set -e
+          test "${code}" = "3" || { echo "expected exit 3 for incomplete analysis, got ${code}"; exit 1; }
+
+          python - "${ROOT}/report.json" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as fh:
+              data = json.load(fh)
+          assert data["status"] == "partial", data["status"]
+          assert data["analysis_complete"] is False
+          assert data["summary"]["score"] is None, "a partial scan must not be graded"
+          assert data["coverage"]["files_failed"] == 1, data["coverage"]
+          assert data["parse_issues"][0]["kind"] == "syntax_error"
+          print("fail-open regression gate: OK")
+          PY
+
+      - name: Server-wide token budget is enforced
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from mcp_doctor.models import ScanConfig, ToolSpec
+          from mcp_doctor.rules.token_rules import check_server_token_budget
+
+          tools = [ToolSpec(name=f"t{i}", description="d", source_file="s.py", line=i,
+                            estimated_tokens=400) for i in range(20)]
+          findings = check_server_token_budget(tools, ScanConfig(max_server_tokens=1000))
+          assert len(findings) == 1 and findings[0].rule_id == "MCP014", findings
+          under = check_server_token_budget(tools[:2], ScanConfig(max_server_tokens=4000))
+          assert under == [], under
+          print("server budget gate: OK")
+          PY
+
       - name: Configuration errors fail with exit code 2
         run: |
           set +e

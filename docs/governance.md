@@ -164,6 +164,24 @@ weight than feature changes.
   registry rejects collisions and duplicate slugs, so a pack can never shadow a built-in
   check.
 
+### The trust contract (0.2.1)
+
+These are permanment guarantees, and a change to any of them is a security-relevant change:
+
+1. **A scan that could not read its inputs is never graded and never passes.** Loaders report
+   `ParseIssue`s; the engine withholds the score; the CLI exits `3`.
+2. **Findings and analysis status are separate.** A parse error is never emitted as a
+   security finding, and an empty findings list on an incomplete scan means nothing.
+3. **Exit codes are API.** `0` pass, `1` gate failure, `2` invocation/config error, `3`
+   incomplete analysis, `4` no matches. Renumbering them is a breaking change.
+4. **Excluded directories are pruned, never traversed.** Scanning must not pay for code it
+   will not read.
+5. **One analysis, many renderings.** Reports for a single run must describe the same
+   snapshot; adding a format must not add a scan.
+
+Any PR that weakens one of these — for example by making the completeness gate opt-in, or by
+restoring a numeric default score for empty scans — must be reviewed as a security regression.
+
 ### Policy presets are a versioned contract
 
 | Change | Required |

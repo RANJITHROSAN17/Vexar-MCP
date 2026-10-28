@@ -54,6 +54,10 @@ inputs:
     description: "Append the Markdown report to the job step summary."
     required: false
     default: "true"
+  allow-incomplete:
+    description: "Do not fail when some files cannot be analyzed. Off by default: unreadable inputs make the result untrustworthy."
+    required: false
+    default: "false"
 
 outputs:
   score:
@@ -77,6 +81,16 @@ outputs:
   exit-code:
     description: "Gate result: 0 = passed, 1 = a gate failed, 2 = configuration or scan error."
     value: ${{ steps.run_scan.outputs.exit_code }}
+
+  status:
+    description: "Analysis status: clean, findings, partial, no_matches or error."
+    value: ${{ steps.run_scan.outputs.status }}
+  analysis-complete:
+    description: "true when every candidate file was analyzed."
+    value: ${{ steps.run_scan.outputs.analysis_complete }}
+  files-failed:
+    description: "Candidate files that could not be parsed or read."
+    value: ${{ steps.run_scan.outputs.files_failed }}
 
 runs:
   using: "composite"
@@ -106,6 +120,7 @@ runs:
         INPUT_SARIF_OUTPUT: ${{ inputs.sarif-output }}
         INPUT_HTML_OUTPUT: ${{ inputs.html-output }}
         INPUT_STEP_SUMMARY: ${{ inputs.step-summary }}
+        INPUT_ALLOW_INCOMPLETE: ${{ inputs.allow-incomplete }}
       run: |
         set -euo pipefail
 
@@ -117,6 +132,7 @@ runs:
         [[ -n "${INPUT_IGNORE}" ]]     && ARGS+=(--ignore "${INPUT_IGNORE}")
         [[ -n "${INPUT_BASELINE}" ]]   && ARGS+=(--baseline "${INPUT_BASELINE}")
         [[ -n "${INPUT_CONFIG}" ]]     && ARGS+=(--config "${INPUT_CONFIG}")
+        [[ "${INPUT_ALLOW_INCOMPLETE}" == "true" ]] && ARGS+=(--allow-incomplete)
         if [[ -n "${INPUT_RULE_PACKS}" ]]; then
           IFS=',' read -r -a PACKS <<< "${INPUT_RULE_PACKS}"
           for pack in "${PACKS[@]}"; do
@@ -125,43 +141,35 @@ runs:
           done
         fi
 
-        # Reports never gate here: the JSON run below is the source of truth for outputs.
-        if [[ -n "${INPUT_SARIF_OUTPUT}" ]]; then
-          vexar-mcp scan "${INPUT_PATH}" --format sarif --fail-on never "${ARGS[@]}" \
-            > "${INPUT_SARIF_OUTPUT}"
-        fi
-
-        if [[ -n "${INPUT_HTML_OUTPUT}" ]]; then
-          vexar-mcp scan "${INPUT_PATH}" --format html --output "${INPUT_HTML_OUTPUT}" \
-            --fail-on never "${ARGS[@]}"
-        fi
+        # One analysis, many renderings. Every artefact below comes from a single
+        # scan_paths() call via --emit, so all reports describe the same snapshot and CI
+        # pays for discovery, parsing and rule execution exactly once. The JSON report is
+        # always produced because the step outputs are derived from it.
+        EMIT=()
+        [[ -n "${INPUT_SARIF_OUTPUT}" ]] && EMIT+=(--emit "sarif=${INPUT_SARIF_OUTPUT}")
+        [[ -n "${INPUT_HTML_OUTPUT}" ]]  && EMIT+=(--emit "html=${INPUT_HTML_OUTPUT}")
 
         JSON_REPORT="$(mktemp)"
-        vexar-mcp scan "${INPUT_PATH}" --format json --fail-on never "${ARGS[@]}" > "${JSON_REPORT}"
+        SUMMARY_MD="$(mktemp)"
+        EMIT+=(--emit "json=${JSON_REPORT}")
+        [[ "${INPUT_STEP_SUMMARY}" == "true" ]] && EMIT+=(--emit "markdown=${SUMMARY_MD}")
 
-        python - "${JSON_REPORT}" <<'PY' >> "${GITHUB_OUTPUT}"
-        import json, sys
-        with open(sys.argv[1], encoding="utf-8") as fh:
-            data = json.load(fh)
-        summary = data["summary"]
-        baseline = data.get("baseline") or {}
-        print(f"score={summary['score']}")
-        print(f"grade={summary['grade']}")
-        print(f"risk_index={summary.get('risk_index', 0)}")
-        print(f"total_diagnostics={summary['total_diagnostics']}")
-        print(f"new_findings={baseline.get('new', 0)}")
-        print(f"policy={data.get('policy', {}).get('name', 'default')}")
-        PY
-
-        if [[ "${INPUT_STEP_SUMMARY}" == "true" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-          vexar-mcp scan "${INPUT_PATH}" --format markdown --fail-on never "${ARGS[@]}" \
-            >> "${GITHUB_STEP_SUMMARY}"
-        fi
-
-        # Final pass: enforce the gate and propagate the real exit code to the job.
         set +e
-        vexar-mcp scan "${INPUT_PATH}" --format terminal "${ARGS[@]}"
+        vexar-mcp scan "${INPUT_PATH}" --format terminal "${EMIT[@]}" "${ARGS[@]}"
         CODE=$?
         set -e
+
+        if [[ -s "${JSON_REPORT}" ]]; then
+          python "${GITHUB_ACTION_PATH}/.github/scripts/action_outputs.py" \
+            "${JSON_REPORT}" >> "${GITHUB_OUTPUT}"
+        else
+          echo "vexar-mcp: no JSON report produced; the scan did not run" >&2
+          if [[ "${CODE}" == "0" ]]; then CODE=2; fi
+        fi
+
+        if [[ "${INPUT_STEP_SUMMARY}" == "true" && -n "${GITHUB_STEP_SUMMARY:-}" && -s "${SUMMARY_MD}" ]]; then
+          cat "${SUMMARY_MD}" >> "${GITHUB_STEP_SUMMARY}"
+        fi
+
         echo "exit_code=${CODE}" >> "${GITHUB_OUTPUT}"
         exit "${CODE}"
