@@ -1,4 +1,5 @@
 {
+  "plan_doc": "docs/roadmap-90-days.md",
   "max_open_roadmap_issues": 8,
   "labels": [
     {
@@ -1016,5 +1017,6 @@
       ]
     }
   ],
-  "min_open_good_first_issues": 2
+  "min_open_good_first_issues": 2,
+  "_comment": "Machine-readable queue. The plan it implements is docs/roadmap-90-days.md; if the two disagree, the document wins and the JSON is the bug."
 }

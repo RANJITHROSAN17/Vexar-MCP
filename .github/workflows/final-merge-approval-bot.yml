@@ -1,39 +1,89 @@
-name: Final Merge Approval Bot — YOU Only (The Only Notification Source)
+name: Final Merge Approval Bot — maintainer only
+
+# Pings the maintainer when a review is approved, with the *actual* state of every check on
+# the head commit.
+#
+# This used to print "Bot confirms: CI + Governance + Roadmap + Review all completed" from an
+# `echo`, and then post a comment telling the maintainer that all gates had passed. Nothing
+# was read. A confirmation that cannot fail is not a confirmation, and on a repository whose
+# whole argument is that unverified claims are worthless, it was the worst kind of bot.
 on:
-  pull_request_review: {types: [submitted]}
-  workflow_dispatch: {}
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
 
 permissions:
-  pull-requests: read  # only reads; never approves itself
+  contents: read
+  pull-requests: read
   issues: write
+  checks: read
+  statuses: read
 
 jobs:
   approve:
-    # Only runs when a review is submitted; only notifies YOU (not contributors, not bots)
+    # Only a review submission can trigger this workflow, and only the maintainer's approval
+    # is worth notifying about.
+    if: >-
+      github.event.review &&
+      github.event.review.state == 'approved' &&
+      github.event.review.user.login == 'RANJITHROSAN17'
     runs-on: ubuntu-latest
-    # Only a review submission can trigger this workflow; the old `|| event_name == "push"`
-    # clause referenced an event this workflow never receives.
-    if: github.event.review && github.event.review.state == 'approved' && github.event.review.user.login == 'RANJITHROSAN17'
     steps:
-      - name: Confirm all gates passed
-        id: gates
-        run: |
-          echo "Checking required status checks..."
-          # This bot does NOT call merge — only confirms and pings you
-          echo "Bot confirms: CI + Governance + Roadmap + Review all completed. Ready for your final merge."
-      - name: Send ONLY to maintainer — merge request notification
+      - name: Read the real status of every check on the head commit
         uses: actions/github-script@v7
+        env:
+          # The PR body is attacker-controlled text; it is never read here, but the PR title
+          # reaches the comment through the API response rather than an interpolation.
+          MAINTAINER: RANJITHROSAN17
         with:
           script: |
-            // ONLY YOU get notified — never @mentions contributors; never auto-merges
-            const maintainer = "RANJITHROSAN17";
-            // workflow_dispatch has no issue/PR in context; commenting would 404.
-            if (!context.issue || !context.issue.number) {
-              core.info(`No issue/PR in context (event: ${context.eventName}); nothing to comment on.`);
-              return;
-            }
-            await github.rest.issues.createComment({
-              owner: context.repo.owner, repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `🔑 **FINAL MERGE BOT — ONLY YOU**\n\n• All bot gates passed (Feature / Issue / Resolve / Review)\n• Code Review Bot: approved\n• Issue Resolve Bot: verified (if linked)\n• Feature Upgrade Bot: queued / proposed\n\n⏳ **ACTION REQUIRED FROM @${maintainer}**\n• Approve merge manually (no auto-merge enabled on protected branch)\n• Check `.github/rulesets/contributor-enforcement.json`: linear history + 1 review required\n• Merge only via GitHub UI (not command line) to trigger release bot next.`,
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo, pull_number: issue_number,
             });
+            const sha = pr.head.sha;
+
+            const runs = await github.paginate(github.rest.checks.listForRef, {
+              owner, repo, ref: sha, per_page: 100,
+            });
+            const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+              owner, repo, ref: sha, per_page: 100,
+            });
+
+            const failed = runs.filter((r) => r.conclusion && !['success', 'neutral', 'skipped'].includes(r.conclusion));
+            const pending = runs.filter((r) => !r.conclusion);
+            const badStatuses = statuses.filter((s) => s.state === 'failure' || s.state === 'error');
+            const pendingStatuses = statuses.filter((s) => s.state === 'pending');
+
+            const ready = failed.length === 0 && pending.length === 0
+              && badStatuses.length === 0 && pendingStatuses.length === 0;
+
+            const line = (r) => `- ${r.name}: ${r.conclusion || 'running'}`;
+            const body = [
+              ready ? '## Ready to merge' : '## Not ready yet',
+              '',
+              `Reviewed head commit: \`${sha.slice(0, 7)}\``,
+              '',
+              `Checks: ${runs.length} run(s), ${failed.length} failing, ${pending.length} running.`,
+              `Commit statuses: ${statuses.length}, ${badStatuses.length} failing, ${pendingStatuses.length} pending.`,
+              '',
+              ...(runs.length ? ['<details><summary>All checks</summary>', '', ...runs.map(line), '', '</details>'] : []),
+              '',
+              ready
+                ? 'Everything on this commit is green. The merge is yours to make - this bot never merges.'
+                : '**Do not merge on this bot\'s word.** At least one check has not finished or has failed; ' +
+                  'the list above is what it actually read.',
+              '',
+              '<sub>This comment reports state; it does not grant approval.</sub>',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner, repo, issue_number, body,
+            });
+
+            if (!ready) {
+              core.setFailed(`${failed.length + badStatuses.length} failing, ` +
+                             `${pending.length + pendingStatuses.length} pending on ${sha.slice(0, 7)}`);
+            }

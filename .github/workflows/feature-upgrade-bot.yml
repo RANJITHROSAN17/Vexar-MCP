@@ -1,47 +1,94 @@
-name: Feature Upgrade Bot — Daily Feature Proposal (Silent)
+name: Feature Proposal Bot
+
+# Proposes the next feature, once a week, in one issue that is edited rather than reopened.
+#
+# The previous version of this workflow triggered on every push to main *and* every pull
+# request event, and its schedule was commented out with the note "disabled to stop duplicate
+# daily bot issues". It also called `sync_roadmap_issues.py --count 1`, a flag the script did
+# not accept, so argparse exited 2 and the fallback message fired every time. The bot had
+# never once proposed anything. Both faults are fixed here: the trigger is scheduled, and the
+# flag exists.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    types: [opened, synchronize]
-  # Disabled to stop duplicate daily bot issues; use workflow_dispatch for manual runs.
-  # schedule:
-  #   - cron: "0 9 * * *"
-  workflow_dispatch: {}
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
 permissions:
-  issues: write
   contents: read
+  issues: write
+
+concurrency:
+  group: feature-proposal
+  cancel-in-progress: false
+
 jobs:
   propose:
+    name: Propose the next roadmap item
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v7
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Read queued roadmap tasks
-        id: queued
+
+      - name: Choose the next item from the manifest
+        id: pick
         run: |
-          python3 .github/scripts/sync_roadmap_issues.py --dry-run --count 1 > proposed.md 2>/dev/null || echo "No queued tasks — proposing upgrade to existing rules" > proposed.md
-          echo "file=proposed.md" >> $GITHUB_OUTPUT
-      - name: Propose new feature / upgrade
-        if: always()
+          python .github/scripts/sync_roadmap_issues.py --dry-run --count 1 > proposed.txt
+          cat proposed.txt
+
+      - name: Publish or refresh the proposal
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const proposed = fs.existsSync('proposed.md') ? fs.readFileSync('proposed.md','utf8') : '';
-            // Only propose if a real queued roadmap item exists (not fallback message)
-            if (!proposed || proposed.includes('No queued tasks') || proposed.trim().length < 10) {
-              console.log('No queued roadmap item — silent, no issue created.');
+            const marker = '<!-- feature-proposal -->';
+            const proposed = fs.readFileSync('proposed.txt', 'utf8').trim();
+            const picked = proposed.split('\n').filter((line) => line.trim().startsWith('- [')).join('\n');
+
+            if (!picked) {
+              core.info('Every queued item already has an issue; no proposal needed.');
               return;
             }
-            try {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: `feat(upgrade): daily feature proposal — ${new Date().toISOString().slice(0,10)}`,
-                body: `🤖 **Feature Upgrade Bot (silent)**\n\n• Status: queued / proposed\n• Source: .github/roadmap.json (15 queued)\n• Action required: maintainer selects next item from #1–#8 or proposes new\n• No notification sent to contributors until maintainer approves.\n\n---\n` + proposed,
-                labels: ["help wanted","roadmap","difficulty/easy","area/upgrade"],
+
+            const body = [
+              marker,
+              '## Next feature, from the plan',
+              '',
+              'This is the head of the queue in `.github/roadmap.json`, re-derived weekly. ',
+              'It is a proposal, not a decision: closing it says "not yet" without losing the item, ',
+              'because the manifest still holds it.',
+              '',
+              '```',
+              picked,
+              '```',
+              '',
+              '**To act on it:** open the issue the curator already made for this item (search the ',
+              'manifest id) and work the acceptance criteria there. Do not implement from this ',
+              'proposal alone — the criteria are the definition of done, and this summary is not.',
+              '',
+              '**To change the plan instead:** edit `.github/roadmap.json`. That file is the queue.',
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100, labels: 'roadmap',
+            });
+            const existing = open.find((issue) => (issue.body || '').includes(marker));
+            if (existing) {
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number, body,
               });
-            } catch (e) { console.log("No new feature issue needed today (silent).", e.message); }
+              core.info(`Updated proposal #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner, repo,
+                title: 'Next feature proposal',
+                body,
+                labels: ['roadmap'],
+              });
+              core.info(`Created proposal #${created.data.number}`);
+            }

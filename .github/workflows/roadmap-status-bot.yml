@@ -1,0 +1,57 @@
+name: Roadmap Status Bot
+
+# One rolling issue answering "what is the next step?". Edited in place, so a weekly run
+# costs no notifications.
+#
+# The drift section is the part that earns its keep: it notices a shipped item whose issue is
+# still open, a plan naming files that have since been deleted, and a version in pyproject
+# that disagrees with the newest tag. That last one is real here right now — the package is
+# 0.2.6 and the newest release is v0.2.1 — and nothing else in the repository looks for it.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/roadmap-90-days.md"
+      - ".github/roadmap.json"
+      - ".github/scripts/roadmap_status.py"
+      - ".github/workflows/roadmap-status-bot.yml"
+  schedule:
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: roadmap-status
+  cancel-in-progress: true
+
+jobs:
+  status:
+    name: Publish the roadmap status issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          # Tags are read to detect a version that was bumped but never released.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Render the status (no API calls)
+        run: python .github/scripts/roadmap_status.py --dry-run --out roadmap_status.md
+
+      - name: Publish or update the status issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python .github/scripts/roadmap_status.py
+
+      - name: Job summary
+        if: always()
+        run: cat roadmap_status.md >> "$GITHUB_STEP_SUMMARY"

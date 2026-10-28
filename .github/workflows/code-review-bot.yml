@@ -16,6 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The roadmap mapping diffs the PR against its base commit.
+          fetch-depth: 0
 
       - name: "Install package + dev tools (fix: venv gone / runner bare)"
         run: |
@@ -96,6 +99,19 @@ jobs:
           echo "--- FILE CONTENTS ---"
           cat review_result.md
 
+      - name: Map the change to the 90-day roadmap
+        # Only on pull requests: a push to main has no base commit to diff against.
+        if: always() && github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Attacker-controlled text: written by a program, never interpolated.
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed_files.txt
+          python -c "import os,pathlib; pathlib.Path('pr_body.md').write_text(os.environ.get('PR_BODY') or '')"
+          python .github/scripts/pr_context.py --changed changed_files.txt --body pr_body.md --out context.md
+
       - name: Post Review Comment — Always (result + score + improvement + log)
         if: always()
         uses: actions/github-script@v7
@@ -110,6 +126,14 @@ jobs:
             const fs = require('fs');
             let result = "Result unavailable";
             try { result = fs.readFileSync('review_result.md','utf8'); } catch(e) { result = "Review result file not found — check workflow logs."; }
+
+            // Roadmap context, when this ran on a pull request.
+            let roadmapContext = "";
+            try {
+              roadmapContext = fs.readFileSync('context.md','utf8');
+            } catch (e) {
+              roadmapContext = "_No roadmap context: this event has no diff to map._";
+            }
 
             const finalLine = result.split("\n").filter(l => l.includes("FINAL RESULT:")).pop() || "Result unclear";
             const isPass = finalLine.includes("PASS");
@@ -133,6 +157,7 @@ jobs:
               `• Conventional Commits format + labels / size tag\n\n` +
               `**What it improved / maintained:**\n` +
               improvement + `\n\n` +
+              roadmapContext + `\n` +
               `---\n` +
               `**Full result log (first 3500 chars):**\n\n` +
               `\`\`\`\n${logSnippet}\n\`\`\`\n\n` +

@@ -1,0 +1,82 @@
+name: Issue Lifecycle Bot
+
+# Closes the loop the queue opens. When a PR that says "Closes #12" is merged, #12 is closed
+# by GitHub whether or not the acceptance criteria were met, and the queue quietly loses the
+# information that the work is merged-but-unreleased. That gap is what this bot records.
+#
+# This replaces two workflows that did nothing but echo a description of what they would do
+# ("Bot: closing linked issue on merge"). A bot that prints its own name and exits is worse
+# than no bot: it looks like coverage.
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  record-merge:
+    name: Mark linked issues as merged, pending release
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label and annotate the issues this PR closes
+        uses: actions/github-script@v7
+        env:
+          # The PR body and title are attacker-controlled: they reach JavaScript through the
+          # environment, never through interpolation into the script body.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        with:
+          script: |
+            if (context.eventName !== 'pull_request') {
+              core.info('No pull request in context; nothing to do.');
+              return;
+            }
+            const { owner, repo } = context.repo;
+            const body = process.env.PR_BODY || '';
+            const numbers = [...body.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi)]
+              .map((m) => Number(m[1]));
+            if (!numbers.length) {
+              core.info('No "Closes #N" reference found in the PR body.');
+              return;
+            }
+
+            // The label is what a dashboard can count: merged code that no release contains.
+            const label = 'status/pending-release';
+            try {
+              await github.rest.issues.createLabel({
+                owner, repo, name: label, color: 'fbca47',
+                description: 'Merged to main, not yet in a tagged release',
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error;
+            }
+
+            for (const issue_number of [...new Set(numbers)]) {
+              const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number });
+              if (issue.pull_request) continue;
+              await github.rest.issues.addLabels({
+                owner, repo, issue_number, labels: [label],
+              });
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body: [
+                  `Merged in ${process.env.MERGE_SHA ? '`' + process.env.MERGE_SHA.slice(0, 7) + '`' : 'a merge commit'}`
+                    + ` (PR #${process.env.PR_NUMBER}).`,
+                  '',
+                  'Two things are still outstanding, and this comment exists so neither is forgotten:',
+                  '',
+                  '1. The acceptance criteria were signed off by a human, not by this bot. If one ',
+                  '   is only *partly* met, reopen with what remains rather than leaving a closed ',
+                  '   issue that claims more than the code does.',
+                  '2. Nothing here is in a release yet. Once a tag contains this merge, remove ',
+                  `   \`${label}\` and add the version to the roadmap entry.`,
+                ].join('\n'),
+              });
+              core.info(`Annotated #${issue_number}`);
+            }

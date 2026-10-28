@@ -21,6 +21,19 @@ from typing import Any
 ROADMAP_MARKER_RE = re.compile(r"<!--\s*roadmap-id:\s*([A-Za-z0-9_-]+)\s*-->")
 
 
+PRIORITY_RE = re.compile(r"priority/p(\d)")
+
+
+def _sort_key(item: dict, index: int) -> tuple[int, int]:
+    """Order the queue the way the plan is meant to be worked: priority, then file order."""
+    for label in item.get("labels", []):
+        name = label.get("name") if isinstance(label, dict) else label
+        match = PRIORITY_RE.fullmatch(str(name))
+        if match:
+            return (int(match.group(1)), index)
+    return (5, index)
+
+
 def render_issue_body(item: dict[str, Any]) -> str:
     """Format a structured, contributor-friendly GitHub Issue body."""
     item_id = item["id"]
@@ -99,6 +112,7 @@ def _is_starter(item: dict[str, Any]) -> bool:
 def select_items_to_open(
     roadmap: dict[str, Any],
     existing_issues: list[dict[str, Any]],
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Determine which queued roadmap items should be opened to refill the contributor queue.
 
@@ -118,14 +132,22 @@ def select_items_to_open(
 
     queued = [
         item
-        for item in roadmap.get("items", [])
+        for index, item in enumerate(roadmap.get("items", []))
         if item["id"] not in seen_ids and item.get("status") != "shipped"
     ]
+    queued.sort(key=lambda item: _sort_key(item, roadmap["items"].index(item)))
+
+    # A capped run is a request for the head of the queue - the proposal bot asking "what is
+    # next?" - not a queue refill, so plan order wins and the on-ramp floor does not reorder it.
+    if limit is not None:
+        return queued[: max(0, limit)]
 
     to_open: list[dict[str, Any]] = []
     # Starters first when the on-ramp is short, so a beginner-facing task is never stuck behind
-    # a hard one in the manifest order.
-    if count_open_starters(existing_issues) < starter_floor:
+    # a hard one in the manifest order - unless something is blocking a release, in which case
+    # a comfortable first issue is the wrong thing to lead with.
+    release_blocking = any(_sort_key(item, 0)[0] == 0 for item in queued)
+    if not release_blocking and count_open_starters(existing_issues) < starter_floor:
         to_open.extend([item for item in queued if _is_starter(item)][:starter_floor])
 
     for item in queued:
@@ -134,6 +156,9 @@ def select_items_to_open(
         if item in to_open:
             continue
         to_open.append(item)
+
+    if limit is not None:
+        to_open = to_open[: max(0, limit)]
     return to_open
 
 
@@ -288,6 +313,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Target owner/repo (defaults to $GITHUB_REPOSITORY).",
     )
     parser.add_argument(
+        "--count",
+        type=int,
+        default=None,
+        help="Open at most N issues this run (default: fill the queue).",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Validate roadmap and preview queued issues without calling GitHub API.",
@@ -297,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
     roadmap = json.loads(args.roadmap.read_text(encoding="utf-8"))
 
     if args.dry_run:
-        to_open = select_items_to_open(roadmap, [])
+        to_open = select_items_to_open(roadmap, [], limit=args.count)
         print(
             f"[dry-run] Validated {len(roadmap.get('items', []))} roadmap items and "
             f"{len(roadmap.get('labels', []))} labels. Initial batch would open {len(to_open)} issues:"
@@ -331,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
         # queue stays under-filled until the next scheduled run a week later.
         closed = {number for number, _ in to_close}
         remaining = [issue for issue in existing if int(issue.get("number", 0)) not in closed]
-        to_open = select_items_to_open(roadmap, remaining)
+        to_open = select_items_to_open(roadmap, remaining, limit=args.count)
         if not to_open:
             print("[roadmap-bot] Active contributor queue is already full; nothing new to open.")
             return 0
