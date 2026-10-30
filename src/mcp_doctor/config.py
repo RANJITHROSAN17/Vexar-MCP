@@ -9,10 +9,18 @@ Resolution order, highest precedence first:
 1. explicit CLI flags (``--policy``, ``--fail-on``, ``--min-score``, ``--max-tokens``,
    ``--ignore``, ``--rule-pack``)
 2. the configuration file's own keys
-3. the selected policy preset's defaults
+3. files it inherits through ``extends``, nearest ancestor first
+4. the selected policy preset's defaults
+
+``extends`` takes a built-in preset name or a path to another configuration file,
+resolved relative to the file that declares it. Chains are applied root-first and may
+nest (organisation -> team -> repository). Cycles and dangling targets are errors, not
+silent fallbacks, and protected categories accumulate along the chain so a child file
+cannot silence a rule an ancestor protected.
 
 Configuration keys (all optional)::
 
+    extends = "../org/vexar-mcp.toml"   # preset name or path to inherit from
     policy = "strict-prod"          # default, ci, strict-prod, enterprise-governance
     fail-on = "warning"            # error | warning | info | never
     min-score = 90                 # 0-100
@@ -33,8 +41,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from mcp_doctor.models import ScanConfig, Severity
-from mcp_doctor.policies import PolicyPreset, apply_policy, resolve_policy
+from mcp_doctor.models import ScanConfig
+from mcp_doctor.policies import (
+    POLICIES,
+    PolicyLayer,
+    PolicyViolation,
+    resolve_policy_layers,
+)
 from mcp_doctor.rules import get_rule_catalog
 
 if sys.version_info >= (3, 11):
@@ -48,6 +61,7 @@ PYPROJECT_TABLES = ("vexar-mcp", "mcp-doctor")
 
 _KNOWN_KEYS = frozenset(
     {
+        "extends",
         "policy",
         "fail-on",
         "min-score",
@@ -59,7 +73,9 @@ _KNOWN_KEYS = frozenset(
         "baseline",
     }
 )
-_VALID_FAIL_ON = frozenset({"error", "warning", "info", "never"})
+#: How deep an ``extends`` chain may nest before the loader refuses to continue.
+#: Real organisation chains are two or three levels; anything deeper is a mistake.
+_MAX_EXTENDS_DEPTH = 16
 
 
 def _read_toml(path: Path) -> dict[str, Any]:
@@ -71,16 +87,21 @@ def _read_toml(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _select_pyproject_table(doc: dict[str, Any]) -> dict[str, Any]:
-    """Return the first recognised ``[tool.<name>]`` table from a pyproject file."""
+def _select_pyproject_table_named(doc: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Return the first recognised ``[tool.<name>]`` table and the name it used."""
     tool_tbl = doc.get("tool", {})
     if not isinstance(tool_tbl, dict):
-        return {}
+        return {}, None
     for table in PYPROJECT_TABLES:
         candidate = tool_tbl.get(table)
         if isinstance(candidate, dict):
-            return candidate
-    return {}
+            return candidate, table
+    return {}, None
+
+
+def _select_pyproject_table(doc: dict[str, Any]) -> dict[str, Any]:
+    """Return the first recognised ``[tool.<name>]`` table from a pyproject file."""
+    return _select_pyproject_table_named(doc)[0]
 
 
 def _search_dirs(start_dir: Path | None) -> list[Path]:
@@ -146,6 +167,138 @@ def _as_int(raw: Any, key: str) -> int | None:
     return raw
 
 
+def _document_and_table(path: Path) -> tuple[dict[str, Any], str | None]:
+    """Read one configuration file and return its keys plus the table name it used."""
+    document = _read_toml(path)
+    if path.name == "pyproject.toml":
+        return _select_pyproject_table_named(document)
+    return document, None
+
+
+def _origin(path: Path, table: str | None) -> str:
+    """Render a layer origin the way ``--print-config`` reports it."""
+    return f"{path} [tool.{table}]" if table else str(path)
+
+
+def _layer_from_document(
+    raw: dict[str, Any], origin: str, *, strict_keys: bool = True
+) -> tuple[PolicyLayer, str | None]:
+    """Validate one configuration document and turn it into a :class:`PolicyLayer`.
+
+    Returns the layer and the raw ``extends`` target, if any. Every error names the file
+    it came from, because an inheritance chain makes "which file said this" the first
+    question anyone asks.
+    """
+    if strict_keys:
+        unknown = sorted(set(raw) - _KNOWN_KEYS)
+        if unknown:
+            raise ValueError(
+                f"{origin}: unknown configuration key(s): "
+                + ", ".join(unknown)
+                + ". Supported keys: "
+                + ", ".join(sorted(_KNOWN_KEYS))
+            )
+
+    extends = raw.get("extends")
+    if extends is not None and not isinstance(extends, str):
+        raise ValueError(f"{origin}: 'extends' must be a preset name or a file path")
+    policy = raw.get("policy")
+    if policy is not None and not isinstance(policy, str):
+        raise ValueError(f"{origin}: 'policy' must be a preset name")
+    fail_on = raw.get("fail-on")
+    if fail_on is not None and not isinstance(fail_on, str):
+        raise ValueError(f"{origin}: configuration key 'fail-on' must be a string")
+
+    try:
+        layer = PolicyLayer(
+            origin=origin,
+            preset_name=policy,
+            fail_on=fail_on,
+            min_score=_as_int(raw.get("min-score"), "min-score"),
+            max_tool_tokens=_as_int(raw.get("max-tool-tokens"), "max-tool-tokens"),
+            max_server_tokens=_as_int(raw.get("max-server-tokens"), "max-server-tokens"),
+            ignore=tuple(_as_str_list(raw.get("ignore"), "ignore")),
+            exclude=tuple(_as_str_list(raw.get("exclude"), "exclude")),
+            rule_packs=tuple(_as_str_list(raw.get("rule-packs"), "rule-packs")),
+        )
+    except ValueError as exc:
+        raise ValueError(f"{origin}: {exc}") from None
+    return layer, (extends.strip() if extends and extends.strip() else None)
+
+
+def _match_preset(name: str) -> str | None:
+    """Return the canonical preset name for ``name``, or ``None`` if it is not one."""
+    candidate = name.strip().lower()
+    return candidate if candidate in POLICIES else None
+
+
+def _collect_layers(
+    path: Path,
+    seen: list[Path],
+    *,
+    depth: int = 0,
+    strict_keys: bool = True,
+) -> list[PolicyLayer]:
+    """Resolve one configuration file and everything it inherits, root layer first.
+
+    Args:
+        path: Configuration file to read.
+        seen: Files already on the current chain, used to detect cycles.
+        depth: Current nesting depth.
+        strict_keys: Reject unrecognised keys instead of ignoring them.
+
+    Returns:
+        Layers ordered from the most ancestral file to ``path`` itself.
+
+    Raises:
+        PolicyViolation: On a cycle, an over-deep chain, or an ``extends`` value that is
+            neither a preset nor an existing file.
+        ValueError: When the file is missing, unreadable, or contains invalid keys.
+    """
+    resolved = path.resolve()
+    if resolved in seen:
+        cycle = " -> ".join([*(str(item) for item in seen), str(resolved)])
+        raise PolicyViolation(f"policy 'extends' cycle: {cycle}")
+    if depth > _MAX_EXTENDS_DEPTH:
+        raise PolicyViolation(
+            f"policy 'extends' chain deeper than {_MAX_EXTENDS_DEPTH} levels at {resolved}"
+        )
+    if not resolved.is_file():
+        raise ValueError(f"configuration file not found: {path}")
+
+    raw, table = _document_and_table(resolved)
+    if resolved.name == "pyproject.toml" and table is None:
+        raise ValueError(f"{resolved}: no [tool.{PYPROJECT_TABLES[0]}] table to inherit from")
+    origin = _origin(resolved, table)
+    layer, extends = _layer_from_document(raw, origin, strict_keys=strict_keys)
+
+    layers: list[PolicyLayer] = []
+    if extends:
+        preset = _match_preset(extends)
+        if preset is not None:
+            # A preset is the root of a chain: it contributes defaults and, importantly, its
+            # protected categories, which the rest of the chain can only widen.
+            layers.append(PolicyLayer(origin=f"{origin} extends '{preset}'", preset_name=preset))
+        else:
+            target = (resolved.parent / extends).resolve()
+            if not target.is_file():
+                known = ", ".join(sorted(POLICIES))
+                raise PolicyViolation(
+                    f"{origin}: extends = '{extends}' is neither a built-in preset "
+                    f"({known}) nor a configuration file ({target})"
+                )
+            layers.extend(
+                _collect_layers(
+                    target,
+                    [*seen, resolved],
+                    depth=depth + 1,
+                    strict_keys=strict_keys,
+                )
+            )
+    layers.append(layer)
+    return layers
+
+
 def load_config(
     config_path: Path | None = None,
     start_dir: Path | None = None,
@@ -184,98 +337,55 @@ def load_config(
         ValueError: On unreadable files, unknown keys, invalid values, or a policy
             violation such as ignoring a protected security rule.
     """
-    raw_cfg: dict[str, Any] = {}
     search_root = (start_dir or Path.cwd()).resolve()
     if search_root.is_file():
         search_root = search_root.parent
 
-    if config_path is not None:
-        raw_cfg = _read_toml(config_path)
-        if "tool" in raw_cfg and isinstance(raw_cfg["tool"], dict):
-            raw_cfg = _select_pyproject_table(raw_cfg) or raw_cfg
-    else:
-        found = discover_config(search_root)
-        if found is not None:
-            document = _read_toml(found)
-            raw_cfg = (
-                _select_pyproject_table(document) if found.name == "pyproject.toml" else document
-            )
-
-    if strict_keys:
-        unknown = sorted(set(raw_cfg) - _KNOWN_KEYS)
-        if unknown:
-            raise ValueError(
-                "unknown configuration key(s): "
-                + ", ".join(unknown)
-                + ". Supported keys: "
-                + ", ".join(sorted(_KNOWN_KEYS))
-            )
-
-    preset: PolicyPreset = resolve_policy(policy_override or raw_cfg.get("policy"))
-
-    max_tool_tokens = _as_int(raw_cfg.get("max-tool-tokens"), "max-tool-tokens")
-    if max_tool_tokens is None:
-        max_tool_tokens = preset.max_tool_tokens
-    if max_tokens_override is not None:
-        max_tool_tokens = max_tokens_override
-
-    max_server_tokens = _as_int(raw_cfg.get("max-server-tokens"), "max-server-tokens")
-    if max_server_tokens is None:
-        max_server_tokens = preset.max_server_tokens
-
-    min_score = _as_int(raw_cfg.get("min-score"), "min-score")
-    if min_score is None:
-        min_score = preset.min_score
-    if min_score_override is not None:
-        min_score = min_score_override
-    if not 0 <= min_score <= 100:
-        raise ValueError(f"'min-score' must be between 0 and 100, got {min_score}")
-
-    fail_on_raw = fail_on_override or str(raw_cfg.get("fail-on", preset.fail_on.value)).lower()
-    if fail_on_raw == "never":
-        fail_on = None
-    elif fail_on_raw in _VALID_FAIL_ON:
-        fail_on = Severity(fail_on_raw)
-    else:
-        raise ValueError(
-            f"invalid 'fail-on' value '{fail_on_raw}'. "
-            f"Use one of: {', '.join(sorted(_VALID_FAIL_ON))}"
-        )
-
-    requested_ignores = {
-        rule.strip().upper() for rule in _as_str_list(raw_cfg.get("ignore"), "ignore")
-    }
-    if extra_ignored_rules:
-        requested_ignores |= {r.strip().upper() for r in extra_ignored_rules if r.strip()}
-    ignored = apply_policy(
-        preset,
-        catalog=get_rule_catalog(),
-        ignored_rules=frozenset(requested_ignores),
-        allow_unknown=allow_unknown_rules,
+    primary = config_path if config_path is not None else discover_config(search_root)
+    layers: list[PolicyLayer] = (
+        _collect_layers(primary, [], strict_keys=strict_keys) if primary is not None else []
     )
 
-    default_excludes = ScanConfig().exclude_globs
-    custom_excludes = tuple(x for x in _as_str_list(raw_cfg.get("exclude"), "exclude") if x.strip())
-    exclude_globs = custom_excludes if custom_excludes else default_excludes
+    cli = PolicyLayer(
+        origin="cli",
+        preset_name=policy_override,
+        fail_on=fail_on_override,
+        min_score=min_score_override,
+        max_tool_tokens=max_tokens_override,
+        ignore=tuple(sorted(rule.strip() for rule in extra_ignored_rules or () if rule.strip())),
+        rule_packs=tuple(pack for pack in extra_rule_packs or () if pack),
+    )
 
-    rule_packs = list(_as_str_list(raw_cfg.get("rule-packs"), "rule-packs"))
-    if extra_rule_packs:
-        rule_packs.extend(pack for pack in extra_rule_packs if pack)
+    resolved = resolve_policy_layers(
+        layers,
+        catalog=get_rule_catalog(),
+        cli=cli if cli.contributed() else None,
+        allow_unknown=allow_unknown_rules,
+        default_excludes=ScanConfig().exclude_globs,
+    )
 
     return ScanConfig(
-        max_tool_tokens=max_tool_tokens,
-        max_server_tokens=max_server_tokens,
-        ignored_rules=ignored,
-        policy_name=preset.name,
-        fail_on=fail_on,
-        min_score=min_score,
-        rule_packs=tuple(dict.fromkeys(rule_packs)),
-        exclude_globs=exclude_globs,
+        max_tool_tokens=resolved.max_tool_tokens,
+        max_server_tokens=resolved.max_server_tokens,
+        ignored_rules=resolved.ignored_rules,
+        policy_name=resolved.preset.name,
+        fail_on=resolved.fail_on,
+        min_score=resolved.min_score,
+        rule_packs=resolved.rule_packs,
+        exclude_globs=resolved.exclude_globs,
+        policy_chain=resolved.chain,
+        policy_sources=resolved.sources,
+        protected_categories=tuple(category.value for category in resolved.protected_categories),
     )
 
 
 def describe_config(config: ScanConfig) -> dict[str, Any]:
-    """Return a JSON-serializable view of the effective configuration."""
+    """Return a JSON-serializable view of the effective configuration.
+
+    The flat keys are the effective values. ``resolution`` explains them: the chain of
+    layers from the most ancestral file to the CLI, which settings each one contributed,
+    and which layer won for every effective setting.
+    """
     return {
         "policy": config.policy_name,
         "fail_on": config.fail_on.value if config.fail_on is not None else "never",
@@ -285,4 +395,12 @@ def describe_config(config: ScanConfig) -> dict[str, Any]:
         "ignore": sorted(config.ignored_rules),
         "exclude": list(config.exclude_globs),
         "rule_packs": list(config.rule_packs),
+        "protected_categories": list(config.protected_categories),
+        "resolution": {
+            "chain": [
+                {"origin": origin, "contributed": list(contributed)}
+                for origin, contributed in config.policy_chain
+            ],
+            "sources": dict(config.policy_sources),
+        },
     }

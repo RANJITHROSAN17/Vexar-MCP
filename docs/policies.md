@@ -38,12 +38,103 @@ floor alone, keep the default threshold and set `--min-score`.
 Highest wins:
 
 1. explicit CLI flags — `--policy`, `--fail-on`, `--min-score`, `--max-tokens`, `--ignore`
-2. the `[policy]`-style keys in the project configuration file
+2. the configuration file nearest the code, then each file it [inherits](#inheritance-one-org-standard-narrow-team-exceptions)
 3. the selected preset's defaults
 
 Run `--print-config` in CI and commit the output if you want enforcement to be visible in
 review. It also prints which file was used, so "why is CI stricter than my laptop" is a
 five-second answer.
+
+## Inheritance: one org standard, narrow team exceptions
+
+An enterprise needs a single reviewed standard with small, explicable team deviations. Copying
+the org file into every repository is how that standard silently drifts, so a configuration
+file can inherit instead:
+
+```toml
+# servers/payments/vexar-mcp.toml
+extends = "../../standards/org.toml"   # a file, or a preset name like "strict-prod"
+policy = "default"                    # this team's deliberate deviation
+min-score = 95                        # ...overriding only what it must
+```
+
+`extends` accepts either a built-in preset name (`extends = "strict-prod"`) or a path to
+another configuration file, resolved **relative to the file that declares it**, not to your
+working directory. Chains nest, so `org -> team -> repo` is three files and one `extends`
+each. Cycles, self-references, dangling targets and chains deeper than 16 levels are
+configuration errors (exit `2`), never a silent fallback.
+
+### Precedence across the chain
+
+Layers apply **root-first**, nearest-to-the-code last:
+
+| Setting | Rule |
+| :--- | :--- |
+| `policy`, `fail-on`, `min-score`, `max-tool-tokens`, `max-server-tokens` | **Nearest layer wins.** A child overrides its parent. |
+| `ignore`, `exclude` | **Accumulate.** A child adds; it cannot drop a parent's entry. |
+| `rule-packs` | **Accumulate**, in chain order, without duplicates. |
+| `protected_categories` | **Accumulate.** See below. |
+| CLI flags | Beat every file layer. |
+
+`ignore` accumulating is the deliberate part: if a child could replace the parent's list, then
+"inherit the org standard" would be indistinguishable from "start from scratch", and the
+diff that removed an entry would be one line nobody reads.
+
+### Protected categories cannot be re-enabled for ignoring
+
+Protection accumulates down the chain and nothing in the chain can widen what is ignorable
+back out. Extending a strict org file and then selecting a weaker preset does **not** unlock
+the org's protected rules:
+
+```console
+$ cat servers/payments/vexar-mcp.toml
+extends = "../../standards/org.toml"   # org file: policy = "strict-prod"
+policy = "default"
+ignore = ["MCP005"]
+
+$ vexar-mcp scan servers/payments
+vexar-mcp: error: servers/payments/vexar-mcp.toml: inherits protection of security rules
+from an extended policy (the effective preset 'default' does not protect them itself), so
+this cannot be ignored: MCP005. Protection can only be narrowed by editing the configuration
+that declares it. Demote or fix the finding instead.
+```
+
+Exit `2`. The error names **the file that tried**, not the ancestor that protected the rule,
+because that is the file someone has to edit. The same holds for a CLI flag: `--policy
+default` does not lift protection a committed file declared — a flag is ephemeral, the
+reviewed configuration is not. Narrowing protection is done by editing the file that declares
+it, which is exactly the change review is supposed to see.
+
+### Auditing the chain
+
+`--print-config` reports the effective values, the layer that produced each one, and what
+every layer contributed:
+
+```console
+$ vexar-mcp scan servers/payments --print-config
+{
+  "policy": "default",
+  "fail_on": "error",
+  "min_score": 95,
+  "protected_categories": ["security"],
+  "resolution": {
+    "chain": [
+      {"origin": "/repo/standards/org.toml", "contributed": ["policy", "max-tool-tokens", "ignore"]},
+      {"origin": "/repo/servers/payments/vexar-mcp.toml", "contributed": ["policy", "min-score"]}
+    ],
+    "sources": {
+      "policy": "/repo/servers/payments/vexar-mcp.toml",
+      "min-score": "/repo/servers/payments/vexar-mcp.toml",
+      "max-tool-tokens": "/repo/standards/org.toml",
+      "ignore": "/repo/standards/org.toml"
+    }
+  }
+}
+```
+
+`chain` is ordered root-first and includes `cli` as its last layer when flags were passed, so
+"why is CI stricter than my laptop" is answered by reading two lines. Commit the output if you
+want enforcement visible in review.
 
 ## Protected rules
 
@@ -72,6 +163,7 @@ in `pyproject.toml`. Discovery walks up from the scan target to the first `.git`
 project-level file applies to every subdirectory scan.
 
 ```toml
+extends = "../org/vexar-mcp.toml"   # inherit a preset name or another config file
 policy = "strict-prod"       # default | ci | strict-prod | enterprise-governance
 fail-on = "warning"          # error | warning | info | never
 min-score = 90               # 0-100

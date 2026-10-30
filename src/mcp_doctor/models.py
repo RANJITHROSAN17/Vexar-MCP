@@ -176,6 +176,14 @@ class ScanConfig:
         "dist",
         "build",
     )
+    # Policy inheritance audit trail: (origin, settings contributed) per layer, root
+    # layer first. Empty when no configuration file participates.
+    policy_chain: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    # Effective setting -> the origin that supplied it, surfaced by --print-config.
+    policy_sources: tuple[tuple[str, str], ...] = ()
+    # Categories the effective policy protects from being ignored. Accumulates down an
+    # inheritance chain, so a child policy can only widen it.
+    protected_categories: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
