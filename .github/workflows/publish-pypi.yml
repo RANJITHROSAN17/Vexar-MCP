@@ -1,5 +1,18 @@
 name: Publish to PyPI (Trusted Publishing)
 
+# The chain this workflow participates in, and why each trigger exists:
+#
+#   git tag vX.Y.Z ──► release.yml (build, test, create GitHub Release)
+#                          └─► calls this workflow directly (workflow_call)
+#   GitHub Release published by hand ──► release: published
+#   Maintainer wants a dry run ──► workflow_dispatch (dry-run defaults to true)
+#
+# `release: published` alone is not enough. release.yml creates the GitHub Release with the
+# repository's GITHUB_TOKEN, and GitHub does not start workflows for events caused by
+# GITHUB_TOKEN - so a tag push would build a release that never reaches PyPI. The explicit
+# workflow_call hand-off is what closes that gap; skip-existing keeps the two paths from
+# colliding if both ever fire.
+
 on:
   release:
     types: [published]
@@ -9,17 +22,94 @@ on:
         description: "Build and verify only; do not upload to PyPI"
         type: boolean
         default: true
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v0.2.7. Empty means 'use the caller's ref'."
+        type: string
+        required: false
+        default: ""
+      dry-run:
+        description: "Build and verify only; do not upload to PyPI"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  verify:
+    name: Verify the release is releasable
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: python -m pip install --upgrade pip
+
+      # A release event carries the tag; a called run is handed one; a dispatch is usually a
+      # branch and has none. All three resolve to one version here so the steps below do not
+      # each re-derive it differently.
+      - name: Resolve the version this run is publishing
+        id: resolve
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-${RELEASE_TAG:-}}"
+          if [ -z "$tag" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if [ -n "$tag" ] && [[ "$tag" != v* ]]; then
+            echo "::error::release tags must look like v1.2.3, got '$tag'"
+            exit 1
+          fi
+          if [ -z "$tag" ]; then
+            version="$(python -c 'import tomllib,pathlib;print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+            echo "no release tag on this ref; verifying the working tree at $version"
+          else
+            version="${tag#v}"
+          fi
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
+      # Version, distribution name, changelog, OIDC wiring and the release hand-off, in one
+      # place. With a tag, the tag itself must agree with pyproject.toml and __init__.py.
+      - name: Verify version, changelog and publish wiring agree
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TAG" ]; then
+            python scripts/verify_release.py --tag "$TAG"
+          else
+            python scripts/verify_release.py
+          fi
+
+      - name: Verify the suite passes on the commit being published
+        run: |
+          python -m pip install -e ".[dev]"
+          pytest --cov=mcp_doctor --cov-report=term-missing --cov-fail-under=85
+
   build:
     name: Build and verify distributions
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -35,31 +125,21 @@ jobs:
 
       - name: Verify the wheel really contains the package
         # Catches the packaging bug where the build succeeds but ships an empty wheel.
+        env:
+          EXPECTED_VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
           python - <<'PY'
-          import subprocess, sys, zipfile
+          import os, zipfile
           from pathlib import Path
 
+          expected = os.environ["EXPECTED_VERSION"]
           wheel = next(Path("dist").glob("*.whl"))
           names = zipfile.ZipFile(wheel).namelist()
           assert any(n.endswith("mcp_doctor/cli.py") for n in names), names[:10]
           assert any("entry_points.txt" in n for n in names), "missing console script metadata"
+          assert f"-{expected}-" in wheel.name, f"{wheel.name} is not version {expected}"
           print(f"wheel check: OK ({wheel.name}, {len(names)} entries)")
-          PY
-
-      - name: Confirm the version matches the tag
-        if: github.event_name == 'release'
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import os, tomllib
-          from pathlib import Path
-
-          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
-          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
-          assert version == tag, f"pyproject version {version} != release tag {tag}"
-          print(f"version check: OK ({version})")
           PY
 
       - name: Upload distributions
@@ -70,8 +150,12 @@ jobs:
 
   publish:
     name: Upload to PyPI via OIDC
-    needs: build
-    if: github.event_name == 'release' || inputs.dry-run == false
+    needs: [verify, build]
+    # A release event publishes; a dispatch or a call publishes only when dry-run is false.
+    if: >-
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.dry-run == false) ||
+      (github.event_name == 'workflow_call' && inputs.dry-run == false)
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -90,3 +174,95 @@ jobs:
         # permission. `twine upload` cannot do this, which is why the previous workflow could
         # never have published despite declaring id-token: write.
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run, or the release event arriving after the called workflow already
+          # published, must not turn into a red run on a release that is actually fine.
+          skip-existing: true
+
+  prove-install:
+    name: Prove pip install yields a working vexar-mcp
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # PyPI serves a new upload to the JSON API immediately but the simple index lags a few
+      # seconds behind, so an immediate pip install can 404 on a file that does exist.
+      - name: Install the published version from PyPI in a clean environment
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/proof
+          for attempt in $(seq 1 12); do
+            if /tmp/proof/bin/pip install --quiet --no-cache-dir "vexar-mcp==${VERSION}"; then
+              echo "installed vexar-mcp==${VERSION} on attempt ${attempt}"
+              exit 0
+            fi
+            echo "PyPI index is not serving ${VERSION} yet (attempt ${attempt}/12); retrying in 15s"
+            sleep 15
+          done
+          echo "::error::vexar-mcp==${VERSION} never became installable from PyPI"
+          exit 1
+
+      - name: The console script reports the published version
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          installed="$(/tmp/proof/bin/vexar-mcp --version)"
+          test "$installed" = "vexar-mcp ${VERSION}" || {
+            echo "::error::expected 'vexar-mcp ${VERSION}', got '$installed'"
+            exit 1
+          }
+          echo "version: $installed"
+
+      # `--version` proves the entry point resolves. This proves the analyzer survived
+      # packaging: a real server is parsed and scored by the *installed* wheel, in a venv that
+      # does not have the repository's source on the path.
+      - name: The installed wheel still scans an MCP server
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/proof_server.py <<'PY'
+          """A minimal, clean MCP server used to prove an installed wheel works."""
+
+          from mcp.server.fastmcp import FastMCP
+
+          server = FastMCP("proof")
+
+
+          @server.tool()
+          def add_numbers(a: int, b: int) -> int:
+              """Add two integers and return the sum.
+
+              Args:
+                  a: The first integer.
+                  b: The second integer.
+              """
+              return a + b
+
+
+          if __name__ == "__main__":
+              server.run()
+          PY
+          /tmp/proof/bin/vexar-mcp scan /tmp/proof_server.py --format json --output /tmp/proof.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("/tmp/proof.json").read_text())
+          summary = report["summary"]
+          assert report["analysis_complete"] is True, "the installed wheel could not analyze the file"
+          assert summary["tools_scanned"] == 1, summary
+          assert summary["score"] == 100, summary
+          assert not report["diagnostics"], report["diagnostics"]
+          print(f"scan proof: score={summary['score']} tools={summary['tools_scanned']}")
+          PY

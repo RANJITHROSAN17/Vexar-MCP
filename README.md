@@ -505,6 +505,7 @@ The repository publishes this viewer to GitHub Pages on every push to `main`: `d
 | Wire this into CI | [`docs/github-actions.md`](docs/github-actions.md) |
 | Know what it will *not* catch | [`docs/limitations.md`](docs/limitations.md) |
 | Render a report in the dashboard | [`docs/dashboard.md`](docs/dashboard.md) |
+| Publish a release to PyPI | [`docs/publishing.md`](docs/publishing.md) |
 | Understand the internals | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Contribute a rule, loader, or reporter | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | Understand how the README and demo are maintained | [`docs/first-impression.md`](docs/first-impression.md) |

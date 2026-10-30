@@ -128,9 +128,18 @@ intention:
 
 ### Release checklist
 
-1. `CHANGELOG.md` has a section for the version, with any "Policy changes" note.
+1. `CHANGELOG.md` has a dated section for the version, with any "Policy changes" note.
 2. `pyproject.toml` and `src/mcp_doctor/__init__.py` versions match.
 3. CI green on all supported Python versions.
 4. Dogfood jobs green — including the intentional exit-`1` assertion.
-5. Tag `vX.Y.Z`, publish, and verify `pip install` plus `vexar-mcp --version` in a clean
-   environment.
+5. `python scripts/verify_release.py --tag vX.Y.Z` passes locally — versions, distribution
+   name, changelog, OIDC wiring and the release hand-off, with no network or account needed.
+6. Tag `vX.Y.Z` and push it. `release.yml` verifies the tag, publishes the GitHub Release,
+   and calls the publish workflow itself; do not expect the `release: published` event to
+   fire from a tag push, because a Release created with `GITHUB_TOKEN` starts no workflow.
+7. Confirm the *Prove pip install yields a working vexar-mcp* job ran and passed. It installs
+   the published version in a clean venv and scans a real server, which is the only evidence
+   that publishing works end to end.
+
+The PyPI side of this — the pending trusted publisher, the dry run, the failure table — is
+documented in [publishing](publishing.md).
