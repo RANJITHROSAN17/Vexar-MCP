@@ -336,6 +336,11 @@ The most common way a security gate dies is not being defeated — it is being q
 silenced one rule at a time. Exit codes make the distinction explicit: `1` means a gate
 failed, `2` means the invocation or configuration was wrong.
 
+One standard, narrow team exceptions: a file can `extends = "../org/vexar-mcp.toml"` and
+override only what that team must — nearest layer wins, protected rules cannot be re-opened,
+and `--print-config` shows which file contributed each setting. See
+[policy inheritance](docs/policies.md#inheritance-one-org-standard-narrow-team-exceptions).
+
 Details: [`docs/policies.md`](docs/policies.md).
 
 ---

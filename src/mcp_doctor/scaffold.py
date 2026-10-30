@@ -92,6 +92,12 @@ def render_config_text(preset: str | None = None) -> str:
 # Check what a scan actually uses -- file, preset and flags combined -- with:
 #     vexar-mcp scan --print-config
 #
+# Inherit another policy file instead of copying it: a built-in preset name, or a path to
+# another vexar-mcp.toml resolved relative to this file. Team files extend the org standard
+# and override only what they must; protected categories accumulated up the chain cannot be
+# lifted further down. Uncomment and set a target to opt in.
+# extends = "../org/vexar-mcp.toml"
+
 # Enforcement preset: {available}.
 # `default` fails on errors only; `ci` fails on warnings with a B (80) score floor;
 # `strict-prod` and `enterprise-governance` fail on more and forbid ignoring security rules.

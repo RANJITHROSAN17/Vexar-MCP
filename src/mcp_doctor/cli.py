@@ -34,7 +34,7 @@ from mcp_doctor.baseline import (
 from mcp_doctor.config import describe_config, discover_config, load_config
 from mcp_doctor.engine import scan_paths, scan_server
 from mcp_doctor.live import LiveAuditError
-from mcp_doctor.models import Diagnostic, ScanConfig, ScanReport, ScanStatus
+from mcp_doctor.models import Category, Diagnostic, ScanConfig, ScanReport, ScanStatus
 from mcp_doctor.policies import PolicyViolation, apply_policy, list_policies, resolve_policy
 from mcp_doctor.reporters import (
     render_github_annotations,
@@ -349,6 +349,13 @@ def _resolve_config(args: argparse.Namespace) -> ScanConfig:
     load_rule_packs(cfg.rule_packs)
 
     preset = resolve_policy(cfg.policy_name)
+    if cfg.protected_categories:
+        # Protections accumulate down an inheritance chain, so the second validation pass
+        # has to use the widened set rather than the bare preset it came from.
+        preset = replace(
+            preset,
+            protected_categories=tuple(Category(name) for name in cfg.protected_categories),
+        )
     validated = apply_policy(preset, catalog=get_rule_catalog(), ignored_rules=cfg.ignored_rules)
     return replace(cfg, ignored_rules=validated)
 

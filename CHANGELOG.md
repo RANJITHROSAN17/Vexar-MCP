@@ -18,6 +18,33 @@ Versioning contract, so upgrades are predictable:
 
 ## [Unreleased]
 
+### Added
+
+- **Policy inheritance.** A configuration file can now declare
+  `extends = "strict-prod"` or point at another configuration file
+  (`extends = "../org/vexar-mcp.toml"`), and chains nest to any practical depth. Layers apply
+  root-first, so the file nearest the code wins for `policy`, `fail-on`, `min-score`,
+  `max-tool-tokens` and `max-server-tokens`, while `ignore`, `exclude` and `rule-packs`
+  accumulate down the chain. Cycles, self-references, dangling targets and chains deeper than
+  16 levels are configuration errors (exit `2`) rather than silent fallbacks.
+- **An auditable resolution chain.** `--print-config` now reports a `resolution` block: every
+  layer root-first with the settings it contributed, plus a `sources` map naming the layer that
+  supplied each effective setting and `protected_categories` for the accumulated protection.
+  The pre-existing flat keys are unchanged. Closes
+  [issue #52](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/52).
+- `vexar-mcp init` documents the new `extends` key in the generated configuration.
+
+### Changed
+
+- **Policy change — inherited protection is monotonic.** Protected categories now accumulate
+  across the resolution chain, and nothing in the chain can re-open them for ignoring. A file
+  that extends a preset protecting security rules and then selects a weaker preset still
+  cannot ignore those rules, and neither can `--policy default` on the command line: protection
+  is narrowed by editing the reviewed configuration, which is the change review should see.
+  Errors name the file or flag that attempted it. Scans *without* a configuration file are
+  unaffected — `--policy default --ignore MCP005` still works where nothing declared
+  protection. Reviewed as a security-relevant tightening, not a loosening.
+
 ### Fixed
 
 - **A tag push now actually reaches PyPI.** `release.yml` creates the GitHub Release with
