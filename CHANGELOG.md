@@ -18,7 +18,28 @@ Versioning contract, so upgrades are predictable:
 
 ## [Unreleased]
 
-(Reserved for the next release.)
+### Fixed
+
+- **A tag push now actually reaches PyPI.** `release.yml` creates the GitHub Release with
+  `GITHUB_TOKEN`, and GitHub does not start workflows for events caused by `GITHUB_TOKEN`, so
+  the publish workflow's `release: published` trigger never fired for a tag. `release.yml` now
+  calls `publish-pypi.yml` directly, and `skip-existing` keeps the direct call and the release
+  event from colliding. Closes
+  [issue #50](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/50).
+
+### Added
+
+- **`scripts/verify_release.py`** — one offline check that the version in `pyproject.toml`,
+  `src/mcp_doctor/__init__.py` and the release tag agree, that the distribution still
+  normalizes to `vexar-mcp`, that the changelog has a dated section for it, and that the
+  publish workflow still authenticates with OIDC instead of a `twine upload` that cannot.
+  `--pypi` adds PyPI's view; it is the first thing that tells a first-time publisher to
+  register a *pending* trusted publisher.
+- **A post-publish install proof.** After the upload, the release pipeline installs
+  `vexar-mcp==<version>` in a clean venv and scans a real MCP server with it, so "the upload
+  succeeded" and "the package works" are no longer the same claim.
+- **[`docs/publishing.md`](docs/publishing.md)** — the PyPI runbook: pending trusted
+  publisher fields, dry run, first release, verification, and a failure table.
 
 ---
 

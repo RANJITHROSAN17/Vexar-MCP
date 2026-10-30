@@ -45,6 +45,12 @@ jobs:
       - name: Typecheck with Mypy
         run: mypy src
 
+      # Release wiring rots between releases: a version bump that misses one of the three
+      # places it is written, or a publish workflow edited back into a shape that cannot
+      # authenticate. Both are silent until a release is attempted, so they are checked here.
+      - name: Verify the release wiring
+        run: python scripts/verify_release.py
+
       - name: Run Pytest with Coverage Gate
         run: pytest --cov=mcp_doctor --cov-report=term-missing --cov-fail-under=85
 
