@@ -270,3 +270,19 @@ class TestCommandLine:
         captured = capsys.readouterr()
         assert "problem(s) found" in captured.err
         assert "stale" in captured.err
+
+
+class TestPublishEventCondition:
+    def test_tag_caller_is_not_mistaken_for_a_workflow_call_event(self) -> None:
+        # A called workflow inherits the caller's event. Previously the tag build
+        # was green while publish and install-proof were silently skipped.
+        workflow = (ROOT / ".github/workflows/publish-pypi.yml").read_text(encoding="utf-8")
+        publish = workflow.split("  publish:\n", 1)[1].split("    runs-on:", 1)[0]
+        condition = " ".join(publish.split("    if: >-", 1)[1].split())
+        assert "github.event_name == 'workflow_call'" not in condition
+        assert (
+            "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') "
+            "&& inputs.dry-run == false)"
+        ) in condition
+        assert "(github.event_name == 'workflow_dispatch' && inputs.dry-run == false)" in condition
+        assert "github.event_name == 'release'" in condition
