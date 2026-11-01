@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.models import Category, ScanConfig, Severity, ToolSpec
-from mcp_doctor.rules import get_all_rules, get_rule_catalog, register_definition
-from mcp_doctor.rules.base import RuleDefinition
-from mcp_doctor.rules.plugin import (
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.models import Category, ScanConfig, Severity, ToolSpec
+from vexar_mcp.rules import get_all_rules, get_rule_catalog, register_definition
+from vexar_mcp.rules.base import RuleDefinition
+from vexar_mcp.rules.plugin import (
     DeclarativeRule,
     RulePackError,
     ToolMatcher,
@@ -384,8 +384,8 @@ def test_python_pack_loading(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         '''
         """Trusted Python rule pack used by tests."""
 
-        from mcp_doctor.models import Category, Diagnostic, Severity
-        from mcp_doctor.rules import register_rule
+        from vexar_mcp.models import Category, Diagnostic, Severity
+        from vexar_mcp.rules import register_rule
 
 
         def register() -> None:

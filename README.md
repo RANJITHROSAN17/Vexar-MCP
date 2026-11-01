@@ -185,7 +185,7 @@ flowchart LR
 ### Repository layout
 
 ```text
-src/mcp_doctor/
+src/vexar_mcp/
 ├── cli.py                 # argparse surface: scan, audit-server, baseline, policy, rules,
 │                          # token-report, simulate, init
 ├── engine.py              # discovery → load → rule execution → report assembly
@@ -260,7 +260,7 @@ python -m pip install -e ".[dev,yaml]"
 Then run the same gate CI runs:
 
 ```bash
-ruff check . && mypy src && pytest --cov=mcp_doctor --cov-fail-under=85
+ruff check . && mypy src && pytest --cov=vexar_mcp --cov-fail-under=85
 ```
 </details>
 
@@ -430,7 +430,7 @@ check_package_metadata                     97        1  examples/clean_server.py
 Total context-window tax across 3 tool(s): ~425 tokens/turn
 ```
 
-Prices are a **dated, explicit input** — each rate in [`simulate/pricing.json`](./src/mcp_doctor/simulate/pricing.json) carries the date a human last checked it (`PRICING_AS_OF = "2026-10"` is the oldest). An entry that goes unreviewed for more than 180 days fails the test suite and makes `simulate` print `REVIEW OVERDUE`; an unknown model raises rather than silently falling back. Counts are deterministic offline estimates, not a tokenizer round-trip — see [`docs/limitations.md`](./docs/limitations.md).
+Prices are a **dated, explicit input** — each rate in [`simulate/pricing.json`](./src/vexar_mcp/simulate/pricing.json) carries the date a human last checked it (`PRICING_AS_OF = "2026-10"` is the oldest). An entry that goes unreviewed for more than 180 days fails the test suite and makes `simulate` print `REVIEW OVERDUE`; an unknown model raises rather than silently falling back. Counts are deterministic offline estimates, not a tokenizer round-trip — see [`docs/limitations.md`](./docs/limitations.md).
 
 ### Adopting a gate on dirty code
 
@@ -445,8 +445,8 @@ vexar-mcp baseline show .vexar-baseline.json               # inspect accepted ri
 ```python
 from pathlib import Path
 
-from mcp_doctor import ScanConfig, scan_paths
-from mcp_doctor.reporters.json_reporter import render_json
+from vexar_mcp import ScanConfig, scan_paths
+from vexar_mcp.reporters.json_reporter import render_json
 
 report = scan_paths([Path("src/")], ScanConfig())
 
@@ -714,7 +714,7 @@ ruff format --check .
 mypy src
 
 # Test suite with coverage gate (CI fails under 85%)
-pytest --cov=mcp_doctor --cov-report=term-missing --cov-fail-under=85
+pytest --cov=vexar_mcp --cov-report=term-missing --cov-fail-under=85
 
 # Release wiring: version / tag / changelog agreement
 python scripts/verify_release.py
@@ -796,7 +796,7 @@ python -m pip install -e ".[dev]"
 2. **Branch.** `git checkout -b feat/mcp016-new-rule`
 3. **Implement**, with tests. Conventional Commits titles are enforced by the governance bot: `feat(rules): …`, `fix(ast): …`, `docs: …`.
 4. **Quantify impact.** Every PR must include a **`Quantifiable Impact`** section — before/after/improvement percentages for speed, memory or coverage. Qualitative claims alone are rejected.
-5. **Run the gate locally.** `ruff check . && mypy src && pytest --cov=mcp_doctor --cov-fail-under=85`
+5. **Run the gate locally.** `ruff check . && mypy src && pytest --cov=vexar_mcp --cov-fail-under=85`
 6. **Open the PR** referencing `Closes #<issue>`.
 
 ### Adding a rule in ten minutes
@@ -858,3 +858,14 @@ MIT License · Copyright (c) 2026 Ranjith Rosan
 <p align="center">
   <a href="#what-this-is">Back to top ↑</a>
 </p>
+
+### Python import migration (0.3)
+
+Use `from vexar_mcp import ScanConfig, scan_paths` and `python -m vexar_mcp`.
+The `vexar-mcp` console command and distribution name are unchanged. The old
+`mcp_doctor` import and module command are compatibility shims for **0.3.x only**,
+planned for removal in 0.4. Submodule aliases share the canonical implementation
+and class objects, rather than loading a second scanner. Do not install the
+unrelated `mcp-doctor` distribution alongside this temporary compatibility shim:
+that distribution owns the same legacy namespace. `vexar-autofix` uses its own
+`vexar_autofix` namespace and the canonical scanner imports.

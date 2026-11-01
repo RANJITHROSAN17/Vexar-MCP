@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
-from mcp_doctor.live import (
+from vexar_mcp.cli import main
+from vexar_mcp.live import (
     SUPPORTED_PROTOCOL_VERSIONS,
     VERSION_META_KEY,
     LiveAuditError,

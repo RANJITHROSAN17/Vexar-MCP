@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from mcp_doctor.baseline import build_baseline, compare
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.reporters import render_html
+from vexar_mcp.baseline import build_baseline, compare
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.reporters import render_html
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
 
@@ -50,7 +50,7 @@ def test_html_rows_are_filterable() -> None:
 
 
 def test_html_escapes_hostile_content() -> None:
-    from mcp_doctor.models import Category, Diagnostic, ScanReport, ScanSummary, Severity
+    from vexar_mcp.models import Category, Diagnostic, ScanReport, ScanSummary, Severity
 
     nasty = Diagnostic(
         rule_id="MCP001",

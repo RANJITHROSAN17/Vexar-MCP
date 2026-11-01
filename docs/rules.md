@@ -319,7 +319,7 @@ A finding is a **static signal**, not a confirmed vulnerability. Many are true p
 
 ## Adding a rule
 
-Rules are registered functions in `src/mcp_doctor/rules/`. See [CONTRIBUTING.md](../CONTRIBUTING.md) — a rule is a decorated function plus positive and negative tests.
+Rules are registered functions in `src/vexar_mcp/rules/`. See [CONTRIBUTING.md](../CONTRIBUTING.md) — a rule is a decorated function plus positive and negative tests.
 
 ---
 

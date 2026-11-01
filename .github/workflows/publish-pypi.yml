@@ -101,7 +101,7 @@ jobs:
       - name: Verify the suite passes on the commit being published
         run: |
           python -m pip install -e ".[dev]"
-          pytest --cov=mcp_doctor --cov-report=term-missing --cov-fail-under=85
+          pytest --cov=vexar_mcp --cov-report=term-missing --cov-fail-under=85
 
   build:
     name: Build and verify distributions
@@ -136,7 +136,7 @@ jobs:
           expected = os.environ["EXPECTED_VERSION"]
           wheel = next(Path("dist").glob("*.whl"))
           names = zipfile.ZipFile(wheel).namelist()
-          assert any(n.endswith("mcp_doctor/cli.py") for n in names), names[:10]
+          assert any(n.endswith("vexar_mcp/cli.py") for n in names), names[:10]
           assert any("entry_points.txt" in n for n in names), "missing console script metadata"
           assert f"-{expected}-" in wheel.name, f"{wheel.name} is not version {expected}"
           print(f"wheel check: OK ({wheel.name}, {len(names)} entries)")

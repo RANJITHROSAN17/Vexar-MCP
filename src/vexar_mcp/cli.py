@@ -1,0 +1,1007 @@
+"""Command-line interface for vexar-mcp.
+
+Exit codes are part of the public contract because CI gates depend on them:
+
+* ``0`` - the scan finished and every gate passed
+* ``1`` - the scan finished but a gate failed (severity, score floor, or baseline delta)
+* ``2`` - usage, configuration, I/O, or live-server error; nothing was gated
+* ``3`` - the analysis was incomplete (files could not be parsed): results unreliable
+* ``4`` - no supported MCP tool was found, and the policy requires at least one
+
+Exit ``3`` exists so CI can tell "your code is broken" (``1``) from "we could not read
+your code" (``3``). Both must fail the build, but conflating them teaches teams to ignore
+the gate.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shlex
+import sys
+from collections.abc import Sequence
+from dataclasses import replace
+from pathlib import Path
+
+from vexar_mcp import __version__
+from vexar_mcp.baseline import (
+    BaselineDelta,
+    BaselineError,
+    build_baseline,
+    compare,
+    read_baseline,
+    write_baseline,
+)
+from vexar_mcp.config import describe_config, discover_config, load_config
+from vexar_mcp.engine import scan_paths, scan_server
+from vexar_mcp.live import LiveAuditError
+from vexar_mcp.models import Category, Diagnostic, ScanConfig, ScanReport, ScanStatus
+from vexar_mcp.policies import PolicyViolation, apply_policy, list_policies, resolve_policy
+from vexar_mcp.registry import FleetReport, RegistryError, load_registry, run_fleet
+from vexar_mcp.reporters import (
+    render_github_annotations,
+    render_html,
+    render_json,
+    render_markdown,
+    render_rules_table,
+    render_sarif,
+    render_terminal,
+    render_token_report,
+)
+from vexar_mcp.reporters.fleet import (
+    render_fleet_html,
+    render_fleet_json,
+    render_fleet_terminal,
+)
+from vexar_mcp.rules import get_all_rules, get_rule_catalog
+from vexar_mcp.rules.plugin import RulePackError, load_rule_packs
+from vexar_mcp.scaffold import (
+    WORKFLOW_PATH,
+    describe_next_steps,
+    plan_scaffold,
+    write_scaffold,
+)
+from vexar_mcp.simulate.cost_model import (
+    DEFAULT_CALLS_PER_DAY,
+    PRICING_AS_OF,
+    UnknownModelError,
+    render_projection,
+    simulate,
+)
+
+_FORMATS = ("terminal", "json", "sarif", "markdown", "github", "html")
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="vexar-mcp",
+        description=(
+            "Security, schema and token-cost analyzer for MCP servers. "
+            "Static scans by default; live stdio introspection with `audit-server`."
+        ),
+    )
+    parser.add_argument("--version", action="version", version=f"vexar-mcp {__version__}")
+
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    # ---------------------------------------------------------------- scan
+    scan_p = sub.add_parser("scan", help="Scan MCP server files, directories, or JSON manifests.")
+    scan_p.add_argument("paths", nargs="*", default=["."], help="Files or directories to scan.")
+    scan_p.add_argument(
+        "--format",
+        choices=_FORMATS,
+        default="terminal",
+        help=(
+            "Output format (default: terminal). 'github' emits Actions workflow commands for "
+            "inline PR annotations; 'html' writes a standalone dashboard."
+        ),
+    )
+    scan_p.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Write the report to this file instead of stdout (required-ish for --format html).",
+    )
+    scan_p.add_argument(
+        "--policy",
+        default=None,
+        help="Enforcement preset: default, ci, strict-prod, enterprise-governance.",
+    )
+    scan_p.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "info", "never"),
+        default=None,
+        help="Minimum severity that fails the run. Overrides the policy default.",
+    )
+    scan_p.add_argument(
+        "--min-score",
+        type=int,
+        default=None,
+        help="Fail when the health score is below this value (0-100).",
+    )
+    scan_p.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help="Override maximum allowed estimated tokens per tool.",
+    )
+    scan_p.add_argument(
+        "--ignore", default="", help="Comma-separated rule IDs to skip (e.g. MCP004,MCP008)."
+    )
+    scan_p.add_argument(
+        "--config", type=Path, default=None, help="Explicit path to a `vexar-mcp.toml` file."
+    )
+    scan_p.add_argument(
+        "--rule-pack",
+        action="append",
+        default=[],
+        metavar="SPEC",
+        help=(
+            "Opt-in rule pack to load: a .toml/.json file, or a trusted Python module path. "
+            "Repeatable."
+        ),
+    )
+    scan_p.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help="Compare against a committed baseline and gate only on new findings.",
+    )
+    scan_p.add_argument(
+        "--write-baseline",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="Record the current findings as the accepted baseline, then exit.",
+    )
+    scan_p.add_argument(
+        "--history",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="JSON array of previous health scores, used for the HTML trend sparkline.",
+    )
+    scan_p.add_argument(
+        "--append-history",
+        action="store_true",
+        help="Append this run's score to the --history file after scanning.",
+    )
+    scan_p.add_argument(
+        "--ts-parser",
+        choices=("lexical", "tree-sitter"),
+        default=None,
+        help=(
+            "TypeScript/JavaScript parser backend. 'lexical' (the default) is dependency-free "
+            "and reads literal registrations only. 'tree-sitter' requires the optional extra "
+            "and also resolves same-file constant names, schema factories and named handlers; "
+            "it also reports how many registrations it could not resolve."
+        ),
+    )
+    scan_p.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help=(
+            "Do not fail when some files cannot be analyzed. Off by default: an unparsable "
+            "file means the result cannot be trusted, so it is a gate failure (exit 3)."
+        ),
+    )
+    scan_p.add_argument(
+        "--fail-on-no-matches",
+        action="store_true",
+        help="Fail (exit 4) when no supported MCP tool is discovered in the target.",
+    )
+    scan_p.add_argument(
+        "--emit",
+        action="append",
+        default=[],
+        metavar="FORMAT=PATH",
+        help=(
+            "Render an additional format from the same scan, e.g. "
+            "--emit sarif=out.sarif --emit html=report.html. Repeatable. Use '-' for stdout."
+        ),
+    )
+    scan_p.add_argument(
+        "--print-config",
+        action="store_true",
+        help="Print the effective configuration and exit without scanning.",
+    )
+
+    # ------------------------------------------------------- audit-server
+    live_p = sub.add_parser(
+        "audit-server",
+        help="Introspect a running MCP server over stdio JSON-RPC and scan its tool catalog.",
+        description=(
+            "Launch an MCP server, complete the initialize handshake, call tools/list, and run "
+            "the full rule set over the announced tools. Use `--` before the server command."
+        ),
+    )
+    live_p.add_argument(
+        "server_command",
+        nargs=argparse.REMAINDER,
+        help="Server command, e.g. -- python my_server.py",
+    )
+    live_p.add_argument("--format", choices=_FORMATS, default="terminal")
+    live_p.add_argument("--output", type=Path, default=None)
+    live_p.add_argument("--policy", default=None, help="Enforcement preset name.")
+    live_p.add_argument("--fail-on", choices=("error", "warning", "info", "never"), default=None)
+    live_p.add_argument("--min-score", type=int, default=None)
+    live_p.add_argument("--ignore", default="")
+    live_p.add_argument("--config", type=Path, default=None)
+    live_p.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="Seconds to allow for the whole handshake and tools/list exchange (default 30).",
+    )
+    live_p.add_argument(
+        "--fail-on-no-matches",
+        action="store_true",
+        help="Fail (exit 4) when the server advertises no tools.",
+    )
+    live_p.add_argument(
+        "--emit",
+        action="append",
+        default=[],
+        metavar="FORMAT=PATH",
+        help="Render an additional format from the same audit (repeatable).",
+    )
+
+    # ------------------------------------------------------- audit-registry
+    reg_p = sub.add_parser(
+        "audit-registry",
+        help="Audit every MCP server listed in a registry or client config file.",
+        description=(
+            "Read a registry file (a 'servers' list, or a Claude Desktop / Cursor "
+            "'mcpServers' object), audit each server over stdio, and report per-server "
+            "scores plus a fleet summary. Each audit is isolated: a server that cannot "
+            "start is reported and the run continues. The fleet score is the WORST "
+            "audited server, not the average."
+        ),
+    )
+    reg_p.add_argument("registry", type=Path, help="Registry or MCP client configuration (JSON).")
+    reg_p.add_argument(
+        "--format",
+        choices=("terminal", "json", "html"),
+        default="terminal",
+        help="Report format (default terminal).",
+    )
+    reg_p.add_argument("--output", type=Path, default=None)
+    reg_p.add_argument("--policy", default=None, help="Enforcement preset name.")
+    reg_p.add_argument("--fail-on", choices=("error", "warning", "info", "never"), default=None)
+    reg_p.add_argument("--min-score", type=int, default=None)
+    reg_p.add_argument("--ignore", default="")
+    reg_p.add_argument("--config", type=Path, default=None)
+    reg_p.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="Default seconds per server when the entry does not set its own (default 30).",
+    )
+    reg_p.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Downgrade 'a server could not be audited' from exit 3 to a normal gate result.",
+    )
+    reg_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate the registry and print the audit plan without launching any server.",
+    )
+
+    # ------------------------------------------------------------ baseline
+    base_p = sub.add_parser("baseline", help="Create or inspect baseline snapshots.")
+    base_sub = base_p.add_subparsers(dest="baseline_command", required=True)
+    base_write = base_sub.add_parser(
+        "write", help="Record current findings as the accepted baseline."
+    )
+    base_write.add_argument("paths", nargs="*", default=["."])
+    base_write.add_argument(
+        "--output", type=Path, default=Path(".vexar-baseline.json"), help="Baseline file to write."
+    )
+    base_write.add_argument("--config", type=Path, default=None)
+    base_write.add_argument("--policy", default=None)
+    base_write.add_argument("--ignore", default="")
+    base_show = base_sub.add_parser("show", help="Summarize an existing baseline file.")
+    base_show.add_argument("file", nargs="?", type=Path, default=Path(".vexar-baseline.json"))
+    base_show.add_argument("--format", choices=("terminal", "json"), default="terminal")
+
+    # -------------------------------------------------------------- policy
+    policy_p = sub.add_parser("policy", help="List built-in enforcement presets.")
+    policy_p.add_argument("--format", choices=("terminal", "json"), default="terminal")
+
+    # --------------------------------------------------------------- rules
+    rules_p = sub.add_parser("rules", help="List all registered diagnostic rules.")
+    rules_p.add_argument("--format", choices=("terminal", "json"), default="terminal")
+
+    # -------------------------------------------------------- token-report
+    tok_p = sub.add_parser(
+        "token-report", help="Display per-tool context-window token usage leaderboard."
+    )
+    tok_p.add_argument("paths", nargs="*", default=["."])
+    tok_p.add_argument("--config", type=Path, default=None)
+
+    # ------------------------------------------------------------- simulate
+    sim_p = sub.add_parser(
+        "simulate",
+        help="Project the per-call and monthly cost of a tool catalog on a given model.",
+    )
+    sim_p.add_argument("paths", nargs="*", default=["."])
+    sim_p.add_argument("--config", type=Path, default=None)
+    sim_p.add_argument(
+        "--model",
+        default="claude-sonnet-4.5",
+        help="Model to price against. Unknown models are rejected unless --input-price is given.",
+    )
+    sim_p.add_argument(
+        "--calls-per-day", type=int, default=DEFAULT_CALLS_PER_DAY, help="Volume assumption."
+    )
+    sim_p.add_argument(
+        "--input-price",
+        type=float,
+        default=None,
+        help="Override the input-token price in USD per 1M tokens (your contract rate).",
+    )
+    sim_p.add_argument("--format", choices=("terminal", "json"), default="terminal")
+    sim_p.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Exit 0 even if the underlying scan could not analyze every file (projection is a lower bound).",
+    )
+
+    # ------------------------------------------------------------------- init
+    init_p = sub.add_parser(
+        "init",
+        help="Write a starter vexar-mcp.toml and optionally a CI workflow.",
+    )
+    init_p.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Project directory to scaffold (default: current directory).",
+    )
+    init_p.add_argument(
+        "--github-action",
+        action="store_true",
+        help="Also write .github/workflows/vexar-mcp.yml.",
+    )
+    init_p.add_argument(
+        "--policy",
+        default=None,
+        help="Preset whose gate values are written into the config (default: the 'default' preset).",
+    )
+    init_p.add_argument(
+        "--action-ref",
+        default="main",
+        help="Ref of RANJITHROSAN17/Vexar-MCP used by the generated workflow (default: main).",
+    )
+    init_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing files instead of refusing.",
+    )
+    init_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the files instead of writing them.",
+    )
+
+    return parser
+
+
+def _resolve_config(args: argparse.Namespace) -> ScanConfig:
+    """Build the effective configuration, loading rule packs before the final validation pass."""
+    targets = [Path(p) for p in getattr(args, "paths", ["."])]
+    extra_ignored = {x.strip() for x in getattr(args, "ignore", "").split(",") if x.strip()}
+    packs = list(getattr(args, "rule_pack", []) or [])
+
+    cfg = load_config(
+        config_path=getattr(args, "config", None),
+        start_dir=targets[0] if targets else Path.cwd(),
+        max_tokens_override=getattr(args, "max_tokens", None),
+        extra_ignored_rules=extra_ignored,
+        policy_override=getattr(args, "policy", None),
+        fail_on_override=getattr(args, "fail_on", None),
+        min_score_override=getattr(args, "min_score", None),
+        extra_rule_packs=packs,
+        allow_unknown_rules=True,
+    )
+
+    load_rule_packs(cfg.rule_packs)
+
+    preset = resolve_policy(cfg.policy_name)
+    if cfg.protected_categories:
+        # Protections accumulate down an inheritance chain, so the second validation pass
+        # has to use the widened set rather than the bare preset it came from.
+        preset = replace(
+            preset,
+            protected_categories=tuple(Category(name) for name in cfg.protected_categories),
+        )
+    validated = apply_policy(preset, catalog=get_rule_catalog(), ignored_rules=cfg.ignored_rules)
+    parser = getattr(args, "ts_parser", None)
+    return replace(
+        cfg,
+        ignored_rules=validated,
+        **({"ts_parser": parser} if parser else {}),
+    )
+
+
+def _load_history(path: Path) -> list[int]:
+    if not path.is_file():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read history file {path}: {exc}") from exc
+    if not isinstance(raw, list):
+        return []
+    return [int(v) for v in raw if isinstance(v, (int, float))]
+
+
+def _append_history(path: Path, score: int) -> None:
+    history = _load_history(path)
+    history.append(score)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(history[-200:], indent=2) + "\n", encoding="utf-8")
+
+
+def _emit(text: str, output: Path | None) -> None:
+    if output is None:
+        print(text)
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(text + ("" if text.endswith("\n") else "\n"), encoding="utf-8")
+
+
+def _render(
+    report: ScanReport,
+    fmt: str,
+    *,
+    delta: BaselineDelta | None = None,
+    history: Sequence[int] | None = None,
+) -> str:
+    """Dispatch to the reporter for ``fmt``."""
+    if fmt == "json":
+        return render_json(report, delta)
+    if fmt == "sarif":
+        return render_sarif(report)
+    if fmt == "markdown":
+        return render_markdown(report, delta)
+    if fmt == "github":
+        return render_github_annotations(report)
+    if fmt == "html":
+        return render_html(report, delta, history=history)
+    return render_terminal(report, delta)
+
+
+def _gate_failures(
+    report: ScanReport,
+    config: ScanConfig,
+    *,
+    delta_new: Sequence[Diagnostic] | None,
+) -> list[str]:
+    """Return human-readable gate failure reasons; empty means the run passed."""
+    # `--fail-on never` means "report only": it disables every gate, including the score
+    # floor, so CI can generate SARIF/HTML artefacts without a second failing pass.
+    if config.fail_on is None:
+        return []
+
+    reasons: list[str] = []
+    findings: Sequence[Diagnostic] = delta_new if delta_new is not None else report.diagnostics
+
+    threshold = config.fail_on
+    breached = [d for d in findings if d.severity.rank >= threshold.rank]
+    if breached:
+        label = "new finding(s)" if delta_new is not None else "finding(s)"
+        reasons.append(
+            f"{len(breached)} {label} at or above '{threshold.value}' "
+            f"(policy '{config.policy_name}')"
+        )
+
+    # A score floor is meaningless in delta mode: the backlog is accepted risk by design.
+    if (
+        delta_new is None
+        and report.summary.score is not None
+        and report.summary.score < config.min_score
+    ):
+        reasons.append(
+            f"health score {report.summary.score} is below the required floor of {config.min_score} "
+            f"(policy '{config.policy_name}')"
+        )
+    return reasons
+
+
+def _analysis_failures(
+    report: ScanReport, *, allow_incomplete: bool, fail_on_no_matches: bool
+) -> tuple[int, list[str]]:
+    """Return ``(exit_code, reasons)`` for analysis-completeness problems.
+
+    These are reported before finding-based gates because an incomplete scan makes the
+    finding set unreliable: ``0`` findings from a ``PARTIAL`` scan means nothing.
+    """
+    reasons: list[str] = []
+    if not allow_incomplete:
+        if report.status is ScanStatus.PARTIAL:
+            failed = report.coverage.files_failed
+            reasons.append(
+                f"analysis incomplete: {failed} file(s) could not be analyzed, so the "
+                "result cannot be trusted (re-run with --allow-incomplete to downgrade this)"
+            )
+        elif report.status is ScanStatus.ERROR:
+            reasons.append(
+                "analysis failed: no candidate file could be analyzed "
+                "(re-run with --allow-incomplete to downgrade this)"
+            )
+    if fail_on_no_matches and report.status is ScanStatus.NO_MATCHES:
+        reasons.append(
+            "no supported MCP tool found in the scan target; nothing was graded "
+            "(--fail-on-no-matches)"
+        )
+    if not reasons:
+        return 0, []
+    code = 3 if report.status in (ScanStatus.PARTIAL, ScanStatus.ERROR) else 4
+    return code, reasons
+
+
+def _summary_line(report: ScanReport, config: ScanConfig) -> str:
+    s = report.summary
+    score = "n/a" if s.score is None else f"{s.score}/100 ({s.grade})"
+    return (
+        f"vexar-mcp: status {report.status.value}, score {score}, risk {s.risk_index}, "
+        f"{s.errors} error(s), {s.warnings} warning(s), {s.infos} info, "
+        f"policy '{config.policy_name}'"
+    )
+
+
+def _cmd_rules(args: argparse.Namespace) -> int:
+    rules = get_all_rules()
+    if args.format == "json":
+        print(
+            json.dumps(
+                [
+                    {
+                        "rule_id": r.rule_id,
+                        "slug": r.slug,
+                        "severity": r.severity.value,
+                        "category": r.category.value,
+                        "summary": r.summary,
+                        "remediation": r.remediation,
+                    }
+                    for r in rules
+                ],
+                indent=2,
+            )
+        )
+    else:
+        print(render_rules_table(rules))
+    return 0
+
+
+def _cmd_policy(args: argparse.Namespace) -> int:
+    presets = list_policies()
+    if args.format == "json":
+        print(
+            json.dumps(
+                [
+                    {
+                        "name": p.name,
+                        "title": p.title,
+                        "description": p.description,
+                        "fail_on": p.fail_on.value,
+                        "min_score": p.min_score,
+                        "max_tool_tokens": p.max_tool_tokens,
+                        "max_server_tokens": p.max_server_tokens,
+                        "protected_categories": [c.value for c in p.protected_categories],
+                    }
+                    for p in presets
+                ],
+                indent=2,
+            )
+        )
+        return 0
+    lines = [f"{'PRESET':<24} {'FAIL-ON':<10} {'MIN':>4} {'TOK/TOOL':>9}  PROTECTED", "-" * 92]
+    for p in presets:
+        protected = ",".join(c.value for c in p.protected_categories) or "-"
+        lines.append(
+            f"{p.name:<24} {p.fail_on.value:<10} {p.min_score:>4} {p.max_tool_tokens:>9}  {protected}"
+        )
+    lines.append("")
+    for p in presets:
+        lines.append(f"{p.name}: {p.title}")
+        lines.append(f"  {p.description}")
+    print("\n".join(lines))
+    return 0
+
+
+def _cmd_baseline(args: argparse.Namespace) -> int:
+    if args.baseline_command == "show":
+        baseline = read_baseline(args.file)
+        if args.format == "json":
+            print(json.dumps({"schema": baseline.schema, "entries": len(baseline.entries)}))
+            return 0
+        print(f"Baseline: {args.file}")
+        print(f"  schema      : {baseline.schema}")
+        print(f"  created_at  : {baseline.created_at or 'unknown'}")
+        print(f"  tool_version: {baseline.tool_version or 'unknown'}")
+        print(f"  policy      : {baseline.policy or 'unknown'}")
+        print(f"  entries     : {len(baseline.entries)}")
+        return 0
+
+    try:
+        cfg = _resolve_config(args)
+        report = scan_paths([Path(p) for p in args.paths], cfg)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+    baseline = build_baseline(report, policy=cfg.policy_name, tool_version=__version__)
+    write_baseline(args.output, baseline)
+    print(
+        f"vexar-mcp: baseline written to {args.output} with {len(baseline.entries)} accepted "
+        f"finding(s). Commit it and gate CI with --baseline {args.output}."
+    )
+    return 0
+
+
+def _cmd_scan(args: argparse.Namespace) -> int:
+    try:
+        cfg = _resolve_config(args)
+    except (ValueError, RulePackError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.print_config:
+        payload = describe_config(cfg)
+        source = discover_config(Path(args.paths[0]) if args.paths else Path.cwd())
+        payload["config_file"] = str(source) if source else None
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    targets = [Path(p) for p in args.paths]
+    try:
+        report = scan_paths(targets, cfg)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    delta = None
+    if args.write_baseline is not None:
+        baseline = build_baseline(report, policy=cfg.policy_name, tool_version=__version__)
+        write_baseline(args.write_baseline, baseline)
+        print(
+            f"vexar-mcp: baseline written to {args.write_baseline} with "
+            f"{len(baseline.entries)} accepted finding(s).",
+            file=sys.stderr,
+        )
+        return 0
+
+    if args.baseline is not None:
+        try:
+            delta = compare(read_baseline(args.baseline), report)
+        except BaselineError as exc:
+            print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+            return 2
+
+    history: list[int] = []
+    if args.history is not None:
+        try:
+            history = _load_history(args.history)
+        except ValueError as exc:
+            print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+            return 2
+        # An ungraded scan has no score to trend; recording None would poison the
+        # sparkline for every later run.
+        if report.summary.score is not None:
+            history.append(report.summary.score)
+
+    text = _render(report, args.format, delta=delta, history=history)
+    _emit(text, args.output)
+
+    for spec in getattr(args, "emit", []):
+        fmt, _, target = spec.partition("=")
+        if not target:
+            print(f"vexar-mcp: error: --emit expects FORMAT=PATH, got '{spec}'", file=sys.stderr)
+            return 2
+        if fmt not in _FORMATS:
+            print(
+                f"vexar-mcp: error: unknown --emit format '{fmt}'. Choose from: "
+                f"{', '.join(_FORMATS)}",
+                file=sys.stderr,
+            )
+            return 2
+        rendered = _render(report, fmt, delta=delta, history=history)
+        if target == "-":
+            print(rendered)
+        else:
+            path = Path(target)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(rendered + ("" if rendered.endswith("\n") else "\n"), encoding="utf-8")
+
+    if args.append_history and args.history is not None and report.summary.score is not None:
+        _append_history(args.history, report.summary.score)
+
+    failures = _gate_failures(
+        report, cfg, delta_new=delta.new_findings if delta is not None else None
+    )
+    analysis_code, analysis_reasons = _analysis_failures(
+        report,
+        allow_incomplete=bool(getattr(args, "allow_incomplete", False)),
+        fail_on_no_matches=bool(getattr(args, "fail_on_no_matches", False)),
+    )
+    if args.format not in ("json", "sarif", "html", "github"):
+        print(_summary_line(report, cfg), file=sys.stderr)
+    for reason in analysis_reasons:
+        print(f"vexar-mcp: analysis problem: {reason}", file=sys.stderr)
+    for reason in failures:
+        print(f"vexar-mcp: gate failed: {reason}", file=sys.stderr)
+    if analysis_code:
+        return analysis_code
+    return 1 if failures else 0
+
+
+def _cmd_simulate(args: argparse.Namespace) -> int:
+    """Project catalog cost from a real scan, refusing to price a model we do not know."""
+    cfg = _resolve_config(args)
+    report = scan_paths([Path(p) for p in args.paths], cfg)
+
+    try:
+        projection = simulate(
+            report,
+            model=args.model,
+            calls_per_day=args.calls_per_day,
+            input_price=args.input_price,
+        )
+    except UnknownModelError as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        print(f"vexar-mcp: prices reviewed {PRICING_AS_OF}", file=sys.stderr)
+        return 2
+
+    if args.format == "json":
+        print(json.dumps(projection.as_dict(), indent=2))
+    else:
+        print(render_projection(projection))
+
+    # A projection over an empty or partly-read catalog would understate spend, so it is
+    # reported with the same "this number is not trustworthy" exit codes as a scan.
+    code, reasons = _analysis_failures(
+        report, allow_incomplete=args.allow_incomplete, fail_on_no_matches=True
+    )
+    for reason in reasons:
+        print(f"vexar-mcp: error: {reason}", file=sys.stderr)
+    if code == 3:
+        print("vexar-mcp: projection above is a LOWER BOUND.", file=sys.stderr)
+    return code
+
+
+def _cmd_audit_server(args: argparse.Namespace) -> int:
+    command = [part for part in args.server_command if part != "--"]
+    if not command:
+        print(
+            "vexar-mcp: error: no server command given. "
+            "Usage: vexar-mcp audit-server -- python my_server.py",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        cfg = _resolve_config(args)
+    except (ValueError, RulePackError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        report = scan_server(command, cfg, timeout=args.timeout)
+    except LiveAuditError as exc:
+        print(f"vexar-mcp: live audit failed: {exc}", file=sys.stderr)
+        return 2
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    _emit(_render(report, args.format), args.output)
+
+    failures = _gate_failures(report, cfg, delta_new=None)
+    analysis_code, analysis_reasons = _analysis_failures(
+        report,
+        allow_incomplete=bool(getattr(args, "allow_incomplete", False)),
+        fail_on_no_matches=bool(getattr(args, "fail_on_no_matches", False)),
+    )
+    if args.format not in ("json", "sarif", "html", "github"):
+        print(_summary_line(report, cfg), file=sys.stderr)
+    for reason in analysis_reasons:
+        print(f"vexar-mcp: analysis problem: {reason}", file=sys.stderr)
+    for reason in failures:
+        print(f"vexar-mcp: gate failed: {reason}", file=sys.stderr)
+    if analysis_code:
+        return analysis_code
+    return 1 if failures else 0
+
+
+def _fleet_gate_failures(fleet: FleetReport, config: ScanConfig) -> list[str]:
+    """Return gate failure reasons for a fleet; empty means every gate passed.
+
+    Mirrors :func:`_gate_failures` for a single report, with one difference: the score
+    floor is checked against the fleet score, which is the worst audited server. A fleet
+    whose worst member fails the floor fails the gate, which is the behaviour a team
+    gating on "no server below 70" expects.
+    """
+    if config.fail_on is None:
+        return []
+
+    reasons: list[str] = []
+    breached = [d for _, d in fleet.diagnostics if d.severity.rank >= config.fail_on.rank]
+    if breached:
+        reasons.append(
+            f"{len(breached)} finding(s) at or above '{config.fail_on.value}' across the fleet "
+            f"(policy '{config.policy_name}')"
+        )
+    if fleet.score is not None and fleet.score < config.min_score:
+        worst = fleet.worst_server
+        name = worst.name if worst is not None else "-"
+        reasons.append(
+            f"fleet score {fleet.score} (worst server '{name}') is below the required floor "
+            f"of {config.min_score} (policy '{config.policy_name}')"
+        )
+    return reasons
+
+
+def _cmd_audit_registry(args: argparse.Namespace) -> int:
+    """Audit every server named in a registry file. See `vexar-mcp audit-registry --help`."""
+    registry_path: Path = args.registry
+    try:
+        registry = load_registry(registry_path)
+    except RegistryError as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    # Anchor configuration discovery at the registry file, so a vexar-mcp.toml beside the
+    # registry governs this fleet rather than whatever directory the shell happens to be in.
+    args.paths = [str(registry_path)]
+    try:
+        cfg = _resolve_config(args)
+    except (ValueError, RulePackError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        # A registry is a list of commands. Printing the resolved argv, with no server
+        # started, is what makes reviewing one before trusting it possible.
+        print(f"Registry: {registry.path} (format: {registry.source_format})")
+        print(f"Servers:  {len(registry.servers)}")
+        for server in registry.servers:
+            if server.unsupported_reason is not None:
+                print(f"  skip  {server.name}: {server.unsupported_reason}")
+                continue
+            timeout = server.timeout if server.timeout is not None else args.timeout
+            where = f" (cwd {server.cwd})" if server.cwd else ""
+            print(
+                f"  run   {server.name}: {shlex.join(server.command)}{where} [timeout {timeout:g}s]"
+            )
+        print("Nothing was executed (--dry-run).")
+        return 0
+
+    def _progress(server: object) -> None:  # local closure over stderr
+        name = getattr(server, "name", "?")
+        print(f"vexar-mcp: auditing {name} ...", file=sys.stderr)
+
+    fleet = run_fleet(registry, cfg, default_timeout=args.timeout, on_start=_progress)
+
+    if args.format == "json":
+        rendered = render_fleet_json(fleet)
+    elif args.format == "html":
+        rendered = render_fleet_html(fleet)
+    else:
+        rendered = render_fleet_terminal(fleet)
+    _emit(rendered, args.output)
+
+    if args.format == "terminal":
+        errors, warnings, infos = fleet.counts
+        print(
+            f"vexar-mcp: fleet status {fleet.status.value}, score "
+            f"{'n/a' if fleet.score is None else f'{fleet.score}/100 ({fleet.grade})'}, "
+            f"{len(fleet.audited)}/{len(fleet.audits)} audited, "
+            f"{errors} error(s), {warnings} warning(s), {infos} info, "
+            f"policy '{cfg.policy_name}'",
+            file=sys.stderr,
+        )
+
+    # Incompleteness is reported before findings, for the same reason a single scan reports
+    # PARTIAL before its gates: findings from a fleet we only half audited do not mean what
+    # they appear to mean.
+    if not fleet.complete and not args.allow_incomplete:
+        if fleet.failed:
+            names = ", ".join(a.name for a in fleet.failed)
+            print(
+                f"vexar-mcp: analysis incomplete: {len(fleet.failed)} server(s) could not be "
+                f"audited ({names}) - the fleet result covers only the rest "
+                "(re-run with --allow-incomplete to downgrade this)",
+                file=sys.stderr,
+            )
+        if fleet.skipped:
+            names = ", ".join(a.name for a in fleet.skipped)
+            print(
+                f"vexar-mcp: analysis incomplete: {len(fleet.skipped)} server(s) skipped as "
+                f"unsupported transports ({names}) "
+                "(re-run with --allow-incomplete to downgrade this)",
+                file=sys.stderr,
+            )
+        return 3
+
+    failures = _fleet_gate_failures(fleet, cfg)
+    for reason in failures:
+        print(f"vexar-mcp: gate failed: {reason}", file=sys.stderr)
+    return 1 if failures else 0
+
+
+def _cmd_init(args: argparse.Namespace) -> int:
+    """Scaffold a configuration file and, optionally, a CI workflow."""
+    target = Path(args.directory)
+    plan = plan_scaffold(
+        target,
+        github_action=args.github_action,
+        force=args.force,
+        policy=args.policy,
+        action_ref=args.action_ref,
+    )
+
+    if plan.is_blocked:
+        for problem in plan.problems:
+            print(f"vexar-mcp: error: {problem}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        for file in plan.files:
+            print(f"===== {file.path} =====")
+            print(file.content, end="" if file.content.endswith("\n") else "\n")
+        return 0
+
+    written = write_scaffold(plan)
+    for path in written:
+        print(f"wrote {path}")
+    if args.action_ref.strip() in {"main", "master"} and any(
+        path.name == WORKFLOW_PATH.name for path in written
+    ):
+        print(
+            "note: the workflow tracks a moving branch; re-run with "
+            "--action-ref <tag-or-sha> to pin the tool version.",
+            file=sys.stderr,
+        )
+    print()
+    print(describe_next_steps(target, github_action=args.github_action))
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entrypoint returning POSIX exit status (0=pass, 1=gate failure, 2=error)."""
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        if args.command == "rules":
+            return _cmd_rules(args)
+        if args.command == "policy":
+            return _cmd_policy(args)
+        if args.command == "baseline":
+            return _cmd_baseline(args)
+        if args.command == "audit-server":
+            return _cmd_audit_server(args)
+        if args.command == "audit-registry":
+            return _cmd_audit_registry(args)
+        if args.command == "simulate":
+            return _cmd_simulate(args)
+        if args.command == "init":
+            return _cmd_init(args)
+        if args.command == "token-report":
+            cfg = _resolve_config(args)
+            report = scan_paths([Path(p) for p in args.paths], cfg)
+            print(render_token_report(report))
+            return 0
+        return _cmd_scan(args)
+    except (PolicyViolation, RulePackError, BaselineError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

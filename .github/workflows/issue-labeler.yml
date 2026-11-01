@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
 
       - name: Unit-test the classifier before letting it touch an issue
-        # The package itself must be importable: tests/conftest.py imports mcp_doctor (it
+        # The package itself must be importable: tests/conftest.py imports vexar_mcp (it
         # snapshots the rule registry). Learned from a red run: `pip install pytest` alone dies
         # with ModuleNotFoundError before a single label is applied.
         run: |

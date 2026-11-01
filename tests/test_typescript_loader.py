@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.engine import discover_candidate_files, scan_paths
-from mcp_doctor.loaders import load_typescript_file
-from mcp_doctor.models import ScanConfig, ToolSpec
+from vexar_mcp.engine import discover_candidate_files, scan_paths
+from vexar_mcp.loaders import load_typescript_file
+from vexar_mcp.models import ScanConfig, ToolSpec
 
 
 def load(tmp_path: Path, source: str, suffix: str = ".ts") -> list[ToolSpec]:

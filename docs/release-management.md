@@ -129,7 +129,7 @@ intention:
 ### Release checklist
 
 1. `CHANGELOG.md` has a dated section for the version, with any "Policy changes" note.
-2. `pyproject.toml` and `src/mcp_doctor/__init__.py` versions match.
+2. `pyproject.toml` and `src/vexar_mcp/__init__.py` versions match.
 3. CI green on all supported Python versions.
 4. Dogfood jobs green — including the intentional exit-`1` assertion.
 5. `python scripts/verify_release.py --tag vX.Y.Z` passes locally — versions, distribution

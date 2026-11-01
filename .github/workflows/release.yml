@@ -36,7 +36,7 @@ jobs:
       - name: Build wheel and sdist
         run: |
           python -m pip install --upgrade pip build ".[dev]"
-          pytest --cov=mcp_doctor --cov-fail-under=85
+          pytest --cov=vexar_mcp --cov-fail-under=85
           python -m build
 
       - name: Create GitHub Release with generated changelog

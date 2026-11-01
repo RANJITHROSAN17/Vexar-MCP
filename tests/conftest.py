@@ -12,8 +12,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from mcp_doctor.rules import restore_registry, snapshot_registry
-from mcp_doctor.rules.plugin import reset_packs
+from vexar_mcp.rules import restore_registry, snapshot_registry
+from vexar_mcp.rules.plugin import reset_packs
 
 
 @pytest.fixture(autouse=True)

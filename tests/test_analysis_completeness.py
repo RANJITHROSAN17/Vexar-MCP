@@ -13,15 +13,15 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
-from mcp_doctor.engine import determine_status, scan_paths
-from mcp_doctor.models import (
+from vexar_mcp.cli import main
+from vexar_mcp.engine import determine_status, scan_paths
+from vexar_mcp.models import (
     IssueKind,
     ScanConfig,
     ScanStatus,
     Severity,
 )
-from mcp_doctor.reporters import (
+from vexar_mcp.reporters import (
     render_html,
     render_json,
     render_markdown,
@@ -144,7 +144,7 @@ def test_findings_status_when_rules_fire() -> None:
 
 
 def test_determine_status_table() -> None:
-    from mcp_doctor.models import Category, Diagnostic, ToolSpec
+    from vexar_mcp.models import Category, Diagnostic, ToolSpec
 
     tool = ToolSpec(name="t", description="d" * 20, source_file="a.py", line=1)
     diag = Diagnostic(
@@ -259,7 +259,7 @@ def test_score_floor_is_not_applied_to_an_ungraded_scan(
 
 
 def test_excluded_directories_are_pruned_during_walk(tmp_path: Path) -> None:
-    from mcp_doctor.engine import discover_candidate_files
+    from vexar_mcp.engine import discover_candidate_files
 
     (tmp_path / "server.py").write_text("x = 1\n", encoding="utf-8")
     huge = tmp_path / "node_modules" / "pkg" / "deep"
@@ -275,7 +275,7 @@ def test_excluded_directories_are_pruned_during_walk(tmp_path: Path) -> None:
 
 
 def test_cache_directories_are_pruned_even_with_custom_excludes(tmp_path: Path) -> None:
-    from mcp_doctor.engine import discover_candidate_files
+    from vexar_mcp.engine import discover_candidate_files
 
     (tmp_path / "server.py").write_text("x = 1\n", encoding="utf-8")
     (tmp_path / "__pycache__").mkdir()
@@ -286,7 +286,7 @@ def test_cache_directories_are_pruned_even_with_custom_excludes(tmp_path: Path) 
 
 
 def test_custom_exclude_glob_prunes_directories(tmp_path: Path) -> None:
-    from mcp_doctor.engine import discover_candidate_files
+    from vexar_mcp.engine import discover_candidate_files
 
     (tmp_path / "server.py").write_text("x = 1\n", encoding="utf-8")
     (tmp_path / "generated").mkdir()
@@ -373,8 +373,8 @@ def test_emit_dash_writes_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_server_budget_rule_thresholds() -> None:
-    from mcp_doctor.models import ToolSpec
-    from mcp_doctor.rules.token_rules import check_server_token_budget
+    from vexar_mcp.models import ToolSpec
+    from vexar_mcp.rules.token_rules import check_server_token_budget
 
     def tools(count: int, tokens: int) -> list[ToolSpec]:
         return [
@@ -400,8 +400,8 @@ def test_server_budget_rule_thresholds() -> None:
 
 
 def test_server_budget_rule_requires_a_budget_and_tools() -> None:
-    from mcp_doctor.models import ToolSpec
-    from mcp_doctor.rules.token_rules import check_server_token_budget
+    from vexar_mcp.models import ToolSpec
+    from vexar_mcp.rules.token_rules import check_server_token_budget
 
     tool = ToolSpec(name="t", description="d", source_file="f.py", line=1, estimated_tokens=9999)
     assert check_server_token_budget([], ScanConfig(max_server_tokens=10)) == []
@@ -410,9 +410,9 @@ def test_server_budget_rule_requires_a_budget_and_tools() -> None:
 
 def test_server_budget_appears_in_reports() -> None:
     """The rule must reach every reporter, not just the terminal."""
-    from mcp_doctor.engine import assemble_report
-    from mcp_doctor.models import ToolSpec
-    from mcp_doctor.rules.token_rules import check_server_token_budget
+    from vexar_mcp.engine import assemble_report
+    from vexar_mcp.models import ToolSpec
+    from vexar_mcp.rules.token_rules import check_server_token_budget
 
     tools = [
         ToolSpec(
@@ -436,8 +436,8 @@ def test_server_budget_appears_in_reports() -> None:
 
 
 def test_register_rule_decorator_rejects_duplicate_ids() -> None:
-    from mcp_doctor.models import Category
-    from mcp_doctor.rules import register_rule
+    from vexar_mcp.models import Category
+    from vexar_mcp.rules import register_rule
 
     with pytest.raises(ValueError, match="already registered"):
 
@@ -454,7 +454,7 @@ def test_register_rule_decorator_rejects_duplicate_ids() -> None:
 
 
 def test_every_registered_rule_has_complete_metadata() -> None:
-    from mcp_doctor.rules import get_all_rules
+    from vexar_mcp.rules import get_all_rules
 
     rules = get_all_rules()
     assert len(rules) == len({r.rule_id for r in rules}), "duplicate rule IDs"
@@ -474,7 +474,7 @@ def test_discovery_does_not_walk_huge_excluded_trees(tmp_path: Path) -> None:
     """
     import time
 
-    from mcp_doctor.engine import discover_candidate_files
+    from vexar_mcp.engine import discover_candidate_files
 
     relevant = tmp_path / "app"
     relevant.mkdir()

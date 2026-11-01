@@ -17,7 +17,7 @@ on:
       - "assets/dashboard.html"
       - "assets/banner.svg"
       - "examples/**"
-      - "src/mcp_doctor/**"
+      - "src/vexar_mcp/**"
       - ".github/workflows/dashboard-deploy.yml"
   workflow_dispatch:
 

@@ -28,7 +28,7 @@ class TestClassify:
         labels = labeler.classify(
             "TypeScript loader misses tools registered via a variable",
             "The parser returns no tools when the name is a constant. See "
-            "src/mcp_doctor/loaders/typescript_loader.py.",
+            "src/vexar_mcp/loaders/typescript_loader.py.",
         )
         assert "area/parsers" in labels
         assert "type/bug" in labels
@@ -83,7 +83,7 @@ class TestClassify:
     def test_area_labels_are_preferred_over_type_labels_when_truncated(self) -> None:
         labels = labeler.classify(
             "feature: rule support for yaml manifests",
-            "src/mcp_doctor/rules/ and docs/ mention a new rule, add it.",
+            "src/vexar_mcp/rules/ and docs/ mention a new rule, add it.",
         )
         assert labels[0].startswith("area/")
 
@@ -148,7 +148,7 @@ class TestNoiseControl:
         "feat(rules): add MCP015 rule when tool parameters have no description",
         "## Summary\n\nFlag tool parameters that carry no description. MCP001 covers the tool "
         "description; parameter-level docs are unchecked.\n\n## Proposed Files to Touch\n\n"
-        "- `src/mcp_doctor/loaders/python_ast.py`\n- `src/mcp_doctor/rules/schema_rules.py`\n\n"
+        "- `src/vexar_mcp/loaders/python_ast.py`\n- `src/vexar_mcp/rules/schema_rules.py`\n\n"
         "## Local Verification\n\n```bash\npython -m pytest tests/test_rules.py\n```",
     )
 
@@ -163,7 +163,7 @@ class TestNoiseControl:
     def test_at_most_two_areas_and_two_types(self) -> None:
         labels = labeler.classify(
             "security: rule parser reporter cli workflow docs",
-            "src/mcp_doctor/rules/ src/mcp_doctor/loaders/ src/mcp_doctor/reporters/ "
+            "src/vexar_mcp/rules/ src/vexar_mcp/loaders/ src/vexar_mcp/reporters/ "
             "docs/ .github/workflows/ traceback injection slow add support",
         )
         assert sum(label.startswith("area/") for label in labels) <= labeler.MAX_AREA_LABELS

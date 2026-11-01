@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.engine import scan_server
-from mcp_doctor.live import (
+from vexar_mcp.engine import scan_server
+from vexar_mcp.live import (
     SUPPORTED_PROTOCOL_VERSIONS,
     LiveAuditError,
     LiveServerSpec,
     introspect_server,
     protocol_diagnostics,
 )
-from mcp_doctor.models import ScanConfig
+from vexar_mcp.models import ScanConfig
 
 MOCK = Path(__file__).parent / "fixtures" / "mock_mcp_server.py"
 

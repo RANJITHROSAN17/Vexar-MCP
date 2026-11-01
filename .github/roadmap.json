@@ -35,12 +35,12 @@
     {
       "name": "area/rules",
       "color": "5319e7",
-      "description": "Lint and security rules under src/mcp_doctor/rules/"
+      "description": "Lint and security rules under src/vexar_mcp/rules/"
     },
     {
       "name": "area/parsers",
       "color": "0052cc",
-      "description": "AST and manifest loaders under src/mcp_doctor/loaders/"
+      "description": "AST and manifest loaders under src/vexar_mcp/loaders/"
     },
     {
       "name": "area/reporters",
@@ -138,8 +138,8 @@
       "summary": "Detect hardcoded credentials (e.g., `sk-...`, `ghp_...`, `AKIA...`, `Bearer ...`, or assignments to `api_key` / `secret` string literals) inside `@mcp.tool()` functions.",
       "motivation": "Developers prototyping MCP servers frequently paste API keys directly into tool modules before publishing. Catching high-confidence secret patterns in `vexar-mcp scan` prevents accidental credential leaks.",
       "files": [
-        "src/mcp_doctor/loaders/python_ast.py",
-        "src/mcp_doctor/rules/security_rules.py",
+        "src/vexar_mcp/loaders/python_ast.py",
+        "src/vexar_mcp/rules/security_rules.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -165,8 +165,8 @@
       "summary": "Flag `requests.get/post/...`, `httpx.get/post/...`, and `urllib.request.urlopen(...)` calls inside MCP tools when no `timeout` keyword argument is provided.",
       "motivation": "An MCP tool that hangs indefinitely on a stalled upstream socket blocks the entire LLM agent turn and stdio transport pipe.",
       "files": [
-        "src/mcp_doctor/loaders/python_ast.py",
-        "src/mcp_doctor/rules/security_rules.py",
+        "src/vexar_mcp/loaders/python_ast.py",
+        "src/vexar_mcp/rules/security_rules.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -192,8 +192,8 @@
       "summary": "Detect f-strings, `%` formatting, `.format(...)`, or `+` string concatenation inside `cursor.execute(...)` / `session.execute(...)` when referencing tool parameters.",
       "motivation": "Database MCP servers are one of the most common MCP server types, and LLM-generated arguments can trivially trigger SQL injection if interpolated directly into SQL strings.",
       "files": [
-        "src/mcp_doctor/loaders/python_ast.py",
-        "src/mcp_doctor/rules/security_rules.py",
+        "src/vexar_mcp/loaders/python_ast.py",
+        "src/vexar_mcp/rules/security_rules.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -219,9 +219,9 @@
       "summary": "Add a `--format github` output option to `vexar-mcp scan` that emits GitHub Actions workflow commands (`::error`, `::warning`, `::notice`).",
       "motivation": "Emitting `::error file=server.py,line=24,title=MCP005 (dangerous-shell-execution)::...` lets GitHub render inline annotations directly on changed lines in Pull Request diffs without requiring GitHub Advanced Security / SARIF upload.",
       "files": [
-        "src/mcp_doctor/reporters/github_actions.py",
-        "src/mcp_doctor/reporters/__init__.py",
-        "src/mcp_doctor/cli.py",
+        "src/vexar_mcp/reporters/github_actions.py",
+        "src/vexar_mcp/reporters/__init__.py",
+        "src/vexar_mcp/cli.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
@@ -247,8 +247,8 @@
       "summary": "Flag tool parameters that carry no description, so an agent cannot infer when to supply them. MCP001 covers the tool description; parameter-level docs are unchecked.",
       "motivation": "Rule IDs are a public contract and MCP012 now means live protocol/transport validation. This item originally requested MCP012, then MCP014, and both were claimed by other rules -- so the next available ID is MCP015. Check `vexar-mcp rules` before claiming an ID.",
       "files": [
-        "src/mcp_doctor/loaders/python_ast.py",
-        "src/mcp_doctor/rules/schema_rules.py",
+        "src/vexar_mcp/loaders/python_ast.py",
+        "src/vexar_mcp/rules/schema_rules.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -273,8 +273,8 @@
       "summary": "Support scanning `.ts` and `.js` MCP servers built with `@modelcontextprotocol/sdk` (`server.tool(name, description, zodSchema, handler)` and `registerTool(...)`).",
       "motivation": "Roughly half of public MCP servers are written in TypeScript. Supporting `.ts`/`.js` files without requiring a Node runtime makes `vexar-mcp` a universal cross-language MCP auditor.",
       "files": [
-        "src/mcp_doctor/loaders/typescript_loader.py",
-        "src/mcp_doctor/engine.py",
+        "src/vexar_mcp/loaders/typescript_loader.py",
+        "src/vexar_mcp/engine.py",
         "tests/test_loaders.py"
       ],
       "acceptance_criteria": [
@@ -299,7 +299,7 @@
       "summary": "Add an `vexar-mcp init [--github-action]` subcommand that generates a commented `vexar-mcp.toml` config file and optional `.github/workflows/mcp-doctor.yml`.",
       "motivation": "One-command onboarding drastically lowers friction for maintainers adopting `vexar-mcp` in existing MCP server repositories.",
       "files": [
-        "src/mcp_doctor/cli.py",
+        "src/vexar_mcp/cli.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
@@ -325,8 +325,8 @@
       "summary": "Detect `pickle.loads`, `pickle.load`, `marshal.loads`, `shelve.open`, and `yaml.load` (without `SafeLoader`) inside MCP tool functions.",
       "motivation": "Deserializing untrusted payloads inside an MCP tool leads directly to arbitrary code execution.",
       "files": [
-        "src/mcp_doctor/loaders/python_ast.py",
-        "src/mcp_doctor/rules/security_rules.py",
+        "src/vexar_mcp/loaders/python_ast.py",
+        "src/vexar_mcp/rules/security_rules.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -350,7 +350,7 @@
       "summary": "Resolve in-file `BaseModel` and `TypedDict` classes referenced by `@mcp.tool()` parameters so nested fields are audited for types, bounds, and token footprint.",
       "motivation": "Many FastMCP servers group tool arguments into a Pydantic `BaseModel` (`def search(req: SearchRequest)`). Expanding its fields unlocks accurate `MCP002`/`MCP003`/`MCP004` diagnostics.",
       "files": [
-        "src/mcp_doctor/loaders/python_ast.py",
+        "src/vexar_mcp/loaders/python_ast.py",
         "tests/test_loaders.py"
       ],
       "acceptance_criteria": [
@@ -374,8 +374,8 @@
       "summary": "Spawn any MCP server command over JSON-RPC 2.0 stdio, perform handshake + `tools/list`, and run all schema/contract/token rules on the live advertised tools.",
       "motivation": "Dynamic MCP servers (written in Go, Rust, Java, or dynamically registered in Python) can be audited at runtime via standard MCP `tools/list` JSON-RPC without needing language-specific AST parsers.",
       "files": [
-        "src/mcp_doctor/loaders/stdio_client.py",
-        "src/mcp_doctor/cli.py",
+        "src/vexar_mcp/loaders/stdio_client.py",
+        "src/vexar_mcp/cli.py",
         "tests/test_stdio_client.py"
       ],
       "acceptance_criteria": [
@@ -400,8 +400,8 @@
       "summary": "Generate a zero-external-asset HTML dashboard (`--format html`) displaying the health grade, per-tool token usage bars, and filterable diagnostics.",
       "motivation": "Teams running `vexar-mcp` in CI artifacts want a single shareable HTML report with zero CDN dependencies.",
       "files": [
-        "src/mcp_doctor/reporters/html_reporter.py",
-        "src/mcp_doctor/cli.py",
+        "src/vexar_mcp/reporters/html_reporter.py",
+        "src/vexar_mcp/cli.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
@@ -426,8 +426,8 @@
       "summary": "Allow generating and passing a baseline JSON snapshot so CI only fails on newly introduced findings.",
       "motivation": "Large existing MCP servers (50+ tools) need a way to turn on `vexar-mcp` in CI immediately without fixing every historical warning on day one.",
       "files": [
-        "src/mcp_doctor/cli.py",
-        "src/mcp_doctor/engine.py",
+        "src/vexar_mcp/cli.py",
+        "src/vexar_mcp/engine.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
@@ -452,7 +452,7 @@
       "summary": "Emit `MCP014` (`excessive-server-tokens`) when the sum of all discovered tools' estimated tokens exceeds `ScanConfig.max_server_tokens` (default `4000`).",
       "motivation": "Even if each individual tool stays at 200 tokens, exposing 35 tools on a single MCP server silently burns 7,000+ tokens on every conversation turn.",
       "files": [
-        "src/mcp_doctor/rules/token_rules.py",
+        "src/vexar_mcp/rules/token_rules.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -476,8 +476,8 @@
       "summary": "Load tool definitions from YAML manifests when `PyYAML` is installed (gracefully skipping when absent).",
       "motivation": "Agent frameworks (CrewAI, AutoGen, declarative MCP gateways) frequently store tool schemas in `.yaml` files.",
       "files": [
-        "src/mcp_doctor/loaders/yaml_manifest.py",
-        "src/mcp_doctor/engine.py",
+        "src/vexar_mcp/loaders/yaml_manifest.py",
+        "src/vexar_mcp/engine.py",
         "tests/test_loaders.py"
       ],
       "acceptance_criteria": [
@@ -501,7 +501,7 @@
       "summary": "Follow 1-hop calls from `@mcp.tool()` functions to module-local helper functions (`_run_cmd(...)`, `_fetch(...)`) when extracting `CodeSink` entries.",
       "motivation": "Production MCP servers often delegate execution to private helper functions in the same file. Propagating tainted parameter flow across 1-hop helper calls significantly increases security recall.",
       "files": [
-        "src/mcp_doctor/loaders/python_ast.py",
+        "src/vexar_mcp/loaders/python_ast.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -528,7 +528,7 @@
       "summary": "Validate a running server's handshake and tools/list response: unsupported protocol revision, missing `tools` capability, malformed entries, pagination.",
       "motivation": "The original item reserved MCP009 for this, but MCP009 ended up as hardcoded secrets and protocol validation shipped as the live-only MCP012. Rule IDs are a public contract, so the manifest follows the code rather than the reverse.",
       "files": [
-        "src/mcp_doctor/rules/mcp009_protocol.py",
+        "src/vexar_mcp/rules/mcp009_protocol.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -553,8 +553,8 @@
       "summary": "Add configurable risk scoring using finding severity, exploitability and available mitigations.",
       "motivation": "A documented score can help operators prioritize findings consistently.",
       "files": [
-        "src/mcp_doctor/engine.py",
-        "src/mcp_doctor/models.py",
+        "src/vexar_mcp/engine.py",
+        "src/vexar_mcp/models.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -579,8 +579,8 @@
       "summary": "Compare current and previous scan results to identify new, resolved and unchanged findings.",
       "motivation": "Scan comparisons make regressions and remediation progress visible.",
       "files": [
-        "src/mcp_doctor/engine.py",
-        "src/mcp_doctor/cli.py",
+        "src/vexar_mcp/engine.py",
+        "src/vexar_mcp/cli.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
@@ -605,7 +605,7 @@
       "summary": "Project catalog token cost into per-call and monthly spend for a chosen model, built on the same estimator that drives MCP002/MCP014.",
       "motivation": "Operators need transparent estimates of tool-schema context costs.",
       "files": [
-        "src/mcp_doctor/simulate/cost_model.py",
+        "src/vexar_mcp/simulate/cost_model.py",
         "tests/test_simulate.py",
         "docs/usage.md"
       ],
@@ -631,8 +631,8 @@
       "summary": "Provide documented strict-production and enterprise-governance policy presets.",
       "motivation": "Reusable policy settings reduce inconsistent deployment checks.",
       "files": [
-        "src/mcp_doctor/config.py",
-        "src/mcp_doctor/models.py",
+        "src/vexar_mcp/config.py",
+        "src/vexar_mcp/models.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
@@ -657,7 +657,7 @@
       "summary": "Expose audit-report JSON data and historical trends in the dashboard.",
       "motivation": "Teams need a readable view of audit results and changes over time.",
       "files": [
-        "src/mcp_doctor/reporters/json_reporter.py",
+        "src/vexar_mcp/reporters/json_reporter.py",
         "tests/test_cli_and_reporters.py"
       ],
       "acceptance_criteria": [
@@ -682,8 +682,8 @@
       "summary": "Design explicit opt-in discovery and configuration of third-party rule packs.",
       "motivation": "Organizations need extensible checks without implicitly trusting or running arbitrary plugins.",
       "files": [
-        "src/mcp_doctor/rules/base.py",
-        "src/mcp_doctor/config.py",
+        "src/vexar_mcp/rules/base.py",
+        "src/vexar_mcp/config.py",
         "tests/test_rules.py"
       ],
       "acceptance_criteria": [
@@ -731,8 +731,8 @@
       "summary": "Add `vexar-mcp audit-registry <file>` that reads a list of server commands (or a Claude/Cursor MCP config), audits each one with the live stdio client, and emits a single combined report.",
       "motivation": "Teams run several MCP servers, often defined in one client config. Auditing them one command at a time is the difference between a tool used daily and a tool used once.",
       "files": [
-        "src/mcp_doctor/live.py",
-        "src/mcp_doctor/cli.py",
+        "src/vexar_mcp/live.py",
+        "src/vexar_mcp/cli.py",
         "docs/live-audit.md"
       ],
       "acceptance_criteria": [
@@ -757,8 +757,8 @@
       "summary": "Allow a policy file to extend a built-in preset and layer team overrides, with deterministic precedence and an auditable resolution chain.",
       "motivation": "Enterprises need one org standard with narrow, reviewable team exceptions. Today that means copy-pasted TOML that silently drifts.",
       "files": [
-        "src/mcp_doctor/policies.py",
-        "src/mcp_doctor/config.py",
+        "src/vexar_mcp/policies.py",
+        "src/vexar_mcp/config.py",
         "docs/policies.md"
       ],
       "acceptance_criteria": [
@@ -783,8 +783,8 @@
       "summary": "Turn `max-server-tokens` into an enforced finding instead of a reported configuration value, so a server cannot silently exceed its aggregate context budget.",
       "motivation": "Per-tool budgets are enforced; the aggregate budget that actually drives per-turn cost is not. Teams hit the aggregate limit first.",
       "files": [
-        "src/mcp_doctor/rules/token_rules.py",
-        "src/mcp_doctor/models.py",
+        "src/vexar_mcp/rules/token_rules.py",
+        "src/vexar_mcp/models.py",
         "docs/rules.md"
       ],
       "acceptance_criteria": [
@@ -810,7 +810,7 @@
       "summary": "Add an opt-in parser backend that resolves computed tool names, imported schema factories and referenced handlers, while keeping the dependency-free lexical loader as the default.",
       "motivation": "The lexical loader is honest about its limits but cannot follow real SDK usage: `server.tool(TOOL_NAME, DESC, createSchema(), handler)` registers an invisible tool. A coverage contract is documented; a stronger backend closes the gap.",
       "files": [
-        "src/mcp_doctor/loaders/typescript_loader.py",
+        "src/vexar_mcp/loaders/typescript_loader.py",
         "docs/limitations.md",
         "pyproject.toml"
       ],
@@ -835,9 +835,9 @@
       "summary": "Detect constructs the loader saw but could not resolve (computed registration names, imported schemas) and report them as analysis issues, so partially-understood files lower status instead of silently passing.",
       "motivation": "Today a file with computed tool registration parses cleanly and reports `clean`. That is the same false-confidence shape as the fail-open parse bug, one level deeper.",
       "files": [
-        "src/mcp_doctor/loaders/typescript_loader.py",
-        "src/mcp_doctor/loaders/python_ast.py",
-        "src/mcp_doctor/models.py"
+        "src/vexar_mcp/loaders/typescript_loader.py",
+        "src/vexar_mcp/loaders/python_ast.py",
+        "src/vexar_mcp/models.py"
       ],
       "acceptance_criteria": [
         "A new issue kind (`unresolved_tool`) is emitted with file, line and construct description.",
@@ -859,7 +859,7 @@
       "summary": "Replace the empirical ~8% claim in tokens.py with a committed benchmark against real tokenizers over representative MCP schemas, and document the method.",
       "motivation": "The estimator drives MCP002 and MCP014, so its accuracy is a product claim. Claims in docstrings that are not reproducible should not exist.",
       "files": [
-        "src/mcp_doctor/tokens.py",
+        "src/vexar_mcp/tokens.py",
         "tests/",
         "docs/usage.md"
       ],
@@ -884,7 +884,7 @@
       "summary": "Add a dated, machine-checked pricing manifest so `vexar-mcp simulate` cannot quietly quote a stale rate.",
       "motivation": "Prices live in a Python dict with an `as_of` string that nothing verifies. A cost projection that silently ages is the same false-confidence failure the scanner was rebuilt to remove.",
       "files": [
-        "src/mcp_doctor/simulate/cost_model.py",
+        "src/vexar_mcp/simulate/cost_model.py",
         "tests/test_simulate.py"
       ],
       "acceptance_criteria": [
@@ -931,7 +931,7 @@
       "summary": "Add an HTTP transport for `audit-server` so remote MCP deployments can be audited, with the origin, header, caching and auth checks the specification requires.",
       "motivation": "The audit path is stdio-only, which covers local servers and nothing else. The 2026-07-28 revision defines `MCP-Protocol-Version` routing headers, origin validation rules and cache scoping that a stdio-only client never has to think about.",
       "files": [
-        "src/mcp_doctor/live.py",
+        "src/vexar_mcp/live.py",
         "docs/live-audit.md",
         "tests/fixtures/"
       ],
@@ -958,8 +958,8 @@
       "summary": "Skip, or gate behind `--follow-symlinks`, any scanned file that resolves outside the requested target, and report the skip as a coverage note.",
       "motivation": "Review finding F-05: a symlinked file inside a scanned tree is read even when it points at `/etc/passwd`. Content is never echoed, so the impact is small \u2014 but least privilege says a scanner should read what it was pointed at and nothing else, and it should say when it declines to read something.",
       "files": [
-        "src/mcp_doctor/engine.py",
-        "src/mcp_doctor/cli.py",
+        "src/vexar_mcp/engine.py",
+        "src/vexar_mcp/cli.py",
         "docs/scan-status.md"
       ],
       "acceptance_criteria": [
@@ -984,7 +984,7 @@
       "motivation": "F-01 happened because a protocol revision shipped and nothing in the repository noticed. A review document is a snapshot; this needs to be a standing artefact with a check attached.",
       "files": [
         "docs/compliance.md",
-        "src/mcp_doctor/live.py",
+        "src/vexar_mcp/live.py",
         "tests/"
       ],
       "acceptance_criteria": [

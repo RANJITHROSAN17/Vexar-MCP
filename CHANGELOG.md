@@ -18,10 +18,19 @@ Versioning contract, so upgrades are predictable:
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
+### Changed
+
+- The canonical import package is now `vexar_mcp`, matching the Vexar-MCP distribution.
+  `mcp_doctor` is a compatibility shim for the 0.3.x minor series only; migrate imports
+  before 0.4. Both paths share the same implementation and model classes. The CLI
+  remains `vexar-mcp`; `python -m vexar_mcp` is the canonical module entry point.
+
 ### Added
 
 - **The `simulate` price table is now a data file that checks its own age.** Rates moved out of
-    `cost_model.py` into `src/mcp_doctor/simulate/pricing.json`, and every entry carries the
+    `cost_model.py` into `src/vexar_mcp/simulate/pricing.json`, and every entry carries the
     `reviewed_on` date a human last verified it. An entry older than `REVIEW_WINDOW_DAYS` (180) now
     fails the test suite and makes `simulate` print `REVIEW OVERDUE` in its `MODEL:` header plus a
     `WARNING:` naming the model, its age, and the file to edit. This replaces a single
@@ -85,7 +94,7 @@ Versioning contract, so upgrades are predictable:
 ### Added
 
 - **`scripts/verify_release.py`** — one offline check that the version in `pyproject.toml`,
-  `src/mcp_doctor/__init__.py` and the release tag agree, that the distribution still
+  `src/vexar_mcp/__init__.py` and the release tag agree, that the distribution still
   normalizes to `vexar-mcp`, that the changelog has a dated section for it, and that the
   publish workflow still authenticates with OIDC instead of a `twine upload` that cannot.
   `--pypi` adds PyPI's view; it is the first thing that tells a first-time publisher to
@@ -297,7 +306,7 @@ the compliance matrix and the release verdict.
   unsanitized. ANSI escapes and bells could corrupt a terminal and a CI log; Markdown fences,
   headings and `::error::` workflow commands could be injected into a PR comment. Not code
   execution: *content spoofing*, which for a security tool is the same failure. New
-  `mcp_doctor/sanitize.py` strips control and bidi characters everywhere and neutralises
+  `vexar_mcp/sanitize.py` strips control and bidi characters everywhere and neutralises
   structural markers where they matter; JSON and SARIF keep the original text because their
   encoders already handle escaping.
 - CRLF in annotation messages is now normalised to LF before escaping, so GitHub annotations are
@@ -423,7 +432,7 @@ CI.
   artefacts now come from one analysis via `--emit`.
 - The history sparkline could record an ungraded score (`None`) and poison the trend for
   later runs; only graded runs are recorded now.
-- **Dead CLI stub removed.** `mcp_doctor/cli_simulate.py` was unreachable from the real
+- **Dead CLI stub removed.** `vexar_mcp/cli_simulate.py` was unreachable from the real
   entry point, 0% covered, and printed a hardcoded token estimate for a hardcoded example.
   Now that `simulate` is a real command reading a real scan, the stub is gone rather than
   left behind as a second, wrong answer.
@@ -471,28 +480,28 @@ opt-in rule pack system.
 
 ### Added
 
-- **Policy engine** (`mcp_doctor.policies`): four versioned presets — `default`, `ci`,
+- **Policy engine** (`vexar_mcp.policies`): four versioned presets — `default`, `ci`,
   `strict-prod`, `enterprise-governance` — bundling fail-on threshold, score floor, and
   token budgets. Ignoring a rule in a category the preset protects is a hard configuration
   error (exit `2`), so a security profile cannot be silently disabled. See
   [docs/policies.md](docs/policies.md).
-- **Baseline gating** (`mcp_doctor.baseline`): `--baseline`, `--write-baseline`, and
+- **Baseline gating** (`vexar_mcp.baseline`): `--baseline`, `--write-baseline`, and
   `vexar-mcp baseline write|show`. Fingerprints exclude line numbers and message text, so
   unrelated edits never look like new findings. Malformed baselines fail closed. See
   [docs/baseline.md](docs/baseline.md).
-- **Live server auditing** (`mcp_doctor.live`): `vexar-mcp audit-server -- <command>` runs
+- **Live server auditing** (`vexar_mcp.live`): `vexar-mcp audit-server -- <command>` runs
   the real `initialize` handshake over stdio JSON-RPC 2.0, follows `tools/list` pagination,
   and feeds the result through the same normalisation and rule pipeline as file scans.
   Bounded by a deadline, an 8 MiB response cap, and a 50-page cap. See
   [docs/live-audit.md](docs/live-audit.md).
-- **Deterministic risk scoring** (`mcp_doctor.risk`): per-finding 0–100 risk
+- **Deterministic risk scoring** (`vexar_mcp.risk`): per-finding 0–100 risk
   (severity × exploitability) and a saturating 0–100 `risk_index`, so a tainted SSRF sink
   outranks a missing description instead of tying with it.
 - **HTML report** (`--format html`): one self-contained file with scorecards, severity
   filters, text search, tool catalogue, optional baseline delta, and an inline SVG trend
   sparkline from `--history`. No CDN, fonts, or external scripts — archivable as a
   compliance artefact and safe to open offline.
-- **Rule packs** (`mcp_doctor.rules.plugin`): declarative `.toml`/`.json` packs (data only,
+- **Rule packs** (`vexar_mcp.rules.plugin`): declarative `.toml`/`.json` packs (data only,
   never executed) plus explicitly trusted Python packs. Reserved `MCP` prefix, duplicate
   IDs, duplicate slugs, unknown match keys, and invalid patterns are all rejected. `invert`
   expresses requirements ("every tool must be namespaced"), not just bans. See
@@ -509,7 +518,7 @@ opt-in rule pack system.
 - Configuration discovery now walks up from the scan target to the first `.git`, so one
   project-level `vexar-mcp.toml` applies to subdirectory scans. Stops at the VCS root so a
   parent checkout cannot leak configuration.
-- `mcp_doctor.rules.snapshot_registry()` / `restore_registry()` for scoped pack loading.
+- `vexar_mcp.rules.snapshot_registry()` / `restore_registry()` for scoped pack loading.
 - `vexar-mcp.toml` at the repository root, so the project scans itself with documented
   settings.
 - `CHANGELOG.md` and this versioning contract.

@@ -61,8 +61,8 @@ jobs:
 
 def make_root(tmp_path: Path, *, version: str = VERSION, name: str = "Vexar-MCP") -> Path:
     """Build the smallest tree the verifier reads: metadata, changelog, two workflows."""
-    (tmp_path / "src" / "mcp_doctor").mkdir(parents=True)
-    (tmp_path / "src" / "mcp_doctor" / "__init__.py").write_text(
+    (tmp_path / "src" / "vexar_mcp").mkdir(parents=True)
+    (tmp_path / "src" / "vexar_mcp" / "__init__.py").write_text(
         f'__version__ = "{version}"\n', encoding="utf-8"
     )
     (tmp_path / "pyproject.toml").write_text(
@@ -91,7 +91,7 @@ class TestRepositoryIsReleasable:
 class TestVersionAgreement:
     def test_a_stale_dunder_version_is_reported(self, tmp_path: Path) -> None:
         root = make_root(tmp_path, version="1.2.3")
-        (root / "src" / "mcp_doctor" / "__init__.py").write_text('__version__ = "1.2.2"\n')
+        (root / "src" / "vexar_mcp" / "__init__.py").write_text('__version__ = "1.2.2"\n')
         problems = verify.check_versions(root, tag=None)
         assert any("1.2.3" in p and "1.2.2" in p and "stale" in p for p in problems)
 

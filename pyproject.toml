@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Vexar-MCP"
-version = "0.2.6"
+version = "0.3.0"
 description = "Static analyzer, security scanner, schema validator, and token-budget auditor for Model Context Protocol (MCP) servers and AI agent tools."
 readme = "README.md"
 license = { text = "MIT" }
@@ -68,13 +68,14 @@ Issues = "https://github.com/RANJITHROSAN17/vexar-mcp/issues"
 Changelog = "https://github.com/RANJITHROSAN17/vexar-mcp/releases"
 
 [project.scripts]
-vexar-mcp = "mcp_doctor.cli:main"
+vexar-mcp = "vexar_mcp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-mcp_doctor = ["py.typed", "simulate/pricing.json"]
+vexar_mcp = ["py.typed", "simulate/pricing.json"]
+mcp_doctor = ["py.typed"]
 
 [tool.ruff]
 target-version = "py310"

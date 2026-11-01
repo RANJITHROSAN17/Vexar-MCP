@@ -63,8 +63,8 @@ jobs:
           echo "mypy exit: $MYPY_EXIT" >> review_result.md
 
           echo "" >> review_result.md
-          echo "3/4 pytest --cov=mcp_doctor --cov-fail-under=85" >> review_result.md
-          $VENV/pytest --cov=mcp_doctor --cov-fail-under=85 >> review_result.md 2>&1
+          echo "3/4 pytest --cov=vexar_mcp --cov-fail-under=85" >> review_result.md
+          $VENV/pytest --cov=vexar_mcp --cov-fail-under=85 >> review_result.md 2>&1
           PYTEST_EXIT=$?
           echo "pytest exit: $PYTEST_EXIT" >> review_result.md
 
@@ -153,7 +153,7 @@ jobs:
               `**What it verified (4 gates — live, dynamic):**\n` +
               `• ruff check .\n` +
               `• mypy src\n` +
-              `• pytest --cov=mcp_doctor --cov-fail-under=85\n` +
+              `• pytest --cov=vexar_mcp --cov-fail-under=85\n` +
               `• Conventional Commits format + labels / size tag\n\n` +
               `**What it improved / maintained:**\n` +
               improvement + `\n\n` +

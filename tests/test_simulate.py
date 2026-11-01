@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
-from mcp_doctor.config import load_config
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.models import ScanStatus
-from mcp_doctor.simulate.cost_model import (
+from vexar_mcp.cli import main
+from vexar_mcp.config import load_config
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.models import ScanStatus
+from vexar_mcp.simulate.cost_model import (
     DEFAULT_CALLS_PER_DAY,
     MODEL_PRICES_USD_PER_MTOK,
     PRICING_AS_OF,
@@ -305,7 +305,7 @@ class TestShippedManifest:
 
         This is meant to fail on a calendar date with no code change. When it does, the fix is
         one line: verify each flagged model's current list price with the vendor and update its
-        `reviewed_on` in src/mcp_doctor/simulate/pricing.json. Do not widen REVIEW_WINDOW_DAYS
+        `reviewed_on` in src/vexar_mcp/simulate/pricing.json. Do not widen REVIEW_WINDOW_DAYS
         to make it pass — that is the same as deleting the test.
         """
         overdue = PRICING_TABLE.stale(date.today())

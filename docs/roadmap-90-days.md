@@ -40,23 +40,23 @@ for the child product.
 
 **Verified.** `mcp-doctor` on PyPI is a different project by a different author
 (`Jiansen/mcp-doctor`, v0.1.0). This repository's distribution is named `Vexar-MCP` but its
-**import package is `mcp_doctor`**. Publishing would place a second, unrelated `mcp_doctor/`
+**import package is `vexar_mcp`**. Publishing would place a second, unrelated `vexar_mcp/`
 into site-packages and shadow or be shadowed by the existing distribution depending on
 install order.
 
-The child product imports it directly (`from mcp_doctor import ScanConfig, scan_paths`), so
+The child product imports it directly (`from vexar_mcp import ScanConfig, scan_paths`), so
 this cannot be fixed in one repo.
 
 **Do, in this order:**
 
-1. Rename `src/mcp_doctor/` → `src/vexar_mcp/`, keeping a `mcp_doctor` shim module that
+1. Rename `src/vexar_mcp/` → `src/vexar_mcp/`, keeping a `vexar_mcp` shim module that
    re-exports with a deprecation warning, so nobody's code breaks on the day of the change.
 2. Bump the pinned commit in `vexar-autofix` and update its two import sites.
 3. Publish `vexar-mcp` to PyPI under trusted publishing (issue **#50** already tracks
    proving the pipeline end to end).
 
 **Done when:** `pip install vexar-mcp` and `pip install vexar-autofix` coexist with no file
-overlap, and `import mcp_doctor` still works through the shim for one minor version.
+overlap, and `import vexar_mcp` still works through the shim for one minor version.
 
 ### D2 — Machine contracts have no schema · P1, weeks 2–3
 
@@ -122,7 +122,7 @@ what that means for the score. **Done when:** [`scan-status.md`](scan-status.md)
 
 | Days | Focus | Exit criterion |
 |---|---|---|
-| 1–15 | **D1** rename + shim, **D5** version/tag alignment | `import mcp_doctor` still works; badge matches package |
+| 1–15 | **D1** rename + shim, **D5** version/tag alignment | `import vexar_mcp` still works; badge matches package |
 | 16–30 | **D2** schemas, **D3** SARIF conformance | Third parties can validate our output without our code |
 | 31–45 | **D4** corpus part 1: five vulnerable, five clean, `expected.json` | Corpus runs in CI |
 | 46–60 | **D6** PR annotations, **D7** two adoption write-ups | A PR shows inline findings; two guides exist |

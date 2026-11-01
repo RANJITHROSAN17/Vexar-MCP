@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from mcp_doctor.models import Category, Diagnostic, Severity
-from mcp_doctor.risk import apply_risk, finding_risk, risk_band, risk_index
+from vexar_mcp.models import Category, Diagnostic, Severity
+from vexar_mcp.risk import apply_risk, finding_risk, risk_band, risk_index
 
 
 def _diag(rule_id: str = "MCP001", severity: Severity = Severity.ERROR) -> Diagnostic:

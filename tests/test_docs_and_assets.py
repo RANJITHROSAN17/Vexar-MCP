@@ -16,10 +16,10 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor import __version__
-from mcp_doctor.config import load_config
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.models import ScanConfig
+from vexar_mcp import __version__
+from vexar_mcp.config import load_config
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.models import ScanConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -115,7 +115,7 @@ class TestQuickstart:
 
     def test_every_command_it_tells_a_newcomer_to_run_is_real(self) -> None:
         """Any `vexar-mcp <subcommand>` in the guide must be a registered subcommand."""
-        from mcp_doctor.cli import _build_parser
+        from vexar_mcp.cli import _build_parser
 
         known = set()
         for action in _build_parser()._subparsers._group_actions:  # type: ignore[union-attr]
@@ -207,7 +207,7 @@ class TestQuotedOutputIsReal:
 
     def test_every_subcommand_is_documented_in_the_usage_reference(self) -> None:
         """A command nobody documented is a command nobody finds."""
-        from mcp_doctor.cli import _build_parser
+        from vexar_mcp.cli import _build_parser
 
         known = set()
         for action in _build_parser()._subparsers._group_actions:  # type: ignore[union-attr]

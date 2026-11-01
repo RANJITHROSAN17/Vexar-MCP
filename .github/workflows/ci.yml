@@ -52,7 +52,7 @@ jobs:
         run: python scripts/verify_release.py
 
       - name: Run Pytest with Coverage Gate
-        run: pytest --cov=mcp_doctor --cov-report=term-missing --cov-fail-under=85
+        run: pytest --cov=vexar_mcp --cov-report=term-missing --cov-fail-under=85
 
       - name: Validate Roadmap Bot Manifest
         run: python .github/scripts/sync_roadmap_issues.py --dry-run
@@ -269,8 +269,8 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          from mcp_doctor.models import ScanConfig, ToolSpec
-          from mcp_doctor.rules.token_rules import check_server_token_budget
+          from vexar_mcp.models import ScanConfig, ToolSpec
+          from vexar_mcp.rules.token_rules import check_server_token_budget
 
           tools = [ToolSpec(name=f"t{i}", description="d", source_file="s.py", line=i,
                             estimated_tokens=400) for i in range(20)]

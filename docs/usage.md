@@ -42,7 +42,7 @@ vexar-mcp 0.1.0
 You can also run it without installing the console script:
 
 ```bash
-python -m mcp_doctor.cli scan .
+python -m vexar_mcp.cli scan .
 ```
 
 ---
@@ -131,7 +131,7 @@ Three deliberate behaviours:
 
 ### Price freshness
 
-Rates live in [`src/mcp_doctor/simulate/pricing.json`](../src/mcp_doctor/simulate/pricing.json) as
+Rates live in [`src/vexar_mcp/simulate/pricing.json`](../src/vexar_mcp/simulate/pricing.json) as
 data, not code, so a repricing is a one-line reviewable diff. Every entry carries its own
 `reviewed_on` date.
 
@@ -583,8 +583,8 @@ Prefer `ignore` in configuration for project-wide policy and `noqa` for genuinel
 ```python
 from pathlib import Path
 
-from mcp_doctor import ScanConfig, scan_paths
-from mcp_doctor.reporters import render_sarif
+from vexar_mcp import ScanConfig, scan_paths
+from vexar_mcp.reporters import render_sarif
 
 report = scan_paths([Path("src")], ScanConfig(max_tool_tokens=300))
 print(report.summary.score, report.summary.grade)

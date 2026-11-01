@@ -5,7 +5,7 @@ Issue #50 is not really "add a workflow" - the workflow existed. It is "the chai
 tag to `pip install vexar-mcp` has never been proven, so every link is still a guess". This
 script makes each link checkable in one second, offline, with no PyPI account:
 
-* the version in ``pyproject.toml`` equals ``mcp_doctor.__version__`` equals the release tag
+* the version in ``pyproject.toml`` equals ``vexar_mcp.__version__`` equals the release tag
   (when one is given) and has a dated ``CHANGELOG.md`` section;
 * the distribution name still normalizes to ``vexar-mcp`` - a rename that only reaches the
   workflow is a publish to the wrong project;
@@ -69,10 +69,10 @@ def read_pyproject(root: Path) -> dict[str, Any]:
 
 def package_version(root: Path) -> str:
     """Read ``__version__`` without importing the package (imports have side effects)."""
-    text = (root / "src" / "mcp_doctor" / "__init__.py").read_text(encoding="utf-8")
+    text = (root / "src" / "vexar_mcp" / "__init__.py").read_text(encoding="utf-8")
     match = re.search(r'^__version__\s*=\s*"([^"]+)"', text, re.M)
     if match is None:
-        raise SystemExit("verify_release: src/mcp_doctor/__init__.py declares no __version__")
+        raise SystemExit("verify_release: src/vexar_mcp/__init__.py declares no __version__")
     return match.group(1)
 
 
@@ -88,7 +88,7 @@ def check_versions(root: Path, tag: str | None) -> list[str]:
             problems.append(f"{label}: version '{value}' is not a MAJOR.MINOR.PATCH release")
     if pyproject_version != init_version:
         problems.append(
-            f"pyproject.toml says {pyproject_version} but src/mcp_doctor/__init__.py says "
+            f"pyproject.toml says {pyproject_version} but src/vexar_mcp/__init__.py says "
             f"{init_version}; one of them is stale"
         )
 

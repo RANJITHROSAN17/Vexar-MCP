@@ -66,10 +66,10 @@ def test_status_reports_a_version_that_was_never_released() -> None:
 
 def test_status_flags_a_plan_naming_a_deleted_file(tmp_path: Path) -> None:
     mod = load("roadmap_status")
-    data = {"items": [{"id": "A", "title": "a", "files": ["src/mcp_doctor/gone.py"]}]}
+    data = {"items": [{"id": "A", "title": "a", "files": ["src/vexar_mcp/gone.py"]}]}
     assert mod.file_drift(data, tmp_path)
-    (tmp_path / "src" / "mcp_doctor").mkdir(parents=True)
-    (tmp_path / "src" / "mcp_doctor" / "gone.py").write_text("")
+    (tmp_path / "src" / "vexar_mcp").mkdir(parents=True)
+    (tmp_path / "src" / "vexar_mcp" / "gone.py").write_text("")
     assert not mod.file_drift(data, tmp_path)
 
 
@@ -90,7 +90,7 @@ def test_pr_guide_matches_a_named_file() -> None:
 
 def test_pr_guide_matches_a_test_written_for_a_named_module() -> None:
     mod = load("pr_context")
-    data = {"items": [{"id": "X", "title": "t", "files": ["src/mcp_doctor/report.py"]}]}
+    data = {"items": [{"id": "X", "title": "t", "files": ["src/vexar_mcp/report.py"]}]}
     assert mod.match_items(data, ["tests/test_report.py"])[0][0]["id"] == "X"
 
 

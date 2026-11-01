@@ -68,7 +68,7 @@ class Line:
 def _run(args: list[str], cwd: Path) -> str:
     """Run the CLI and return stdout+stderr, with the checkout path made relative."""
     proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [sys.executable, "-m", "mcp_doctor", *args],
+        [sys.executable, "-m", "vexar_mcp", *args],
         cwd=cwd,
         capture_output=True,
         text=True,

@@ -25,15 +25,15 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.loaders.ts_backends import (
+from vexar_mcp.cli import main
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.loaders.ts_backends import (
     TreeSitterUnavailable,
     extract_tools,
     tree_sitter_available,
 )
-from mcp_doctor.loaders.typescript_loader import load_typescript
-from mcp_doctor.models import ScanConfig
+from vexar_mcp.loaders.typescript_loader import load_typescript
+from vexar_mcp.models import ScanConfig
 
 pytestmark = pytest.mark.skipif(
     not tree_sitter_available(),

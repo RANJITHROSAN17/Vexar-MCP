@@ -11,7 +11,7 @@ Two things to know before you start:
   publisher, because there is no project page to add one to. See [step 1](#step-1-register-a-pending-trusted-publisher).
 - **`mcp-doctor` on PyPI is somebody else's project** (`Jiansen/mcp-doctor`, one release,
   March 2026). It is not an earlier upload of this repository and it must not be claimed or
-  reused. This project ships as the distribution `vexar-mcp`; `mcp_doctor` is only the import
+  reused. This project ships as the distribution `vexar-mcp`; `vexar_mcp` is only the import
   package name.
 
 ## How a release reaches PyPI
@@ -78,7 +78,7 @@ PyPI permanently owns `vexar-mcp` `0.2.6` the moment it is uploaded.
 
 1. Move the `## [Unreleased]` notes in `CHANGELOG.md` under a dated
    `## [0.2.7] - YYYY-MM-DD` heading.
-2. Set the same version in `pyproject.toml` and `src/mcp_doctor/__init__.py`.
+2. Set the same version in `pyproject.toml` and `src/vexar_mcp/__init__.py`.
 3. Verify locally, from the repository root:
 
    ```bash
@@ -142,7 +142,7 @@ python scripts/verify_release.py --tag v0.2.7 --pypi
   hides it from resolvers without breaking anyone who already pinned it).
 - **One version, four places.** `pyproject.toml`, `__init__.py`, the tag, and the changelog
   heading. `verify_release.py --tag` exists because three of them were drifted before.
-- **`mcp_doctor` is a shared import name.** The unrelated `mcp-doctor` distribution ships the
+- **`vexar_mcp` is a shared import name.** The unrelated `mcp-doctor` distribution ships the
   same top-level package, so the two cannot be installed together. The clean-venv proof job
   is what keeps that collision from hiding a packaging bug.
 
