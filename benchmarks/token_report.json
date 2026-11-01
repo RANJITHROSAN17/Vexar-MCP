@@ -1,0 +1,590 @@
+{
+  "schema": "vexar-token-benchmark/v1",
+  "corpus_sha256": "bd29d0b6ca8c7bdd76ac08821a8992684e144636409f7a8f02de477cbc228da2",
+  "tokenizer": {
+    "package": "tiktoken",
+    "version": "0.13.0"
+  },
+  "serialization": {
+    "separators": [
+      ",",
+      ":"
+    ],
+    "sort_keys": false,
+    "order": "committed JSON key order"
+  },
+  "method": "100 * abs(estimated - exact) / exact; p95 nearest rank; group by encoding and ensure_ascii",
+  "framing": {
+    "included_in_measurement": false,
+    "raw_schema_path_heuristic_addend": 8,
+    "note": "Counts serialized tool JSON only; neither API usage nor model-specific framing. The parameter-based fallback is not benchmarked."
+  },
+  "groups": [
+    {
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "count": 12,
+      "mean_absolute_percentage_error": 84.462768,
+      "p95_absolute_percentage_error": 150.769231,
+      "worst_absolute_percentage_error": 150.769231,
+      "worst_case_id": "identifiers"
+    },
+    {
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "count": 12,
+      "mean_absolute_percentage_error": 100.819256,
+      "p95_absolute_percentage_error": 150.769231,
+      "worst_absolute_percentage_error": 150.769231,
+      "worst_case_id": "identifiers"
+    },
+    {
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "count": 12,
+      "mean_absolute_percentage_error": 84.518474,
+      "p95_absolute_percentage_error": 150.769231,
+      "worst_absolute_percentage_error": 150.769231,
+      "worst_case_id": "identifiers"
+    },
+    {
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "count": 12,
+      "mean_absolute_percentage_error": 110.370311,
+      "p95_absolute_percentage_error": 150.769231,
+      "worst_absolute_percentage_error": 150.769231,
+      "worst_case_id": "identifiers"
+    }
+  ],
+  "observations": [
+    {
+      "case_id": "empty",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 134,
+      "serialized_sha256": "5b12681954da63a247040553c9429656d025ef4d5bbfaddfce69c2237251ba7d",
+      "estimated_tokens": 66,
+      "exact_tokens": 29,
+      "signed_token_error": 37,
+      "absolute_percentage_error": 127.58620689655173
+    },
+    {
+      "case_id": "empty",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 134,
+      "serialized_sha256": "5b12681954da63a247040553c9429656d025ef4d5bbfaddfce69c2237251ba7d",
+      "estimated_tokens": 66,
+      "exact_tokens": 28,
+      "signed_token_error": 38,
+      "absolute_percentage_error": 135.71428571428572
+    },
+    {
+      "case_id": "empty",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 134,
+      "serialized_sha256": "5b12681954da63a247040553c9429656d025ef4d5bbfaddfce69c2237251ba7d",
+      "estimated_tokens": 66,
+      "exact_tokens": 29,
+      "signed_token_error": 37,
+      "absolute_percentage_error": 127.58620689655173
+    },
+    {
+      "case_id": "empty",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 134,
+      "serialized_sha256": "5b12681954da63a247040553c9429656d025ef4d5bbfaddfce69c2237251ba7d",
+      "estimated_tokens": 66,
+      "exact_tokens": 28,
+      "signed_token_error": 38,
+      "absolute_percentage_error": 135.71428571428572
+    },
+    {
+      "case_id": "lookup",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 237,
+      "serialized_sha256": "f977a3d1fb270ea6fc0bd5a0f1309a2b97fb218b6ff8a46b0b66d13edc917973",
+      "estimated_tokens": 110,
+      "exact_tokens": 50,
+      "signed_token_error": 60,
+      "absolute_percentage_error": 120.0
+    },
+    {
+      "case_id": "lookup",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 237,
+      "serialized_sha256": "f977a3d1fb270ea6fc0bd5a0f1309a2b97fb218b6ff8a46b0b66d13edc917973",
+      "estimated_tokens": 110,
+      "exact_tokens": 50,
+      "signed_token_error": 60,
+      "absolute_percentage_error": 120.0
+    },
+    {
+      "case_id": "lookup",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 237,
+      "serialized_sha256": "f977a3d1fb270ea6fc0bd5a0f1309a2b97fb218b6ff8a46b0b66d13edc917973",
+      "estimated_tokens": 110,
+      "exact_tokens": 50,
+      "signed_token_error": 60,
+      "absolute_percentage_error": 120.0
+    },
+    {
+      "case_id": "lookup",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 237,
+      "serialized_sha256": "f977a3d1fb270ea6fc0bd5a0f1309a2b97fb218b6ff8a46b0b66d13edc917973",
+      "estimated_tokens": 110,
+      "exact_tokens": 50,
+      "signed_token_error": 60,
+      "absolute_percentage_error": 120.0
+    },
+    {
+      "case_id": "bounded-list",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 277,
+      "serialized_sha256": "522dd83b8d369e870c2d8979b7f9f729df60c4fb32ffd2f5f69601a5310765ab",
+      "estimated_tokens": 144,
+      "exact_tokens": 65,
+      "signed_token_error": 79,
+      "absolute_percentage_error": 121.53846153846153
+    },
+    {
+      "case_id": "bounded-list",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 277,
+      "serialized_sha256": "522dd83b8d369e870c2d8979b7f9f729df60c4fb32ffd2f5f69601a5310765ab",
+      "estimated_tokens": 144,
+      "exact_tokens": 65,
+      "signed_token_error": 79,
+      "absolute_percentage_error": 121.53846153846153
+    },
+    {
+      "case_id": "bounded-list",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 277,
+      "serialized_sha256": "522dd83b8d369e870c2d8979b7f9f729df60c4fb32ffd2f5f69601a5310765ab",
+      "estimated_tokens": 144,
+      "exact_tokens": 65,
+      "signed_token_error": 79,
+      "absolute_percentage_error": 121.53846153846153
+    },
+    {
+      "case_id": "bounded-list",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 277,
+      "serialized_sha256": "522dd83b8d369e870c2d8979b7f9f729df60c4fb32ffd2f5f69601a5310765ab",
+      "estimated_tokens": 144,
+      "exact_tokens": 65,
+      "signed_token_error": 79,
+      "absolute_percentage_error": 121.53846153846153
+    },
+    {
+      "case_id": "nested",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 463,
+      "serialized_sha256": "684725b8065cbbe6c89164acc823d77db8780419aae96b2491bb63df1b09c7b5",
+      "estimated_tokens": 234,
+      "exact_tokens": 98,
+      "signed_token_error": 136,
+      "absolute_percentage_error": 138.77551020408163
+    },
+    {
+      "case_id": "nested",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 463,
+      "serialized_sha256": "684725b8065cbbe6c89164acc823d77db8780419aae96b2491bb63df1b09c7b5",
+      "estimated_tokens": 234,
+      "exact_tokens": 102,
+      "signed_token_error": 132,
+      "absolute_percentage_error": 129.41176470588235
+    },
+    {
+      "case_id": "nested",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 463,
+      "serialized_sha256": "684725b8065cbbe6c89164acc823d77db8780419aae96b2491bb63df1b09c7b5",
+      "estimated_tokens": 234,
+      "exact_tokens": 98,
+      "signed_token_error": 136,
+      "absolute_percentage_error": 138.77551020408163
+    },
+    {
+      "case_id": "nested",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 463,
+      "serialized_sha256": "684725b8065cbbe6c89164acc823d77db8780419aae96b2491bb63df1b09c7b5",
+      "estimated_tokens": 234,
+      "exact_tokens": 102,
+      "signed_token_error": 132,
+      "absolute_percentage_error": 129.41176470588235
+    },
+    {
+      "case_id": "portuguese",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 384,
+      "serialized_sha256": "b1a55fc68e8b4057963425685ba6740704a52af08ffeddf66ed14ada5ce6aaea",
+      "estimated_tokens": 177,
+      "exact_tokens": 116,
+      "signed_token_error": 61,
+      "absolute_percentage_error": 52.58620689655172
+    },
+    {
+      "case_id": "portuguese",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 384,
+      "serialized_sha256": "b1a55fc68e8b4057963425685ba6740704a52af08ffeddf66ed14ada5ce6aaea",
+      "estimated_tokens": 177,
+      "exact_tokens": 111,
+      "signed_token_error": 66,
+      "absolute_percentage_error": 59.45945945945946
+    },
+    {
+      "case_id": "portuguese",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 356,
+      "serialized_sha256": "4d36664940c796ac33151d72dbf7ade27276ccda22eac17db09b9e63478cb77a",
+      "estimated_tokens": 168,
+      "exact_tokens": 87,
+      "signed_token_error": 81,
+      "absolute_percentage_error": 93.10344827586206
+    },
+    {
+      "case_id": "portuguese",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 356,
+      "serialized_sha256": "4d36664940c796ac33151d72dbf7ade27276ccda22eac17db09b9e63478cb77a",
+      "estimated_tokens": 168,
+      "exact_tokens": 80,
+      "signed_token_error": 88,
+      "absolute_percentage_error": 110.0
+    },
+    {
+      "case_id": "chinese",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 506,
+      "serialized_sha256": "c2c94d8777f4d0e625ad010e3568cd3ea22c8b3b417a001af24911e4285b4270",
+      "estimated_tokens": 266,
+      "exact_tokens": 231,
+      "signed_token_error": 35,
+      "absolute_percentage_error": 15.151515151515152
+    },
+    {
+      "case_id": "chinese",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 506,
+      "serialized_sha256": "c2c94d8777f4d0e625ad010e3568cd3ea22c8b3b417a001af24911e4285b4270",
+      "estimated_tokens": 266,
+      "exact_tokens": 233,
+      "signed_token_error": 33,
+      "absolute_percentage_error": 14.163090128755364
+    },
+    {
+      "case_id": "chinese",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 341,
+      "serialized_sha256": "75797450b7d9cba4dc31a1ea916b7bb52b43985234902e6ac46be42a4baca485",
+      "estimated_tokens": 156,
+      "exact_tokens": 90,
+      "signed_token_error": 66,
+      "absolute_percentage_error": 73.33333333333333
+    },
+    {
+      "case_id": "chinese",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 341,
+      "serialized_sha256": "75797450b7d9cba4dc31a1ea916b7bb52b43985234902e6ac46be42a4baca485",
+      "estimated_tokens": 156,
+      "exact_tokens": 76,
+      "signed_token_error": 80,
+      "absolute_percentage_error": 105.26315789473684
+    },
+    {
+      "case_id": "japanese",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 506,
+      "serialized_sha256": "a069b8e9519646ba3e907de0ee6bc5790a716ed373be0073393b2163b810c349",
+      "estimated_tokens": 263,
+      "exact_tokens": 217,
+      "signed_token_error": 46,
+      "absolute_percentage_error": 21.19815668202765
+    },
+    {
+      "case_id": "japanese",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 506,
+      "serialized_sha256": "a069b8e9519646ba3e907de0ee6bc5790a716ed373be0073393b2163b810c349",
+      "estimated_tokens": 263,
+      "exact_tokens": 218,
+      "signed_token_error": 45,
+      "absolute_percentage_error": 20.642201834862384
+    },
+    {
+      "case_id": "japanese",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 350,
+      "serialized_sha256": "0f29bac99ef66677c6249e6ba3cc7bcb799ac80f14f35f809924304c5f517b80",
+      "estimated_tokens": 159,
+      "exact_tokens": 97,
+      "signed_token_error": 62,
+      "absolute_percentage_error": 63.91752577319588
+    },
+    {
+      "case_id": "japanese",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 350,
+      "serialized_sha256": "0f29bac99ef66677c6249e6ba3cc7bcb799ac80f14f35f809924304c5f517b80",
+      "estimated_tokens": 159,
+      "exact_tokens": 77,
+      "signed_token_error": 82,
+      "absolute_percentage_error": 106.49350649350649
+    },
+    {
+      "case_id": "emoji",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 450,
+      "serialized_sha256": "29c3ffffafb1c521ce53e84717ddafad109dd125d999835c983d7f694deb44c0",
+      "estimated_tokens": 224,
+      "exact_tokens": 160,
+      "signed_token_error": 64,
+      "absolute_percentage_error": 40.0
+    },
+    {
+      "case_id": "emoji",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 450,
+      "serialized_sha256": "29c3ffffafb1c521ce53e84717ddafad109dd125d999835c983d7f694deb44c0",
+      "estimated_tokens": 224,
+      "exact_tokens": 160,
+      "signed_token_error": 64,
+      "absolute_percentage_error": 40.0
+    },
+    {
+      "case_id": "emoji",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 350,
+      "serialized_sha256": "be1af97fcd931283eea748c4ff6ecf8cd245429eb882cb2183c376842bb5de4c",
+      "estimated_tokens": 161,
+      "exact_tokens": 103,
+      "signed_token_error": 58,
+      "absolute_percentage_error": 56.310679611650485
+    },
+    {
+      "case_id": "emoji",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 350,
+      "serialized_sha256": "be1af97fcd931283eea748c4ff6ecf8cd245429eb882cb2183c376842bb5de4c",
+      "estimated_tokens": 161,
+      "exact_tokens": 93,
+      "signed_token_error": 68,
+      "absolute_percentage_error": 73.11827956989248
+    },
+    {
+      "case_id": "mixed",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 433,
+      "serialized_sha256": "fbca6da935ea9f0b5701de1c7b43e71e0a224db2c57f173c98bb8a08349f4a47",
+      "estimated_tokens": 221,
+      "exact_tokens": 147,
+      "signed_token_error": 74,
+      "absolute_percentage_error": 50.34013605442177
+    },
+    {
+      "case_id": "mixed",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 433,
+      "serialized_sha256": "fbca6da935ea9f0b5701de1c7b43e71e0a224db2c57f173c98bb8a08349f4a47",
+      "estimated_tokens": 221,
+      "exact_tokens": 148,
+      "signed_token_error": 73,
+      "absolute_percentage_error": 49.32432432432432
+    },
+    {
+      "case_id": "mixed",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 373,
+      "serialized_sha256": "9cb551ba9a5c470f529342c63a6004003e04aa04f8b7b948c64be2aea99e08fd",
+      "estimated_tokens": 187,
+      "exact_tokens": 99,
+      "signed_token_error": 88,
+      "absolute_percentage_error": 88.88888888888889
+    },
+    {
+      "case_id": "mixed",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 373,
+      "serialized_sha256": "9cb551ba9a5c470f529342c63a6004003e04aa04f8b7b948c64be2aea99e08fd",
+      "estimated_tokens": 187,
+      "exact_tokens": 94,
+      "signed_token_error": 93,
+      "absolute_percentage_error": 98.93617021276596
+    },
+    {
+      "case_id": "identifiers",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 432,
+      "serialized_sha256": "c1c673809f51d53b142a798e84613c123b769418f42d5abdc24572f3e0d7f412",
+      "estimated_tokens": 163,
+      "exact_tokens": 65,
+      "signed_token_error": 98,
+      "absolute_percentage_error": 150.76923076923077
+    },
+    {
+      "case_id": "identifiers",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 432,
+      "serialized_sha256": "c1c673809f51d53b142a798e84613c123b769418f42d5abdc24572f3e0d7f412",
+      "estimated_tokens": 163,
+      "exact_tokens": 65,
+      "signed_token_error": 98,
+      "absolute_percentage_error": 150.76923076923077
+    },
+    {
+      "case_id": "identifiers",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 432,
+      "serialized_sha256": "c1c673809f51d53b142a798e84613c123b769418f42d5abdc24572f3e0d7f412",
+      "estimated_tokens": 163,
+      "exact_tokens": 65,
+      "signed_token_error": 98,
+      "absolute_percentage_error": 150.76923076923077
+    },
+    {
+      "case_id": "identifiers",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 432,
+      "serialized_sha256": "c1c673809f51d53b142a798e84613c123b769418f42d5abdc24572f3e0d7f412",
+      "estimated_tokens": 163,
+      "exact_tokens": 65,
+      "signed_token_error": 98,
+      "absolute_percentage_error": 150.76923076923077
+    },
+    {
+      "case_id": "escaped-text",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 311,
+      "serialized_sha256": "25ce0eb062c1d75906e25d397e51d87e417e13cde3706fb3428e11dbea291555",
+      "estimated_tokens": 160,
+      "exact_tokens": 81,
+      "signed_token_error": 79,
+      "absolute_percentage_error": 97.53086419753086
+    },
+    {
+      "case_id": "escaped-text",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 311,
+      "serialized_sha256": "25ce0eb062c1d75906e25d397e51d87e417e13cde3706fb3428e11dbea291555",
+      "estimated_tokens": 160,
+      "exact_tokens": 82,
+      "signed_token_error": 78,
+      "absolute_percentage_error": 95.1219512195122
+    },
+    {
+      "case_id": "escaped-text",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 311,
+      "serialized_sha256": "25ce0eb062c1d75906e25d397e51d87e417e13cde3706fb3428e11dbea291555",
+      "estimated_tokens": 160,
+      "exact_tokens": 81,
+      "signed_token_error": 79,
+      "absolute_percentage_error": 97.53086419753086
+    },
+    {
+      "case_id": "escaped-text",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 311,
+      "serialized_sha256": "25ce0eb062c1d75906e25d397e51d87e417e13cde3706fb3428e11dbea291555",
+      "estimated_tokens": 160,
+      "exact_tokens": 82,
+      "signed_token_error": 78,
+      "absolute_percentage_error": 95.1219512195122
+    },
+    {
+      "case_id": "long-description",
+      "encoding": "cl100k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 1488,
+      "serialized_sha256": "7c0541a090b8670b8b6187bdb32a96b053e99c4b0d139863d66a006b6e7c2d76",
+      "estimated_tokens": 463,
+      "exact_tokens": 260,
+      "signed_token_error": 203,
+      "absolute_percentage_error": 78.07692307692308
+    },
+    {
+      "case_id": "long-description",
+      "encoding": "o200k_base",
+      "ensure_ascii": true,
+      "serialized_utf8_bytes": 1488,
+      "serialized_sha256": "7c0541a090b8670b8b6187bdb32a96b053e99c4b0d139863d66a006b6e7c2d76",
+      "estimated_tokens": 463,
+      "exact_tokens": 260,
+      "signed_token_error": 203,
+      "absolute_percentage_error": 78.07692307692308
+    },
+    {
+      "case_id": "long-description",
+      "encoding": "cl100k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 1488,
+      "serialized_sha256": "7c0541a090b8670b8b6187bdb32a96b053e99c4b0d139863d66a006b6e7c2d76",
+      "estimated_tokens": 463,
+      "exact_tokens": 260,
+      "signed_token_error": 203,
+      "absolute_percentage_error": 78.07692307692308
+    },
+    {
+      "case_id": "long-description",
+      "encoding": "o200k_base",
+      "ensure_ascii": false,
+      "serialized_utf8_bytes": 1488,
+      "serialized_sha256": "7c0541a090b8670b8b6187bdb32a96b053e99c4b0d139863d66a006b6e7c2d76",
+      "estimated_tokens": 463,
+      "exact_tokens": 260,
+      "signed_token_error": 203,
+      "absolute_percentage_error": 78.07692307692308
+    }
+  ]
+}

@@ -42,6 +42,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Benchmark/reference tokenizer only; default scanning remains heuristic and dependency-free.
+exact-tokenizer = ["tiktoken==0.13.0"]
 # YAML tool manifests are read only when PyYAML is installed; the core package stays
 # dependency-free so `vexar-mcp scan` works on a bare Python install.
 yaml = ["pyyaml>=6.0.1"]

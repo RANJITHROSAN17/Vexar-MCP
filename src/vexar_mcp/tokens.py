@@ -15,7 +15,11 @@ def estimate_tokens(text: str) -> int:
     """Estimate BPE token count for arbitrary English/JSON/code text without network dependencies.
 
     Splits words and punctuation and accounts for subword splitting on long identifiers.
-    Empirically within ~8% of cl100k_base / o200k_base on MCP tool schemas.
+    This is a heuristic, not an accuracy bound. Measurements against cl100k_base
+    and o200k_base on the original synthetic corpus are in benchmarks/token_report.json;
+    reproduce with scripts/benchmark_tokens.py and the optional exact-tokenizer extra.
+    Serialization is measured separately from model framing; the +8 addend below
+    is not calibrated by that benchmark. See docs/usage.md for scope and limitations.
     """
     if not text or not text.strip():
         return 0
