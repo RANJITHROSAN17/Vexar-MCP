@@ -856,7 +856,9 @@ def _cmd_audit_registry(args: argparse.Namespace) -> int:
                 continue
             timeout = server.timeout if server.timeout is not None else args.timeout
             where = f" (cwd {server.cwd})" if server.cwd else ""
-            print(f"  run   {server.name}: {shlex.join(server.command)}{where} [timeout {timeout:g}s]")
+            print(
+                f"  run   {server.name}: {shlex.join(server.command)}{where} [timeout {timeout:g}s]"
+            )
         print("Nothing was executed (--dry-run).")
         return 0
 

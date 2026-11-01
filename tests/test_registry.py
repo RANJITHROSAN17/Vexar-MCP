@@ -152,7 +152,11 @@ def test_client_config_parses_command_and_args() -> None:
 
 def test_client_config_keeps_env_and_cwd() -> None:
     registry = parse_registry(
-        {"mcpServers": {"db": {"command": "db-server", "env": {"DSN": "sqlite://x"}, "cwd": "/srv"}}}
+        {
+            "mcpServers": {
+                "db": {"command": "db-server", "env": {"DSN": "sqlite://x"}, "cwd": "/srv"}
+            }
+        }
     )
     server = registry.servers[0]
     assert server.env == {"DSN": "sqlite://x"}
@@ -192,9 +196,7 @@ def test_empty_client_config_is_not_a_clean_fleet() -> None:
 
 def test_duplicate_names_are_refused() -> None:
     with pytest.raises(RegistryError, match="duplicate"):
-        parse_registry(
-            _native({"name": "a", "command": ["x"]}, {"name": "a", "command": ["y"]})
-        )
+        parse_registry(_native({"name": "a", "command": ["x"]}, {"name": "a", "command": ["y"]}))
 
 
 def test_names_differing_only_by_case_are_refused() -> None:
@@ -285,9 +287,7 @@ def test_fleet_score_is_the_worst_server_not_the_average(
         )
     )
     fleet = run_fleet(registry, ScanConfig(), default_timeout=20.0)
-    scores = {
-        a.name: a.score for a in fleet.audited if a.report is not None
-    }
+    scores = {a.name: a.score for a in fleet.audited if a.report is not None}
     assert scores["clean0"] == 100
     assert scores["bad"] is not None and scores["bad"] < 100
     assert fleet.score == min(s for s in scores.values() if s is not None)
@@ -372,7 +372,11 @@ def test_partially_failing_fleet_reports_each_outcome(tmp_path: Path) -> None:
     )
     fleet = run_fleet(registry, ScanConfig(), default_timeout=20.0)
     outcomes = {a.name: a.outcome for a in fleet.audits}
-    assert outcomes == {"clean": OUTCOME_AUDITED, "broken": OUTCOME_FAILED, "findings": OUTCOME_AUDITED}
+    assert outcomes == {
+        "clean": OUTCOME_AUDITED,
+        "broken": OUTCOME_FAILED,
+        "findings": OUTCOME_AUDITED,
+    }
     assert len(fleet.failed) == 1
     assert len(fleet.audited) == 2
     assert fleet.complete is False

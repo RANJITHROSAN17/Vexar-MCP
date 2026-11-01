@@ -292,7 +292,7 @@ def _env(entry: Mapping[str, Any], *, where: str) -> dict[str, str]:
         if not isinstance(value, str):
             raise _fail(
                 f"{where}: env var '{key}' must be a string "
-                f"(got {type(value).__name__}; quote it as \"{value}\")"
+                f'(got {type(value).__name__}; quote it as "{value}")'
             )
         resolved[key] = value
     return resolved
@@ -355,7 +355,9 @@ def _check_unique(names: Sequence[str]) -> None:
         if lowered in seen:
             other = seen[lowered]
             if other == name:
-                raise _fail(f"duplicate server name '{name}'; names identify reports, so they must be unique")
+                raise _fail(
+                    f"duplicate server name '{name}'; names identify reports, so they must be unique"
+                )
             raise _fail(
                 f"server names '{other}' and '{name}' differ only by case; "
                 "report tables cannot tell them apart"
@@ -425,7 +427,9 @@ def parse_registry(data: object, *, path: str = "<memory>") -> Registry:
     if not servers:
         # An empty registry is not a clean fleet. It is a file that audits nothing, and
         # reporting exit 0 for it is the same false confidence as scoring an unread file 100.
-        raise _fail(f"{path}: registry contains no servers; refusing to report an empty fleet as clean")
+        raise _fail(
+            f"{path}: registry contains no servers; refusing to report an empty fleet as clean"
+        )
 
     _check_unique([server.name for server in servers])
     return Registry(servers=tuple(servers), source_format=source_format, path=path)
@@ -452,7 +456,9 @@ def load_registry(path: Path) -> Registry:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise _fail(f"{path}: not valid JSON (line {exc.lineno}, column {exc.colno}): {exc.msg}") from exc
+        raise _fail(
+            f"{path}: not valid JSON (line {exc.lineno}, column {exc.colno}): {exc.msg}"
+        ) from exc
     return parse_registry(data, path=str(path))
 
 
