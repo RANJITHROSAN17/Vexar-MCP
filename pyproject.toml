@@ -45,12 +45,20 @@ dependencies = [
 # YAML tool manifests are read only when PyYAML is installed; the core package stays
 # dependency-free so `vexar-mcp scan` works on a bare Python install.
 yaml = ["pyyaml>=6.0.1"]
+# Optional TypeScript parser backend. The default 'lexical' scanner has no dependencies;
+# install this extra and pass --ts-parser tree-sitter to resolve computed tool names,
+# same-file schema factories and named handlers. Nothing changes until you select it.
+tree-sitter = ["tree-sitter>=0.21", "tree-sitter-typescript>=0.21"]
 dev = [
   "mypy>=1.10.0",
   "pytest>=8.0.0",
   "pytest-cov>=5.0.0",
   "pyyaml>=6.0.1",
   "ruff>=0.6.0",
+  # Present in dev so CI exercises BOTH TypeScript backends. The runtime package still
+  # never imports it unless --ts-parser tree-sitter is selected.
+  "tree-sitter>=0.21",
+  "tree-sitter-typescript>=0.21",
 ]
 
 [project.urls]
@@ -85,7 +93,7 @@ warn_unused_configs = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["tomli", "yaml"]
+module = ["tomli", "yaml", "tree_sitter", "tree_sitter_typescript"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

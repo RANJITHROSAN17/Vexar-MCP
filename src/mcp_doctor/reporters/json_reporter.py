@@ -72,6 +72,18 @@ def report_payload(report: ScanReport, delta: BaselineDelta | None = None) -> di
             if report.live_protocol
             else None
         ),
+        # Which TypeScript backend ran, so two reports are only compared when they were
+        # produced the same way. `unresolved_registrations` states how much of the syntax
+        # the backend could see but not read: a non-zero value means the tool list is a
+        # floor, not a verdict. null when no TypeScript was parsed (live audits included).
+        "typescript": (
+            {
+                "backend": report.ts_parser,
+                "unresolved_registrations": report.ts_unresolved,
+            }
+            if report.ts_parser
+            else None
+        ),
         "coverage": {
             "candidate_files": report.coverage.candidate_files,
             "files_analyzed": report.coverage.files_analyzed,
