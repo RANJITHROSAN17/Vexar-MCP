@@ -326,3 +326,18 @@ jobs:
           code=$?
           set -e
           test "${code}" = "2" || { echo "expected exit 2 for unknown policy, got ${code}"; exit 1; }
+
+  token-estimator-benchmark:
+    name: Reproduce optional tokenizer benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install optional exact-tokenizer extra
+        run: python -m pip install -e ".[dev,exact-tokenizer]"
+      - name: Recompute committed reference counts and errors
+        run: python scripts/benchmark_tokens.py --check
+      - name: Exercise benchmark regressions
+        run: pytest tests/test_token_benchmark.py

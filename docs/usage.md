@@ -617,3 +617,42 @@ server command for your project:
       - id: vexar-mcp-live
         args: ["--", "python", "my_server.py"]
 ```
+
+## Token-estimator accuracy benchmark
+
+The scanner's token counts remain **heuristic estimates**, not billed usage or an
+accuracy guarantee. The old “within ~8%” claim was unsupported and has been removed.
+The formula is unchanged by this benchmark work; do not interpret disclosure of
+measurement error as a calibration fix.
+
+The committed [reference report](../benchmarks/token_report.json) contains all raw
+counts and mean, p95 and worst-case **absolute percentage error** for each tokenizer
+encoding and serialization separately. See the [corpus and methodology](../benchmarks/README.md).
+The small synthetic corpus exposes substantial errors; it is not a random sample
+of production tools and cannot justify a general accuracy claim.
+
+Reproduce from the repository root (installation and first use may need network):
+
+```bash
+python -m pip install -e ".[exact-tokenizer]"
+python scripts/benchmark_tokens.py --check
+```
+
+To regenerate after deliberately changing the estimator or fixtures:
+
+```bash
+python scripts/benchmark_tokens.py
+```
+
+Review the report diff; CI recomputes it with the pinned tokenizer. Do not hand-edit
+measurements. The optional `exact-tokenizer` extra installs `tiktoken==0.13.0` for
+this benchmark; it **does not switch the CLI to exact counting**. Default scans do
+not import/download it. On first use tiktoken may download its hash-verified encoding
+tables; later runs can use its cache (`TIKTOKEN_CACHE_DIR` can select the cache).
+The dedicated benchmark CI job opts in; normal runtime dependencies remain unchanged.
+
+Both `cl100k_base` and `o200k_base` count identical compact JSON for each fixture,
+with Unicode escaping enabled and disabled as separate groups. These are encoding
+references, not model-specific chat protocol accounting. The `+8` heuristic in the
+raw-schema branch of `estimate_tool_tokens` is disclosed separately and excluded
+from the error calculation. Its parameter-based fallback is not measured here.

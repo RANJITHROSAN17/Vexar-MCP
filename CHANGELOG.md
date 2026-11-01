@@ -18,6 +18,12 @@ Versioning contract, so upgrades are predictable:
 
 ## [Unreleased]
 
+### Added
+
+- A reproducible token-estimator benchmark with an original MIT-licensed Unicode/schema
+  corpus, per-encoding/serialization error distributions, and opt-in exact-tokenizer extra.
+  Removes the unsupported ~8% accuracy claim without changing the estimator formula.
+
 ## [0.3.0] - 2026-11-01
 
 ### Changed
