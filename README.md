@@ -872,3 +872,7 @@ and class objects, rather than loading a second scanner. Do not install the
 unrelated `mcp-doctor` distribution alongside this temporary compatibility shim:
 that distribution owns the same legacy namespace. `vexar-autofix` uses its own
 `vexar_autofix` namespace and the canonical scanner imports.
+
+## Maintainer
+
+**[Ranjith Rosan](https://github.com/RANJITHROSAN17)** maintains Vexar-MCP, a static analysis tool for Model Context Protocol servers. Contributions are credited through the repository’s commit and pull-request history.
