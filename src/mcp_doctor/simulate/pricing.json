@@ -1,0 +1,14 @@
+{
+  "$comment": "Input-token list prices in USD per 1M tokens. EVERY entry carries its own reviewed_on date; the review-window test in tests/test_simulate.py fails once an entry passes REVIEW_WINDOW_DAYS, and `simulate` prints a warning. Update a date only after checking the vendor's current published list price.",
+  "schema": "vexar-mcp-pricing/v1",
+  "models": {
+    "claude-sonnet-4.5": { "input_usd_per_mtok": 3.0, "reviewed_on": "2026-10-01" },
+    "claude-haiku-4.5": { "input_usd_per_mtok": 1.0, "reviewed_on": "2026-10-01" },
+    "claude-opus-4.1": { "input_usd_per_mtok": 15.0, "reviewed_on": "2026-10-01" },
+    "gpt-4.1": { "input_usd_per_mtok": 2.0, "reviewed_on": "2026-10-01" },
+    "gpt-4.1-mini": { "input_usd_per_mtok": 0.4, "reviewed_on": "2026-10-01" },
+    "gpt-5": { "input_usd_per_mtok": 1.25, "reviewed_on": "2026-10-01" },
+    "gemini-2.5-pro": { "input_usd_per_mtok": 1.25, "reviewed_on": "2026-10-01" },
+    "gemini-2.5-flash": { "input_usd_per_mtok": 0.3, "reviewed_on": "2026-10-01" }
+  }
+}

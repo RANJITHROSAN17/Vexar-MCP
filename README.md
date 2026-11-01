@@ -199,7 +199,7 @@ src/mcp_doctor/
 ├── loaders/               # python_ast · typescript_loader · json_manifest · yaml_manifest
 ├── rules/                 # security · schema · contract · token rules + plugin packs
 ├── reporters/             # terminal · json · sarif · markdown · github_actions · html
-└── simulate/cost_model.py # dated model price table → monthly projection
+└── simulate/              # cost_model.py + pricing.json (dated, review-checked rates)
 ```
 
 Full internals: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
@@ -430,7 +430,7 @@ check_package_metadata                     97        1  examples/clean_server.py
 Total context-window tax across 3 tool(s): ~425 tokens/turn
 ```
 
-Prices are a **dated, explicit input** (`PRICING_AS_OF = "2026-10"`); an unknown model raises rather than silently falling back. Counts are deterministic offline estimates, not a tokenizer round-trip — see [`docs/limitations.md`](./docs/limitations.md).
+Prices are a **dated, explicit input** — each rate in [`simulate/pricing.json`](./src/mcp_doctor/simulate/pricing.json) carries the date a human last checked it (`PRICING_AS_OF = "2026-10"` is the oldest). An entry that goes unreviewed for more than 180 days fails the test suite and makes `simulate` print `REVIEW OVERDUE`; an unknown model raises rather than silently falling back. Counts are deterministic offline estimates, not a tokenizer round-trip — see [`docs/limitations.md`](./docs/limitations.md).
 
 ### Adopting a gate on dirty code
 
