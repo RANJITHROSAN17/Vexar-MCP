@@ -72,6 +72,10 @@ class LiveServerSpec:
     timeout: float = 30.0
     protocol_version: str = DEFAULT_PROTOCOL_VERSION
     env: dict[str, str] = field(default_factory=dict)
+    #: Working directory for the child. Client configurations carry one, and ignoring it
+    #: would audit a server from the wrong directory - which produces a plausible report
+    #: about the wrong thing, the worst possible outcome for a diagnostic tool.
+    cwd: str | None = None
 
     @classmethod
     def from_command_line(
@@ -307,6 +311,7 @@ def introspect_server(spec: LiveServerSpec) -> LiveAuditResult:
             text=True,
             bufsize=1,
             env=env,
+            cwd=spec.cwd,
             start_new_session=os.name == "posix",
         )
     except FileNotFoundError as exc:

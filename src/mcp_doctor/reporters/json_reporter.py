@@ -41,12 +41,19 @@ def _delta_payload(delta: BaselineDelta | None) -> dict[str, object] | None:
     }
 
 
-def render_json(report: ScanReport, delta: BaselineDelta | None = None) -> str:
-    """Serialize a ScanReport as deterministic pretty-printed JSON.
+def report_payload(report: ScanReport, delta: BaselineDelta | None = None) -> dict[str, object]:
+    """Build the machine-readable payload for one report.
 
-    The payload is additive-only across minor releases: consumers may rely on existing
-    keys never disappearing or changing type. ``schema`` is bumped only for breaking
-    changes.
+    Split out of :func:`render_json` so a fleet audit can embed each server's payload
+    object directly instead of re-serializing and re-parsing it. One builder means the
+    single-server and fleet documents can never drift apart in their field names.
+
+    Args:
+        report: The scan report to describe.
+        delta: Optional baseline comparison to attach under ``baseline``.
+
+    Returns:
+        A JSON-ready dictionary. Additive-only across minor releases.
     """
     s = report.summary
     payload: dict[str, object] = {
@@ -125,4 +132,14 @@ def render_json(report: ScanReport, delta: BaselineDelta | None = None) -> str:
     delta_payload = _delta_payload(delta)
     if delta_payload is not None:
         payload["baseline"] = delta_payload
-    return json.dumps(payload, indent=2)
+    return payload
+
+
+def render_json(report: ScanReport, delta: BaselineDelta | None = None) -> str:
+    """Serialize a ScanReport as deterministic pretty-printed JSON.
+
+    The payload is additive-only across minor releases: consumers may rely on existing
+    keys never disappearing or changing type. ``schema`` is bumped only for breaking
+    changes.
+    """
+    return json.dumps(report_payload(report, delta), indent=2)
