@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from mcp_doctor.engine import discover_candidate_files, scan_paths
-from mcp_doctor.loaders import (
+from vexar_mcp.engine import discover_candidate_files, scan_paths
+from vexar_mcp.loaders import (
     load_json_manifest,
     load_python_file,
     load_yaml_manifest,
     looks_like_tool_manifest,
 )
-from mcp_doctor.loaders.yaml_manifest import _invalid_yaml_issue
-from mcp_doctor.models import IssueKind, ScanConfig, ScanStatus
+from vexar_mcp.loaders.yaml_manifest import _invalid_yaml_issue
+from vexar_mcp.models import IssueKind, ScanConfig, ScanStatus
 
 
 def test_python_ast_loader_extracts_fastmcp_and_sdk_tools(tmp_path: Path) -> None:
@@ -121,7 +121,7 @@ def search(req: SearchRequest, resp: SearchResp = None) -> list[str]:
     """Search."""
     return []
 ''')
-    from mcp_doctor.loaders import load_python_file
+    from vexar_mcp.loaders import load_python_file
 
     tools = load_python_file(src)
     assert len(tools) == 1
@@ -134,7 +134,7 @@ def search(req: SearchRequest, resp: SearchResp = None) -> list[str]:
 
 
 def test_typescript_loader_clean_fixture() -> None:
-    from mcp_doctor.loaders import load_typescript_file
+    from vexar_mcp.loaders import load_typescript_file
 
     fixture = Path(__file__).resolve().parent / "fixtures" / "clean_ts_server.ts"
     tools = load_typescript_file(fixture)
@@ -146,7 +146,7 @@ def test_typescript_loader_clean_fixture() -> None:
 
 
 def test_typescript_loader_vulnerable_fixture() -> None:
-    from mcp_doctor.loaders import load_typescript_file
+    from vexar_mcp.loaders import load_typescript_file
 
     fixture = Path(__file__).resolve().parent / "fixtures" / "vulnerable_ts_server.ts"
     tools = load_typescript_file(fixture)
@@ -160,7 +160,7 @@ def test_typescript_loader_vulnerable_fixture() -> None:
 
 
 def test_typescript_loader_best_standard() -> None:
-    from mcp_doctor.loaders import load_typescript_file
+    from vexar_mcp.loaders import load_typescript_file
 
     clean = Path(__file__).resolve().parent / "fixtures" / "clean_ts_server.ts"
     vuln = Path(__file__).resolve().parent / "fixtures" / "vulnerable_ts_server.ts"

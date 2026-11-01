@@ -1,6 +1,6 @@
-"""Support `python -m mcp_doctor` execution."""
+"""Legacy module entry point, retained for 0.3.x."""
 
-from mcp_doctor.cli import main
+from vexar_mcp.cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

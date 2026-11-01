@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mcp_doctor.baseline import read_baseline
-from mcp_doctor.cli import main
+from vexar_mcp.baseline import read_baseline
+from vexar_mcp.cli import main
 
 ROOT = Path(__file__).resolve().parents[1]
 

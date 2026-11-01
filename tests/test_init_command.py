@@ -25,11 +25,11 @@ if sys.version_info >= (3, 11):
 else:  # pragma: no cover - exercised on 3.10 only
     import tomli as tomllib
 
-from mcp_doctor import __version__
-from mcp_doctor.cli import main
-from mcp_doctor.config import discover_config, load_config
-from mcp_doctor.models import Severity
-from mcp_doctor.scaffold import (
+from vexar_mcp import __version__
+from vexar_mcp.cli import main
+from vexar_mcp.config import discover_config, load_config
+from vexar_mcp.models import Severity
+from vexar_mcp.scaffold import (
     ACTION_REPOSITORY,
     CONFIG_FILENAME,
     WORKFLOW_PATH,
@@ -85,7 +85,7 @@ class TestGeneratedConfig:
         assert "REPLACES" in text
 
     def test_every_known_config_key_is_documented(self) -> None:
-        from mcp_doctor.config import _KNOWN_KEYS
+        from vexar_mcp.config import _KNOWN_KEYS
 
         text = render_config_text()
         for key in sorted(_KNOWN_KEYS):
@@ -94,7 +94,7 @@ class TestGeneratedConfig:
     @pytest.mark.parametrize("preset", ["ci", "strict-prod", "enterprise-governance"])
     def test_it_writes_the_chosen_presets_gate_values(self, preset: str, tmp_path: Path) -> None:
         """Switching presets must change the written values, not just the `policy` line."""
-        from mcp_doctor.policies import resolve_policy
+        from vexar_mcp.policies import resolve_policy
 
         policy = resolve_policy(preset)
         data = tomllib.loads(render_config_text(preset))
@@ -111,7 +111,7 @@ class TestGeneratedConfig:
         assert config.max_tool_tokens == policy.max_tool_tokens
 
     def test_an_unknown_preset_is_rejected(self) -> None:
-        from mcp_doctor.policies import PolicyViolation
+        from vexar_mcp.policies import PolicyViolation
 
         with pytest.raises(PolicyViolation):
             render_config_text("no-such-preset")

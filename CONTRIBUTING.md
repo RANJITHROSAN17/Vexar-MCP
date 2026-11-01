@@ -32,14 +32,14 @@ Run the full quality gate locally before pushing:
 ruff check .
 ruff format --check .
 mypy src
-pytest --cov=mcp_doctor --cov-report=term-missing
+pytest --cov=vexar_mcp --cov-report=term-missing
 ```
 
 ---
 
 ## How to Add a New Lint Rule in 10 Minutes
 
-1. Pick the matching rule module under `src/mcp_doctor/rules/` (`security_rules.py`, `schema_rules.py`, `token_rules.py`, or `contract_rules.py`).
+1. Pick the matching rule module under `src/vexar_mcp/rules/` (`security_rules.py`, `schema_rules.py`, `token_rules.py`, or `contract_rules.py`).
 2. Decorate a check function with `@register_rule(...)`:
 
 ```python
@@ -77,13 +77,13 @@ Our **PR Governance Bot** enforces [Conventional Commits](https://www.convention
    `MCP013` are static rules, `MCP012` is live-only. `MCP012` is skipped by design in the
    static modules — do not reuse it.
 2. Register with `@register_rule(...)` in the appropriate module under
-   `src/mcp_doctor/rules/` (`security_rules.py`, `schema_rules.py`, `token_rules.py`,
+   `src/vexar_mcp/rules/` (`security_rules.py`, `schema_rules.py`, `token_rules.py`,
    `contract_rules.py`).
 3. Add the rule to the table in `README.md`, a section in `docs/rules.md` (with a
    remediation example and at least one false-positive case), and tests in
    `tests/test_rules.py`.
 4. If the rule can emit an error, consider whether it belongs in a protected category. Add
-   it to the relevant presets in `src/mcp_doctor/policies.py` and say so in the PR.
+   it to the relevant presets in `src/vexar_mcp/policies.py` and say so in the PR.
 
 ### Changing a policy preset
 
@@ -110,7 +110,7 @@ over Python packs, because they are data and cannot run code.
 
 ### Touching the live audit path
 
-`src/mcp_doctor/live.py` runs a child process. Keep these invariants:
+`src/vexar_mcp/live.py` runs a child process. Keep these invariants:
 
 - argv lists only, never a shell;
 - one total deadline covering handshake and pagination;

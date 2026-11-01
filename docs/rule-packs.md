@@ -120,8 +120,8 @@ The same schema works as JSON: `{"rule": [ ... ]}`.
 
 ```python
 # acme_vexar_rules/__init__.py
-from mcp_doctor.models import Category, Diagnostic, Severity
-from mcp_doctor.rules import register_rule
+from vexar_mcp.models import Category, Diagnostic, Severity
+from vexar_mcp.rules import register_rule
 
 
 def register() -> None:  # called once, on demand
@@ -148,8 +148,8 @@ process. That is exactly right for a one-shot CI run. Long-lived hosts and tests
 isolation should bracket loading:
 
 ```python
-from mcp_doctor.rules import restore_registry, snapshot_registry
-from mcp_doctor.rules.plugin import load_rule_pack
+from vexar_mcp.rules import restore_registry, snapshot_registry
+from vexar_mcp.rules.plugin import load_rule_pack
 
 snapshot = snapshot_registry()
 try:

@@ -23,9 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
-from mcp_doctor.models import ScanConfig
-from mcp_doctor.registry import (
+from vexar_mcp.cli import main
+from vexar_mcp.models import ScanConfig
+from vexar_mcp.registry import (
     OUTCOME_AUDITED,
     OUTCOME_FAILED,
     OUTCOME_SKIPPED,

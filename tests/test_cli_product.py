@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
+from vexar_mcp.cli import main
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
 MOCK = Path(__file__).parent / "fixtures" / "mock_mcp_server.py"

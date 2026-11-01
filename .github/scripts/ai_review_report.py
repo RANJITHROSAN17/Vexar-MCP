@@ -15,8 +15,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.models import Diagnostic
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.models import Diagnostic
 
 MAX_DIAGNOSTICS = 200
 REMEDIATION_CHARS = 60

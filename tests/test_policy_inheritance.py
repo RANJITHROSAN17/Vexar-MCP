@@ -18,15 +18,15 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
-from mcp_doctor.config import describe_config, load_config
-from mcp_doctor.models import Category, Severity
-from mcp_doctor.policies import (
+from vexar_mcp.cli import main
+from vexar_mcp.config import describe_config, load_config
+from vexar_mcp.models import Category, Severity
+from vexar_mcp.policies import (
     PolicyLayer,
     PolicyViolation,
     resolve_policy_layers,
 )
-from mcp_doctor.rules import get_rule_catalog
+from vexar_mcp.rules import get_rule_catalog
 
 CATALOG = get_rule_catalog()
 

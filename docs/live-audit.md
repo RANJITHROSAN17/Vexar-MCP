@@ -95,7 +95,7 @@ vexar-mcp audit-server --timeout 120 -- docker run --rm -i my-mcp-server
 ```
 
 `stderr_tail` from the server is available to library callers through
-`mcp_doctor.live.introspect_server()` when a report needs more context than the diagnostic.
+`vexar_mcp.live.introspect_server()` when a report needs more context than the diagnostic.
 
 ## Auditing a whole fleet
 
@@ -233,8 +233,8 @@ Three keys carry the honesty of the document and should be read together:
 ## Library use
 
 ```python
-from mcp_doctor.engine import scan_server
-from mcp_doctor.models import ScanConfig
+from vexar_mcp.engine import scan_server
+from vexar_mcp.models import ScanConfig
 
 report = scan_server(["python", "my_server.py"], ScanConfig(policy_name="strict-prod"), timeout=60)
 print(report.summary.score, report.summary.risk_index)

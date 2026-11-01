@@ -7,7 +7,7 @@ Vexar-MCP is a four-stage static analysis pipeline. It has zero mandatory runtim
               │
               ▼
   ┌─────────────────────────┐
-  │ 1. Loaders              │  src/mcp_doctor/loaders/
+  │ 1. Loaders              │  src/vexar_mcp/loaders/
   │  • python_ast.py        │  Parses @mcp.tool(), Tool(...), types, bounds & AST sinks
   │  • typescript_loader.py │  Parses TS/JS MCP SDK server.tool(...) registrations
   │  • json_manifest.py     │  Parses MCP tools/list, OpenAI & Anthropic tool JSON
@@ -15,7 +15,7 @@ Vexar-MCP is a four-stage static analysis pipeline. It has zero mandatory runtim
               │  list[ToolSpec]
               ▼
   ┌─────────────────────────┐
-  │ 2. Rule Registry        │  src/mcp_doctor/rules/
+  │ 2. Rule Registry        │  src/vexar_mcp/rules/
   │  • contract_rules.py    │  MCP001, MCP008        (tool contract quality)
   │  • token_rules.py       │  MCP002                (per-tool token budget)
   │  • schema_rules.py      │  MCP003, MCP004        (parameter schema drift)
@@ -24,14 +24,14 @@ Vexar-MCP is a four-stage static analysis pipeline. It has zero mandatory runtim
               │  list[Diagnostic]
               ▼
   ┌─────────────────────────┐
-  │ 3. Scan Engine          │  src/mcp_doctor/engine.py
+  │ 3. Scan Engine          │  src/vexar_mcp/engine.py
   │  • # noqa & TOML filter │  Applies inline & vexar-mcp.toml suppressions
   │  • Health Scorecard     │  Computes 0-100 score, A+..F grade & context token tax
   └───────────┬─────────────┘
               │  ScanReport
               ▼
   ┌─────────────────────────┐
-  │ 4. Reporters            │  src/mcp_doctor/reporters/
+  │ 4. Reporters            │  src/vexar_mcp/reporters/
   │  • terminal.py          │  Human CLI scorecard & token leaderboard
   │  • json_reporter.py     │  CI machine-readable report (dashboard input)
   │  • sarif.py             │  SARIF v2.1.0 for GitHub Code Scanning
@@ -74,7 +74,7 @@ Vexar-MCP is a four-stage static analysis pipeline. It has zero mandatory runtim
 
 ## Extending
 
-- **New rule:** decorate a function in `src/mcp_doctor/rules/`, add positive and negative cases in `tests/test_rules.py`.
+- **New rule:** decorate a function in `src/vexar_mcp/rules/`, add positive and negative cases in `tests/test_rules.py`.
 - **New input format:** add a loader returning `list[ToolSpec]` and register it in `engine.scan_paths`.
 - **New reporter:** pure function `ScanReport -> str`, exported from `reporters/__init__.py`, wired into `cli.py`.
 

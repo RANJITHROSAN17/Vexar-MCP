@@ -1,19 +1,12 @@
-"""Output reporters: terminal, JSON, SARIF v2.1.0, Markdown, HTML, and Actions annotations."""
+"""Compatibility namespace for 0.3.x; migrate to vexar_mcp.reporters before 0.4."""
 
-from mcp_doctor.reporters.github_actions import render_github_annotations
-from mcp_doctor.reporters.html_report import render_html
-from mcp_doctor.reporters.json_reporter import render_json
-from mcp_doctor.reporters.markdown import render_markdown
-from mcp_doctor.reporters.sarif import render_sarif
-from mcp_doctor.reporters.terminal import render_rules_table, render_terminal, render_token_report
+from importlib import import_module
+from typing import Any
 
-__all__ = [
-    "render_github_annotations",
-    "render_html",
-    "render_json",
-    "render_markdown",
-    "render_rules_table",
-    "render_sarif",
-    "render_terminal",
-    "render_token_report",
-]
+from vexar_mcp.reporters import *  # noqa: F403
+
+_canonical = import_module("vexar_mcp.reporters")
+
+
+def __getattr__(name: str) -> Any:
+    return getattr(_canonical, name)

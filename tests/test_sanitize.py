@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.models import (
+from vexar_mcp.models import (
     Category,
     Diagnostic,
     IssueKind,
@@ -26,7 +26,7 @@ from mcp_doctor.models import (
     Severity,
     ToolSpec,
 )
-from mcp_doctor.reporters import (
+from vexar_mcp.reporters import (
     render_github_annotations,
     render_html,
     render_json,
@@ -34,7 +34,7 @@ from mcp_doctor.reporters import (
     render_sarif,
     render_terminal,
 )
-from mcp_doctor.sanitize import (
+from vexar_mcp.sanitize import (
     neutralize_markdown,
     neutralize_workflow_command,
     sanitize_for_sink,

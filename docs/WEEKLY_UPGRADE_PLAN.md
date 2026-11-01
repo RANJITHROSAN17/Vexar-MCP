@@ -21,7 +21,7 @@ Bot automation: `feature-upgrade-bot.yml` probes queued roadmap daily; `roadmap-
 - [ ] Add severity model (Critical / High / Medium / Low) to all findings
 - [ ] Update `engine.py` to output `severity` + `exploitability` + `mitigation`
 - [ ] Update `MCP001`–`MCP009` rules with metadata (confidence, fix guidance, references)
-- [ ] Write `tests/test_risk_score.py` — *never created; risk scoring shipped in `src/mcp_doctor/risk.py` with tests in `tests/test_risk.py`*
+- [ ] Write `tests/test_risk_score.py` — *never created; risk scoring shipped in `src/vexar_mcp/risk.py` with tests in `tests/test_risk.py`*
 
 Bot automation: `issue-raise-bot.yml` opens new contributor issue `RM-016` (good first issue / risk engine) when queued.
 

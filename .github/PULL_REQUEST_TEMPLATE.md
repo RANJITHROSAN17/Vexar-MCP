@@ -13,7 +13,7 @@ Closes #
 - [ ] Added or updated unit tests in `tests/`
 - [ ] `ruff check .` and `ruff format --check .` pass
 - [ ] `mypy src` passes with zero errors
-- [ ] `pytest --cov=mcp_doctor` passes (>= 85% coverage)
+- [ ] `pytest --cov=vexar_mcp` passes (>= 85% coverage)
 
 ---
 ## Quantifiable Impact (Required — metrics first)

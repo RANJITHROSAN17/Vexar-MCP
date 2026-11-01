@@ -171,7 +171,7 @@ rule limitations above.
 
 **The score is a heuristic.** `score = 100 - (15·errors + 6·warnings + 2·info)` saturates at
 zero quickly. It is a trend signal, not a maturity model. `risk_index` uses a different,
-documented model (`src/mcp_doctor/risk.py`) and saturates smoothly; neither is a substitute
+documented model (`src/vexar_mcp/risk.py`) and saturates smoothly; neither is a substitute
 for reading the findings.
 
 **Baseline fingerprints ignore line numbers.** That is intentional, but it has consequences:

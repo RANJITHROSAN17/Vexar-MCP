@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.models import Category, ParameterSpec, ScanConfig, Severity, ToolSpec
-from mcp_doctor.rules import get_all_rules, get_rule_catalog
-from mcp_doctor.rules.schema_rules import check_undocumented_parameters
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.models import Category, ParameterSpec, ScanConfig, Severity, ToolSpec
+from vexar_mcp.rules import get_all_rules, get_rule_catalog
+from vexar_mcp.rules.schema_rules import check_undocumented_parameters
 
 
 def test_clean_example_scores_100() -> None:
@@ -123,7 +123,7 @@ def fetch(url: str) -> str:
     """Fetch."""
     return requests.get(url).text
 ''')
-    from mcp_doctor.engine import scan_paths
+    from vexar_mcp.engine import scan_paths
 
     report = scan_paths([srv])
     triggered = {d.rule_id for d in report.diagnostics}
@@ -140,7 +140,7 @@ def fetch(url: str) -> str:
     """Fetch with timeout."""
     return requests.get(url, timeout=10).text
 ''')
-    from mcp_doctor.engine import scan_paths
+    from vexar_mcp.engine import scan_paths
 
     report = scan_paths([srv])
     triggered = {d.rule_id for d in report.diagnostics}
@@ -250,7 +250,7 @@ def _write_secret_server(tmp_path: Path, body: str, filename: str = "secret_serv
     ],
 )
 def test_mcp009_detects_known_token_prefixes(tmp_path: Path, secret: str) -> None:
-    from mcp_doctor.models import Category, Severity
+    from vexar_mcp.models import Category, Severity
 
     source = _write_secret_server(tmp_path, f'    api_key = "{secret}"\n    return query')
     report = scan_paths([source])
@@ -362,8 +362,8 @@ def test_mcp009_toolspec_never_stores_the_raw_secret(tmp_path: Path) -> None:
 
 
 def test_mcp009_is_registered_once_as_error_security_rule() -> None:
-    from mcp_doctor.models import Category, Severity
-    from mcp_doctor.rules.base import get_all_rules
+    from vexar_mcp.models import Category, Severity
+    from vexar_mcp.rules.base import get_all_rules
 
     matches = [rule for rule in get_all_rules() if rule.rule_id == "MCP009"]
     assert len(matches) == 1
@@ -838,7 +838,7 @@ def test_mutual_recursion_terminates_and_still_finds_one_hop_sinks(
     The visited set is the real guard; the hop limit is a scope decision. Testing at a
     raised limit keeps the recursion protection honest if that limit is ever changed.
     """
-    import mcp_doctor.loaders.python_ast as python_ast
+    import vexar_mcp.loaders.python_ast as python_ast
 
     monkeypatch.setattr(python_ast, "_HELPER_HOP_LIMIT", 8)
     diagnostics = _scan_source(

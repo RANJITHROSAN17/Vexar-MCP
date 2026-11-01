@@ -129,11 +129,11 @@ _TYPE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
 
 #: Structural hints: a contributor pasted a real path, which is the strongest signal there is.
 _PATH_HINTS: tuple[tuple[str, str], ...] = (
-    ("src/mcp_doctor/rules/", "area/rules"),
-    ("src/mcp_doctor/loaders/", "area/parsers"),
-    ("src/mcp_doctor/reporters/", "area/reporters"),
-    ("src/mcp_doctor/cli.py", "area/cli"),
-    ("src/mcp_doctor/config.py", "area/cli"),
+    ("src/vexar_mcp/rules/", "area/rules"),
+    ("src/vexar_mcp/loaders/", "area/parsers"),
+    ("src/vexar_mcp/reporters/", "area/reporters"),
+    ("src/vexar_mcp/cli.py", "area/cli"),
+    ("src/vexar_mcp/config.py", "area/cli"),
     (".github/workflows/", "area/ci"),
     ("action.yml", "area/ci"),
     ("docs/", "area/docs"),

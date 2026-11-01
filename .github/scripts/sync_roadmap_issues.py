@@ -63,7 +63,7 @@ def render_issue_body(item: dict[str, Any]) -> str:
 python -m pip install -e ".[dev]"
 ruff check .
 mypy src
-pytest --cov=mcp_doctor
+pytest --cov=vexar_mcp
 ```
 
 ---

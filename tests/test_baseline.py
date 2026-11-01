@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.baseline import (
+from vexar_mcp.baseline import (
     BASELINE_SCHEMA,
     BaselineError,
     baseline_from_json,
@@ -19,8 +19,8 @@ from mcp_doctor.baseline import (
     read_baseline,
     write_baseline,
 )
-from mcp_doctor.engine import scan_paths
-from mcp_doctor.models import Category, Diagnostic, ScanReport, ScanSummary, Severity
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.models import Category, Diagnostic, ScanReport, ScanSummary, Severity
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EXAMPLES = Path(__file__).parent.parent / "examples"

@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from mcp_doctor.cli import main
-from mcp_doctor.models import Category, Diagnostic, ScanReport, ScanSummary, Severity
-from mcp_doctor.reporters import render_github_annotations
+from vexar_mcp.cli import main
+from vexar_mcp.models import Category, Diagnostic, ScanReport, ScanSummary, Severity
+from vexar_mcp.reporters import render_github_annotations
 
 ROOT = Path(__file__).resolve().parent.parent
 

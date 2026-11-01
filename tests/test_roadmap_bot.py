@@ -134,7 +134,7 @@ def test_roadmap_never_proposes_a_rule_id_that_already_exists() -> None:
     Mentions of existing rules in passing ("taint propagation to strengthen MCP005") are fine;
     what must not drift is an item that *proposes to add* an ID that is already taken.
     """
-    from mcp_doctor.rules import get_rule_catalog
+    from vexar_mcp.rules import get_rule_catalog
 
     roadmap = json.loads((ROOT / ".github" / "roadmap.json").read_text(encoding="utf-8"))
     live_ids = set(get_rule_catalog())
