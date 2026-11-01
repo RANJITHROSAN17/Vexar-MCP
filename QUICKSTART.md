@@ -28,10 +28,10 @@ local analysis.
 
 ## Step 1 — install
 
-There is no PyPI release yet, so install from source:
+Create and activate a virtual environment first (`python -m venv .venv`; on macOS/Linux use `source .venv/bin/activate`, on Windows PowerShell use `.\.venv\Scripts\Activate.ps1`). Install the published release:
 
 ```bash
-pip install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main"
+python -m pip install "vexar-mcp==0.3.0"
 vexar-mcp --version
 ```
 
@@ -46,9 +46,11 @@ using. `python3 -m venv .venv && source .venv/bin/activate` first, then reinstal
 
 ## Step 2 — see it work
 
-Scan the intentionally insecure example that ships with the project:
+The examples live in the source repository, not in your working directory after a pip install. Fetch the matching release before scanning:
 
 ```bash
+git clone --branch v0.3.0 --depth 1 https://github.com/RANJITHROSAN17/Vexar-MCP.git
+cd Vexar-MCP
 vexar-mcp scan examples/vulnerable_server.py
 ```
 

@@ -211,9 +211,9 @@ Full internals: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 | Requirement | Version | Notes |
 | :--- | :--- | :--- |
 | **Python** | `>= 3.10` | Declared in `pyproject.toml`. Tested on 3.10–3.13. |
-| **pip** | any recent | `pip install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main"` |
+| **pip** | any recent | `python -m pip install "vexar-mcp==0.3.0"` |
 | **Git** | any | Only for installing from source. |
-| **PyYAML** *(optional)* | `>= 6.0.1` | Needed **only** for `.yaml` manifests: `pip install user/vexar-mcp[yaml]` |
+| **PyYAML** *(optional)* | `>= 6.0.1` | Needed **only** for `.yaml` manifests: `python -m pip install "vexar-mcp[yaml]==0.3.0"` |
 | **Node.js** *(optional)* | — | **Not required.** TypeScript/JS servers are parsed statically. |
 | **Docker** *(optional)* | — | Not required by the tool; handy if you want to audit a containerised server. |
 
@@ -228,17 +228,20 @@ Runtime dependencies: **none** on Python 3.11+. On 3.10, `tomli>=2.0.1` is insta
 same path and shows the output to expect at each step.
 
 ```bash
-# 1. Install (from source -- there is no PyPI release of this package yet)
-pip install "git+https://github.com/RANJITHROSAN17/Vexar-MCP.git@main"
+# 1. Install the published release (inside an activated virtual environment)
+python -m pip install "vexar-mcp==0.3.0"
+vexar-mcp --version
 
-# 2. See it catch real problems in an intentionally broken example
-vexar-mcp scan examples/
+# 2. Get the example files; pip does not copy this repository into your directory
+git clone --branch v0.3.0 --depth 1 https://github.com/RANJITHROSAN17/Vexar-MCP.git
+cd Vexar-MCP
+vexar-mcp scan examples/vulnerable_server.py
 
 # 3. Point it at your own server and enforce a policy
 vexar-mcp scan path/to/your_mcp_server --policy strict-prod
 ```
 
-That is the whole on-ramp. **If step 2 prints findings and step 3 exits `1`, it is working.**
+That is the whole on-ramp. **Step 2 is intentionally vulnerable and should exit `1`.** Step 3 exits `0` for a clean scan, `1` for policy findings, or `2` for a configuration/scan failure; inspect coverage and status, not just the score.
 
 <details>
 <summary><strong>Developing on Vexar-MCP itself</strong></summary>
