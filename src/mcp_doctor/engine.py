@@ -18,7 +18,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
-from mcp_doctor.loaders import load_json_manifest, load_python_file, load_typescript_file
+from mcp_doctor.loaders import load_json_manifest, load_python_file
+from mcp_doctor.loaders.typescript_loader import load_typescript
 from mcp_doctor.loaders.yaml_manifest import (
     YAML_SUFFIXES,
     load_yaml_manifest,
@@ -259,15 +260,23 @@ def assemble_report(
     )
 
 
-def _load_file(file_path: Path, issues: list[ParseIssue]) -> list[ToolSpec]:
-    """Dispatch one candidate file to the loader for its language or format."""
+def _load_file(
+    file_path: Path, issues: list[ParseIssue], parser: str = "lexical"
+) -> tuple[list[ToolSpec], int]:
+    """Dispatch one candidate file to the loader for its language or format.
+
+    Returns:
+        The tools found and the number of registrations the parser could see but not
+        resolve. Only the TypeScript path can report the latter; everything else is zero.
+    """
     if file_path.suffix == ".py":
-        return load_python_file(file_path, issues=issues)
+        return load_python_file(file_path, issues=issues), 0
     if file_path.suffix in (".ts", ".js", ".jsx"):
-        return load_typescript_file(file_path, issues=issues)
+        extraction = load_typescript(file_path, issues=issues, parser=parser)
+        return list(extraction.tools), extraction.unresolved
     if file_path.suffix in YAML_SUFFIXES:
-        return load_yaml_manifest(file_path, issues=issues)
-    return load_json_manifest(file_path, issues=issues)
+        return load_yaml_manifest(file_path, issues=issues), 0
+    return load_json_manifest(file_path, issues=issues), 0
 
 
 def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> ScanReport:
@@ -278,9 +287,14 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
     all_tools: list[ToolSpec] = []
     parse_issues: list[ParseIssue] = []
     files_with_tools = 0
+    unresolved = 0
+    ts_seen = False
 
     for file_path in files:
-        loaded = _load_file(file_path, parse_issues)
+        loaded, file_unresolved = _load_file(file_path, parse_issues, effective_cfg.ts_parser)
+        unresolved += file_unresolved
+        if file_path.suffix in (".ts", ".js", ".jsx"):
+            ts_seen = True
         if loaded:
             files_with_tools += 1
         all_tools.extend(loaded)
@@ -298,12 +312,17 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
         files_with_tools=files_with_tools,
         tools_analyzed=len(all_tools),
     )
-    return assemble_report(
-        all_tools,
-        _inline_suppressed(raw, all_tools),
-        effective_cfg,
-        coverage=coverage,
-        parse_issues=parse_issues,
+    return replace(
+        assemble_report(
+            all_tools,
+            _inline_suppressed(raw, all_tools),
+            effective_cfg,
+            coverage=coverage,
+            parse_issues=parse_issues,
+        ),
+        # Only claim a backend when a TypeScript file was actually parsed with one.
+        ts_parser=effective_cfg.ts_parser if ts_seen else None,
+        ts_unresolved=unresolved,
     )
 
 

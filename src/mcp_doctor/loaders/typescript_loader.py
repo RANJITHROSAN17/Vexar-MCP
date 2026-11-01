@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from bisect import bisect_right
+from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
@@ -19,6 +20,26 @@ from mcp_doctor.models import CodeSink, IssueKind, ParameterSpec, ParseIssue, To
 from mcp_doctor.tokens import estimate_tool_tokens
 
 _EXTENSIONS = frozenset({".ts", ".js", ".jsx"})
+
+#: Backend names accepted by ``--ts-parser``. ``lexical`` needs nothing installed.
+TS_PARSERS: tuple[str, ...] = ("lexical", "tree-sitter")
+DEFAULT_TS_PARSER = "lexical"
+
+
+@dataclass(frozen=True)
+class Extraction:
+    """What one TypeScript file yielded, and by which backend.
+
+    ``unresolved`` counts registrations that were found in the syntax but whose arguments
+    this backend could not prove. It exists so "0 tools" and "3 tools I could not read"
+    stop looking like the same result in a report.
+    """
+
+    tools: tuple[ToolSpec, ...]
+    backend: str
+    unresolved: int = 0
+
+
 _LEX = re.compile(
     r"""(?P<comment>//[^\n]*|/\*.*?\*/)|"""
     r"""(?P<string>"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|"""
@@ -331,19 +352,37 @@ def _sinks(
     return tuple(result)
 
 
-def load_typescript_file(path: Path, *, issues: list[ParseIssue] | None = None) -> list[ToolSpec]:
-    """Extract literal SDK tool registrations without executing JavaScript.
+def load_typescript(
+    path: Path,
+    *,
+    issues: list[ParseIssue] | None = None,
+    parser: str = DEFAULT_TS_PARSER,
+) -> Extraction:
+    """Extract SDK tool registrations without executing JavaScript.
 
     Args:
         path: A TypeScript, JavaScript or JSX source file. Declaration files are ignored.
+        issues: Receives a :class:`ParseIssue` when the file cannot be read.
+        parser: ``lexical`` (default) or ``tree-sitter``. The lexical scanner reads tokens
+            and sees only registrations whose name is a literal at the call site; the
+            tree-sitter backend additionally resolves same-file constant names, schema
+            factories and named handlers. See :mod:`mcp_doctor.loaders.ts_backends`.
 
     Returns:
-        Tools in source order, with statically known parameters and inline-handler
-        sinks. Unsupported extensions yield an empty list; unreadable files append a
-        :class:`ParseIssue` to ``issues`` when a sink is supplied.
+        An :class:`Extraction`: the tools found, the backend that found them, and how many
+        registrations were visible in the syntax but not resolvable.
+
+    Raises:
+        ValueError: If ``parser`` is not a known backend.
+        TreeSitterUnavailable: If ``tree-sitter`` is selected but not installed. This is
+            deliberately not a silent fallback: a report must not claim coverage it lacks.
     """
+    if parser not in TS_PARSERS:
+        raise ValueError(
+            f"unknown TypeScript parser backend '{parser}'; expected one of {list(TS_PARSERS)}"
+        )
     if path.name.endswith(".d.ts") or path.suffix not in _EXTENSIONS:
-        return []
+        return Extraction(tools=(), backend=parser)
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
@@ -355,7 +394,41 @@ def load_typescript_file(path: Path, *, issues: list[ParseIssue] | None = None) 
                     message=f"cannot read file: {exc}",
                 )
             )
-        return []
+        return Extraction(tools=(), backend=parser)
+
+    if parser != "lexical":
+        # Imported lazily: a default install must never import the optional dependency.
+        from mcp_doctor.loaders.ts_backends import extract_tools
+
+        return extract_tools(str(path), text, source_file=str(path))
+
+    return _extract_lexical(text, source_file=str(path))
+
+
+def load_typescript_file(
+    path: Path,
+    *,
+    issues: list[ParseIssue] | None = None,
+    parser: str = DEFAULT_TS_PARSER,
+) -> list[ToolSpec]:
+    """Extract tool registrations and return only the tools.
+
+    Convenience wrapper over :func:`load_typescript` for callers that do not need the
+    backend or the unresolved count.
+
+    Args:
+        path: A TypeScript, JavaScript or JSX source file.
+        issues: Receives a :class:`ParseIssue` when the file cannot be read.
+        parser: ``lexical`` (default) or ``tree-sitter``.
+
+    Returns:
+        Tools in source order.
+    """
+    return list(load_typescript(path, issues=issues, parser=parser).tools)
+
+
+def _extract_lexical(text: str, *, source_file: str) -> Extraction:
+    """Token-level extraction: literal registrations only."""
     source = _Source(text)
     functions, namespaces = _imports(source)
     tools = []
@@ -398,11 +471,11 @@ def load_typescript_file(path: Path, *, issues: list[ParseIssue] | None = None) 
             ToolSpec(
                 name=name,
                 description=description,
-                source_file=str(path),
+                source_file=source_file,
                 line=source.line(index - 2),
                 parameters=params,
                 sinks=_sinks(source, args[-1], params, functions, namespaces),
                 estimated_tokens=estimate_tool_tokens(name, description, params),
             )
         )
-    return tools
+    return Extraction(tools=tuple(tools), backend="lexical")

@@ -72,6 +72,65 @@ The trace is deliberately shallow. Each additional hop multiplies the chance of 
 
 The TS loader is a static scan, not a TypeScript compiler. It recognises common `server.tool(...)` registration shapes. It does not resolve imports, follow generics, or evaluate decorators, so complex or heavily abstracted registrations can be missed.
 
+### Choosing a parser backend: `--ts-parser lexical|tree-sitter`
+
+There are two front ends, and the choice is explicit. **`lexical` is the default and needs
+nothing installed** — a bare `pip install Vexar-MCP` behaves exactly as it always has.
+
+```bash
+vexar-mcp scan .                                  # lexical (default)
+vexar-mcp scan . --ts-parser tree-sitter          # opt-in, needs the extra
+pip install "Vexar-MCP[tree-sitter]"              # the extra
+```
+
+The tree-sitter backend parses the file into a real syntax tree and resolves **same-file**
+identifiers before analysing them. It does not replace the analysis: the resolved spans go
+through the *same* parameter and sink code the lexical scanner uses, so on a file both
+backends can read, they produce the same tools, the same parameters, the same sinks and the
+same score. That is enforced by a test over both committed TypeScript fixtures, because a
+security report whose findings depend on which optional package is installed is worse than
+one with a documented blind spot.
+
+| Construct | `lexical` (default) | `tree-sitter` (opt-in) |
+| :--- | :--- | :--- |
+| `server.tool("literal_name", ...)` | Recognised | Recognised |
+| `const NAME = "x"; server.tool(NAME, ...)` | **Invisible** | Recognised |
+| `const DESC = "..."` used as the description | Invisible (empty description) | Recognised |
+| `const SCHEMA = { ... };` used as the schema | Invisible (no parameters) | Recognised, with parameters |
+| `function makeSchema() { return { ... }; }` → `makeSchema()` | Invisible | Recognised when it has exactly one `return` |
+| `async function handler() {...}` passed by name | Registered, **sinks not inspected** | Registered, sinks inspected |
+| Inline `async () => {}` handler | Recognised | Recognised |
+| `` const ID = `tool_${stage}` `` (template substitution) | Invisible | **Invisible** — counted as unresolved |
+| Identifier imported from another module | Invisible | **Invisible** — counted as unresolved |
+| `const { ID } = config` (destructuring) | Invisible | **Invisible** — counted as unresolved |
+| Factory with several `return` statements | Invisible | **Invisible** — the schema is dropped, the tool is kept |
+| Decorator- or registry-driven registration | Invisible | Invisible |
+
+The last five rows are deliberate. Resolving them would mean guessing, and a security
+scanner that invents a tool's shape grades fiction.
+
+**Why same-file only.** Following an `import` would attribute a finding to a file the user
+may not have scanned, using a line number from somewhere else. For a diagnostic tool a
+misattribution is worse than a documented gap, so cross-file resolution is out of scope.
+
+**Missing extra.** Selecting `--ts-parser tree-sitter` without the extra installed is an
+error (exit `2`) that names the install command. It does **not** silently fall back to the
+lexical scanner: a report must never claim coverage it did not have.
+
+**What the JSON report records.** Every file scan carries a `typescript` block so two runs
+are only compared when they measured the same way:
+
+```json
+"typescript": {"backend": "tree-sitter", "unresolved_registrations": 3}
+```
+
+`unresolved_registrations` counts registrations that were *visible in the syntax* but whose
+arguments could not be proved. It is the honest counterpart to the tool count: with the
+default backend this number is `0` even for a file full of computed names, because the
+lexical scanner cannot see them to count them. A non-zero value means the tool list is a
+**floor**, not a verdict. The field is `null` when no TypeScript was parsed at all — a live
+audit, or a scan that found no `.ts`/`.js` files.
+
 ## Token estimates are approximations
 
 `estimate_tool_tokens` is a deterministic offline heuristic based on character counts and schema structure. It is designed to be fast and dependency-free, and to rank tools consistently.
@@ -153,7 +212,8 @@ have not triaged their backlog — pair it with a baseline.
 `status` and the coverage counters answer **"how much was read?"**, not **"how well was it
 understood?"**. A TypeScript file with valid syntax counts as `files_analyzed` even when it
 registers tools through computed names, external schema modules, or helper functions this
-scanner cannot follow. Those are documented loader limits (see above), not analysis failures.
+scanner cannot follow — unless `--ts-parser tree-sitter` is used, in which case some of
+those become readable and the rest are counted in `typescript.unresolved_registrations`. Those are documented loader limits (see above), not analysis failures.
 
 So:
 
@@ -166,7 +226,8 @@ So:
 | Loader | Recognizes | Does not recognize |
 | :--- | :--- | :--- |
 | Python (AST) | `@mcp.tool()` / `@server.tool()` decorated functions, `Tool(...)` objects, FastMCP builders, typed parameters with bounds, sinks in the handler body | Tools registered through runtime indirection (registries built from data, decorators applied by name), non-`ast`-parseable syntax, tools defined in non-Python sources |
-| TypeScript / JS | Lexical scan of `server.tool(...)` / `registerTool` calls with literal names, inline object schemas, inline handlers | Computed identifiers, imported schema factories, externally referenced handler bodies, framework-level registration wrappers, full JS lexical semantics |
+| TypeScript / JS (`lexical`, default) | `server.tool(...)` / `registerTool` calls with literal names, inline object schemas, inline handlers | Computed identifiers, imported schema factories, externally referenced handler bodies, framework-level registration wrappers, full JS lexical semantics |
+| TypeScript / JS (`tree-sitter`, opt-in extra) | Everything the lexical backend recognises, plus same-file constant names and descriptions, same-file schema constants, single-`return` schema factories, and handler bodies referenced by name | Cross-module imports, template strings with substitutions, destructured bindings, factories whose value depends on an argument, decorators, full JS lexical semantics |
 | JSON manifests | MCP `tools/list` payloads, OpenAI and Anthropic tool manifests | Manifests produced at runtime, non-JSON formats, references resolved by an external schema registry |
 
 If a construct is outside these contracts, the tool it registers is invisible — and no rule

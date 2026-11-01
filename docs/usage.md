@@ -65,12 +65,16 @@ Scans files or directories and prints a scorecard plus diagnostics.
 | `--max-tokens` | integer | `250` | Per-tool token budget before `MCP002` triggers. Overrides config files. |
 | `--ignore` | comma-separated rule IDs | – | Rules to skip, e.g. `MCP004,MCP008`. |
 | `--config` | path | auto-discovered | Explicit TOML configuration file. |
+| `--ts-parser` | `lexical`, `tree-sitter` | `lexical` | TypeScript/JavaScript front end. `tree-sitter` needs the optional extra and resolves computed names; see [limitations.md](limitations.md#choosing-a-parser-backend---ts-parser-lexicaltree-sitter). |
 
 ```bash
 vexar-mcp scan .                                   # everything under the current directory
 vexar-mcp scan src/server.py src/tools.json        # specific files
 vexar-mcp scan . --format sarif --fail-on warning  # CI gate
 vexar-mcp scan . --ignore MCP004 --max-tokens 400  # adjust the policy
+
+pip install "Vexar-MCP[tree-sitter]"
+vexar-mcp scan . --ts-parser tree-sitter           # resolve computed tool names (opt-in)
 ```
 
 ### `vexar-mcp token-report [paths...]`

@@ -176,6 +176,10 @@ class ScanConfig:
         "dist",
         "build",
     )
+    # Which TypeScript parser backend produced the tools: "lexical" (dependency-free
+    # default) or "tree-sitter" (opt-in extra that resolves computed names). Recorded on
+    # the report so two runs are only compared when they measured the same way.
+    ts_parser: str = "lexical"
     # Policy inheritance audit trail: (origin, settings contributed) per layer, root
     # layer first. Empty when no configuration file participates.
     policy_chain: tuple[tuple[str, tuple[str, ...]], ...] = ()
@@ -242,6 +246,13 @@ class ScanReport:
     #: Set only for live audits: the protocol revision actually used and how it was agreed.
     live_protocol: str | None = None
     live_mode: str | None = None
+    #: TypeScript backend that ran, or None when no TypeScript was parsed (a live audit,
+    #: or a scan that found no .ts/.js files). Recorded so coverage is comparable across
+    #: runs rather than silently depending on which extra happened to be installed.
+    ts_parser: str | None = None
+    #: Registrations visible in the syntax but not resolvable by the backend that ran.
+    #: Non-zero is a coverage statement: the tool count is a floor, not a verdict.
+    ts_unresolved: int = 0
 
     @property
     def is_complete(self) -> bool:

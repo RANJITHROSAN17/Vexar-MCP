@@ -167,6 +167,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Append this run's score to the --history file after scanning.",
     )
     scan_p.add_argument(
+        "--ts-parser",
+        choices=("lexical", "tree-sitter"),
+        default=None,
+        help=(
+            "TypeScript/JavaScript parser backend. 'lexical' (the default) is dependency-free "
+            "and reads literal registrations only. 'tree-sitter' requires the optional extra "
+            "and also resolves same-file constant names, schema factories and named handlers; "
+            "it also reports how many registrations it could not resolve."
+        ),
+    )
+    scan_p.add_argument(
         "--allow-incomplete",
         action="store_true",
         help=(
@@ -406,7 +417,12 @@ def _resolve_config(args: argparse.Namespace) -> ScanConfig:
             protected_categories=tuple(Category(name) for name in cfg.protected_categories),
         )
     validated = apply_policy(preset, catalog=get_rule_catalog(), ignored_rules=cfg.ignored_rules)
-    return replace(cfg, ignored_rules=validated)
+    parser = getattr(args, "ts_parser", None)
+    return replace(
+        cfg,
+        ignored_rules=validated,
+        **({"ts_parser": parser} if parser else {}),
+    )
 
 
 def _load_history(path: Path) -> list[int]:
