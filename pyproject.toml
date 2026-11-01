@@ -74,7 +74,7 @@ vexar-mcp = "mcp_doctor.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-mcp_doctor = ["py.typed"]
+mcp_doctor = ["py.typed", "simulate/pricing.json"]
 
 [tool.ruff]
 target-version = "py310"

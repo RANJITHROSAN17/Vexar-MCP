@@ -20,6 +20,18 @@ Versioning contract, so upgrades are predictable:
 
 ### Added
 
+- **The `simulate` price table is now a data file that checks its own age.** Rates moved out of
+    `cost_model.py` into `src/mcp_doctor/simulate/pricing.json`, and every entry carries the
+    `reviewed_on` date a human last verified it. An entry older than `REVIEW_WINDOW_DAYS` (180) now
+    fails the test suite and makes `simulate` print `REVIEW OVERDUE` in its `MODEL:` header plus a
+    `WARNING:` naming the model, its age, and the file to edit. This replaces a single
+    `PRICING_AS_OF` string that nothing verified: a projection could silently quote a rate from an
+    unknown date, which is the same false-confidence failure the scanner was rebuilt to remove.
+    `--input-price` is exempt, because a caller's own contract rate is not in the table.
+    `--format json` gains `pricing_stale` and `pricing_review_window_days`. `PRICING_AS_OF` and
+    `MODEL_PRICES_USD_PER_MTOK` still exist and are now derived from the manifest, so existing
+    imports keep working.
+
 - **`vexar-mcp audit-registry <file>` — audit a whole fleet.** Reads a native registry
   (`servers` list) or an existing Claude Desktop / Cursor configuration (`mcpServers` object),
   audits every server with the same stdio client `audit-server` uses, and emits one combined

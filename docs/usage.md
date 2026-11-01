@@ -129,6 +129,21 @@ Three deliberate behaviours:
   would make an understated bill look authoritative.
 - **No tools found exits 4** rather than printing a confident `$0.00`.
 
+### Price freshness
+
+Rates live in [`src/mcp_doctor/simulate/pricing.json`](../src/mcp_doctor/simulate/pricing.json) as
+data, not code, so a repricing is a one-line reviewable diff. Every entry carries its own
+`reviewed_on` date.
+
+- An entry older than `REVIEW_WINDOW_DAYS` (180) is **stale**. `simulate` still projects — refusing
+  to print a number would not make prices fresher — but the `MODEL:` header gains `REVIEW OVERDUE`
+  and a `WARNING:` line names the model, how old it is, and the file to edit.
+- The same condition **fails the test suite**, so it cannot be merged unnoticed.
+- `--input-price` suppresses the warning: your own contract rate is not in the table, so the
+  table's age says nothing about whether that number is right.
+- `pricing_as_of`, `pricing_stale` and `pricing_review_window_days` are exposed in `--format json`
+  for dashboards that want to gate on it.
+
 ### `vexar-mcp init [directory]`
 
 Writes a commented `vexar-mcp.toml` so a project does not start from a blank page, and with
