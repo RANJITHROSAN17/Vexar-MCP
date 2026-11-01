@@ -5,6 +5,17 @@ A gate nobody can turn on is a gate nobody uses. If your server has 240 existing
 that into a ratchet: accept what exists today, fail only on what is introduced tomorrow, and
 burn the backlog down deliberately.
 
+## Complete GitHub Actions example
+
+Use the [worked CI job in usage.md](usage.md#worked-ci-job-adopt-once-gate-only-new-findings)
+for a copy-pasteable `--policy ci` workflow against `examples/`. It includes manual
+`--write-baseline` adoption, a downloadable candidate for review, and normal
+`--baseline` enforcement. Commit the reviewed candidate before enforcing; an
+unchanged second run passes even if its absolute score remains low. Never write
+a new baseline automatically on every PR—that would accept the very regressions
+the gate is intended to catch. The documented commands are regression-tested in
+`tests/test_baseline_ci_docs.py`.
+
 ## Workflow
 
 ```bash

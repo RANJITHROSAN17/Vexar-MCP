@@ -322,6 +322,94 @@ vexar-mcp scan . --write-baseline .vexar-baseline.json
 vexar-mcp scan . --baseline .vexar-baseline.json --policy strict-prod
 ```
 
+## Worked CI job: adopt once, gate only new findings
+
+This workflow runs against `examples/` in a fresh checkout of this repository.
+Save it as `.github/workflows/vexar-baseline.yml`. It deliberately separates an
+**explicit adoption run** from ordinary enforcing runs; do not regenerate a
+baseline on every PR, or every regression becomes accepted risk.
+
+```yaml
+name: Vexar baseline gate
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      adopt:
+        description: Generate a candidate baseline for review (not enforcement)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Adopt existing findings (manual opt-in only)
+        if: github.event_name == 'workflow_dispatch' && inputs.adopt == true
+        run: vexar-mcp scan examples/ --policy ci --write-baseline .vexar-baseline-ci.json
+      - name: Export candidate for review
+        if: github.event_name == 'workflow_dispatch' && inputs.adopt == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-vexar-baseline
+          path: .vexar-baseline-ci.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Enforce the committed baseline
+        if: github.event_name != 'workflow_dispatch' || inputs.adopt != true
+        run: vexar-mcp scan examples/ --policy ci --baseline .vexar-baseline-ci.json
+```
+
+### First run: adoption and review
+
+On the default branch, select **Actions → Vexar baseline gate → Run workflow**
+and enable **adopt**. This runs `--write-baseline`, records the existing findings,
+and exits successfully despite the examples' intentional violations. Download the
+`candidate-vexar-baseline` artifact, review the JSON, then commit
+`.vexar-baseline-ci.json` at the repository root in a reviewed PR. The job has
+read-only repository permissions and **does not commit accepted risk for you**.
+The workflow must be on the default branch for its manual dispatch button to appear.
+Until the baseline is committed, enforcing runs fail closed with exit `2`;
+that is expected, not a reason to add `continue-on-error`.
+
+For local adoption instead, run the exact command from the adopting step above,
+review and commit the generated file, then run the enforcing command. Both scan
+commands are executed directly from this YAML by
+`tests/test_baseline_ci_docs.py`; the installation command is also used by the
+repository's CI. No extra scan commands are hidden behind illustrative output.
+
+### Second run: no changes
+
+With the committed baseline and unchanged `examples/`, the enforcing run exits
+`0`: zero new findings, the existing findings are **unchanged**, and zero resolved.
+The ordinary score can still be low and the report can still show findings. A
+baseline changes what fails the gate, not the measured score or the underlying
+code. In baseline mode the score floor is not enforced; only **new findings at or
+above the `ci` severity threshold** fail with exit `1`. Incomplete scans retain
+their separate failure behavior; a baseline is not a parse-error bypass.
+
+New violations fail; fixed findings become resolved. Changes to rules, tool
+schemas or the selected policy can change scores without a source edit. Keep the
+policy consistent between adoption and enforcement, and review baseline refreshes
+rather than accepting them automatically. Fingerprints omit line numbers and
+message text, so moving lines alone does not make a violation new; they also
+cannot distinguish another occurrence of the same rule on the same tool/file.
+See [baseline.md](baseline.md) for identity details and governance.
+
+For your own project, replace `examples/` in **both** scan steps with your server
+folder. The editable install shown here installs Vexar-MCP from this repository;
+in a different repository install a reviewed, pinned Vexar-MCP release instead.
+Those substitutions are project-specific, not commands verified by this example.
+
 ## Scanning targets
 
 | Extension | Parser | What is extracted |
