@@ -20,6 +20,22 @@ Versioning contract, so upgrades are predictable:
 
 ### Added
 
+- **`vexar-mcp audit-registry <file>` — audit a whole fleet.** Reads a native registry
+  (`servers` list) or an existing Claude Desktop / Cursor configuration (`mcpServers` object),
+  audits every server with the same stdio client `audit-server` uses, and emits one combined
+  report in terminal, JSON (`vexar-fleet/v1`) or HTML. Each audit is isolated: a server that
+  cannot start, hangs, or speaks non-JSON-RPC is recorded as `failed` and the run continues.
+  The schema is validated fail-closed — ambiguous shape, duplicate names, non-string argv or
+  `env` values, and an empty server list are all exit `2` rather than a guess, and a remote
+  server is reported as `skipped` instead of being silently dropped. A fleet with any failed
+  or skipped member is **incomplete** and exits `3` (`--allow-incomplete` downgrades it).
+  The fleet score is the **worst audited server, not the average**, because an average lets
+  one vulnerable server hide behind healthy ones; the mean is reported beside it as context.
+  `--dry-run` prints the resolved argv and launches nothing. Closes
+  [issue #51](https://github.com/RANJITHROSAN17/Vexar-MCP/issues/51).
+- **`--cwd` and env support on the live client.** `LiveServerSpec` and `engine.scan_server()`
+  accept a working directory and extra environment variables, so a client configuration's
+  `cwd`/`env` are honoured instead of the server being audited from the wrong directory.
 - **Policy inheritance.** A configuration file can now declare
   `extends = "strict-prod"` or point at another configuration file
   (`extends = "../org/vexar-mcp.toml"`), and chains nest to any practical depth. Layers apply

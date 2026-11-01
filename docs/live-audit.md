@@ -97,6 +97,139 @@ vexar-mcp audit-server --timeout 120 -- docker run --rm -i my-mcp-server
 `stderr_tail` from the server is available to library callers through
 `mcp_doctor.live.introspect_server()` when a report needs more context than the diagnostic.
 
+## Auditing a whole fleet
+
+Teams do not run one MCP server. `audit-registry` reads the file that already lists them —
+a Claude Desktop or Cursor configuration, or a checked-in registry — audits each server
+over the same stdio client, and emits one combined report.
+
+```bash
+vexar-mcp audit-registry .vexar-servers.json
+vexar-mcp audit-registry ~/.config/Claude/claude_desktop_config.json --format json
+vexar-mcp audit-registry fleet.json --dry-run          # validate + show the plan, run nothing
+```
+
+### The registry schema
+
+Two shapes are accepted, and a file containing both is refused rather than guessed at.
+
+**Native registry** — `servers` is a list, each entry named:
+
+```json
+{
+  "version": 1,
+  "servers": [
+    {"name": "invoices", "command": ["python", "servers/invoices.py"], "timeout": 45},
+    {"name": "search",   "command": "npx", "args": ["-y", "@acme/search"], "env": {"API_KEY": "..."}}
+  ]
+}
+```
+
+**Client configuration** — `mcpServers` is an object keyed by server name, read as-is:
+
+```json
+{
+  "mcpServers": {
+    "invoices": {"command": "python", "args": ["servers/invoices.py"], "env": {}, "cwd": "/srv/invoices"}
+  }
+}
+```
+
+| Field | Required | Meaning |
+| :--- | :--- | :--- |
+| `name` | native only | Unique label used in the report. Keys of `mcpServers` serve this role there. |
+| `command` | yes | A **list** (used literally) or a **string** (split on whitespace, never shell-expanded). |
+| `args` | no | List of strings. Only valid when `command` is a string. |
+| `env` | no | Object of string values, layered over the parent environment. |
+| `cwd` | no | Working directory for the child. |
+| `timeout` | no | Per-server seconds; falls back to `--timeout`. |
+| `version` | no | Registry revision. Currently only `1`. |
+
+### Validation is fail-closed
+
+A registry is a list of commands to execute, which makes it a code path wearing a config
+file's clothes. Every ambiguity is an error (exit `2`) that names the offending field:
+
+| Situation | Result |
+| :--- | :--- |
+| File missing, or not JSON | exit `2`, with the line and column for a syntax error |
+| Neither `servers` nor `mcpServers` present | exit `2`, listing the keys it did find |
+| Both present | exit `2` — refusing to guess which one to audit |
+| `servers` empty, or `mcpServers` empty | exit `2` — an empty registry is **not** a clean fleet |
+| Duplicate names, or names differing only by case | exit `2` — report rows must be distinguishable |
+| `command` list plus `args`, or an empty command | exit `2` |
+| A non-string argv element or `env` value | exit `2`, quoting the value to fix |
+| `timeout` of zero, negative, boolean, or non-numeric | exit `2` |
+| Unknown `version` | exit `2` naming the versions this build reads |
+| Remote entry (`url`, or `type` of `http`/`sse`) | **skipped** — well-formed, out of reach of a stdio client |
+
+That last row is the interesting one: a remote server is not an error, because client
+configs legitimately mix transports. It is also not silently dropped, because a report that
+lists only what it managed to reach looks more complete than it is. It appears in the table
+as `skipped`, and the fleet is marked incomplete.
+
+### Isolation, and what a failure costs
+
+Each server is audited in its own process, sequentially, and every failure mode is caught
+and recorded rather than raised:
+
+| Situation | Recorded as | Effect on the run |
+| :--- | :--- | :--- |
+| Executable missing | `failed`, with the executable named | run continues; exit `3` |
+| Timeout | `failed`, child killed as usual | run continues; exit `3` |
+| Server speaks non-JSON-RPC | `failed`, with the reason | run continues; exit `3` |
+| Server speaks an old/broken revision | `audited`, with `MCP012` findings | exit per gates |
+| Remote/SSE transport | `skipped`, with the reason | exit `3` |
+
+Exit `3` means "we could not audit part of your fleet", which is deliberately not the same
+as `1` ("we audited everything and something is wrong"). `--allow-incomplete` downgrades it
+to the ordinary gate result when the missing servers are known and accepted.
+
+### The fleet score is the worst server
+
+This is the one number the report leads with, and it is the **minimum** across audited
+servers, never the average:
+
+```
+Fleet score: 60/100 (D)  |  risk: 72  |  tools: 5
+Coverage: 2 of 2 server(s) audited
+Worst server: 'findings' - the worst audited server, not the average
+  mean across audited servers: 80/100 (context only)
+```
+
+Four clean servers and one vulnerable one average to a comfortable B, and the B is the only
+number anyone reads. A minimum cannot be improved by adding healthy servers, which is what
+makes it worth printing. For the same reason `risk_index` is the fleet's **highest**, not a
+sum: running the same server twice is not twice the risk.
+
+`--min-score` gates against that fleet score, so a policy of "no server below 70" fails when
+any one server is below 70. The mean is reported next to it, labelled as context.
+
+A server that produced no grade (`NO_MATCHES`, or nothing to score) cannot set the floor and
+is excluded from the minimum; if no server was graded at all, the fleet score is `null` and
+the run does not pretend otherwise.
+
+### Report formats
+
+`--format terminal|json|html`. The JSON document is `vexar-fleet/v1` with `fleet`,
+`coverage`, `status`, and a `servers` array; each audited server embeds the complete
+`vexar-mcp-report/v1` payload it would have produced alone, so nothing is lost by auditing
+in a fleet. The HTML report is a single self-contained file, like the single-server one.
+
+Three keys carry the honesty of the document and should be read together:
+
+```json
+{
+  "status": "partial",
+  "complete": false,
+  "coverage": {"servers": 5, "audited": 4, "failed": 1, "skipped": 0},
+  "fleet": {"score": 68, "score_semantics": "minimum across audited servers", "mean_score": 84}
+}
+```
+
+`score: 68` is not "the fleet is at 68". It is "the worst server we managed to audit is at
+68, and we did not manage to audit all of them".
+
 ## Library use
 
 ```python

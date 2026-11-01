@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
@@ -36,6 +37,7 @@ from mcp_doctor.engine import scan_paths, scan_server
 from mcp_doctor.live import LiveAuditError
 from mcp_doctor.models import Category, Diagnostic, ScanConfig, ScanReport, ScanStatus
 from mcp_doctor.policies import PolicyViolation, apply_policy, list_policies, resolve_policy
+from mcp_doctor.registry import FleetReport, RegistryError, load_registry, run_fleet
 from mcp_doctor.reporters import (
     render_github_annotations,
     render_html,
@@ -45,6 +47,11 @@ from mcp_doctor.reporters import (
     render_sarif,
     render_terminal,
     render_token_report,
+)
+from mcp_doctor.reporters.fleet import (
+    render_fleet_html,
+    render_fleet_json,
+    render_fleet_terminal,
 )
 from mcp_doctor.rules import get_all_rules, get_rule_catalog
 from mcp_doctor.rules.plugin import RulePackError, load_rule_packs
@@ -226,6 +233,48 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="FORMAT=PATH",
         help="Render an additional format from the same audit (repeatable).",
+    )
+
+    # ------------------------------------------------------- audit-registry
+    reg_p = sub.add_parser(
+        "audit-registry",
+        help="Audit every MCP server listed in a registry or client config file.",
+        description=(
+            "Read a registry file (a 'servers' list, or a Claude Desktop / Cursor "
+            "'mcpServers' object), audit each server over stdio, and report per-server "
+            "scores plus a fleet summary. Each audit is isolated: a server that cannot "
+            "start is reported and the run continues. The fleet score is the WORST "
+            "audited server, not the average."
+        ),
+    )
+    reg_p.add_argument("registry", type=Path, help="Registry or MCP client configuration (JSON).")
+    reg_p.add_argument(
+        "--format",
+        choices=("terminal", "json", "html"),
+        default="terminal",
+        help="Report format (default terminal).",
+    )
+    reg_p.add_argument("--output", type=Path, default=None)
+    reg_p.add_argument("--policy", default=None, help="Enforcement preset name.")
+    reg_p.add_argument("--fail-on", choices=("error", "warning", "info", "never"), default=None)
+    reg_p.add_argument("--min-score", type=int, default=None)
+    reg_p.add_argument("--ignore", default="")
+    reg_p.add_argument("--config", type=Path, default=None)
+    reg_p.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="Default seconds per server when the entry does not set its own (default 30).",
+    )
+    reg_p.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Downgrade 'a server could not be audited' from exit 3 to a normal gate result.",
+    )
+    reg_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate the registry and print the audit plan without launching any server.",
     )
 
     # ------------------------------------------------------------ baseline
@@ -750,6 +799,120 @@ def _cmd_audit_server(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _fleet_gate_failures(fleet: FleetReport, config: ScanConfig) -> list[str]:
+    """Return gate failure reasons for a fleet; empty means every gate passed.
+
+    Mirrors :func:`_gate_failures` for a single report, with one difference: the score
+    floor is checked against the fleet score, which is the worst audited server. A fleet
+    whose worst member fails the floor fails the gate, which is the behaviour a team
+    gating on "no server below 70" expects.
+    """
+    if config.fail_on is None:
+        return []
+
+    reasons: list[str] = []
+    breached = [d for _, d in fleet.diagnostics if d.severity.rank >= config.fail_on.rank]
+    if breached:
+        reasons.append(
+            f"{len(breached)} finding(s) at or above '{config.fail_on.value}' across the fleet "
+            f"(policy '{config.policy_name}')"
+        )
+    if fleet.score is not None and fleet.score < config.min_score:
+        worst = fleet.worst_server
+        name = worst.name if worst is not None else "-"
+        reasons.append(
+            f"fleet score {fleet.score} (worst server '{name}') is below the required floor "
+            f"of {config.min_score} (policy '{config.policy_name}')"
+        )
+    return reasons
+
+
+def _cmd_audit_registry(args: argparse.Namespace) -> int:
+    """Audit every server named in a registry file. See `vexar-mcp audit-registry --help`."""
+    registry_path: Path = args.registry
+    try:
+        registry = load_registry(registry_path)
+    except RegistryError as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    # Anchor configuration discovery at the registry file, so a vexar-mcp.toml beside the
+    # registry governs this fleet rather than whatever directory the shell happens to be in.
+    args.paths = [str(registry_path)]
+    try:
+        cfg = _resolve_config(args)
+    except (ValueError, RulePackError, OSError) as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        # A registry is a list of commands. Printing the resolved argv, with no server
+        # started, is what makes reviewing one before trusting it possible.
+        print(f"Registry: {registry.path} (format: {registry.source_format})")
+        print(f"Servers:  {len(registry.servers)}")
+        for server in registry.servers:
+            if server.unsupported_reason is not None:
+                print(f"  skip  {server.name}: {server.unsupported_reason}")
+                continue
+            timeout = server.timeout if server.timeout is not None else args.timeout
+            where = f" (cwd {server.cwd})" if server.cwd else ""
+            print(f"  run   {server.name}: {shlex.join(server.command)}{where} [timeout {timeout:g}s]")
+        print("Nothing was executed (--dry-run).")
+        return 0
+
+    def _progress(server: object) -> None:  # local closure over stderr
+        name = getattr(server, "name", "?")
+        print(f"vexar-mcp: auditing {name} ...", file=sys.stderr)
+
+    fleet = run_fleet(registry, cfg, default_timeout=args.timeout, on_start=_progress)
+
+    if args.format == "json":
+        rendered = render_fleet_json(fleet)
+    elif args.format == "html":
+        rendered = render_fleet_html(fleet)
+    else:
+        rendered = render_fleet_terminal(fleet)
+    _emit(rendered, args.output)
+
+    if args.format == "terminal":
+        errors, warnings, infos = fleet.counts
+        print(
+            f"vexar-mcp: fleet status {fleet.status.value}, score "
+            f"{'n/a' if fleet.score is None else f'{fleet.score}/100 ({fleet.grade})'}, "
+            f"{len(fleet.audited)}/{len(fleet.audits)} audited, "
+            f"{errors} error(s), {warnings} warning(s), {infos} info, "
+            f"policy '{cfg.policy_name}'",
+            file=sys.stderr,
+        )
+
+    # Incompleteness is reported before findings, for the same reason a single scan reports
+    # PARTIAL before its gates: findings from a fleet we only half audited do not mean what
+    # they appear to mean.
+    if not fleet.complete and not args.allow_incomplete:
+        if fleet.failed:
+            names = ", ".join(a.name for a in fleet.failed)
+            print(
+                f"vexar-mcp: analysis incomplete: {len(fleet.failed)} server(s) could not be "
+                f"audited ({names}) - the fleet result covers only the rest "
+                "(re-run with --allow-incomplete to downgrade this)",
+                file=sys.stderr,
+            )
+        if fleet.skipped:
+            names = ", ".join(a.name for a in fleet.skipped)
+            print(
+                f"vexar-mcp: analysis incomplete: {len(fleet.skipped)} server(s) skipped as "
+                f"unsupported transports ({names}) "
+                "(re-run with --allow-incomplete to downgrade this)",
+                file=sys.stderr,
+            )
+        return 3
+
+    failures = _fleet_gate_failures(fleet, cfg)
+    for reason in failures:
+        print(f"vexar-mcp: gate failed: {reason}", file=sys.stderr)
+    return 1 if failures else 0
+
+
 def _cmd_init(args: argparse.Namespace) -> int:
     """Scaffold a configuration file and, optionally, a CI workflow."""
     target = Path(args.directory)
@@ -802,6 +965,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_baseline(args)
         if args.command == "audit-server":
             return _cmd_audit_server(args)
+        if args.command == "audit-registry":
+            return _cmd_audit_registry(args)
         if args.command == "simulate":
             return _cmd_simulate(args)
         if args.command == "init":

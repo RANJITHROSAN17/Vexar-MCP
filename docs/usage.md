@@ -197,6 +197,66 @@ vexar-mcp audit-server -- python my_server.py
 vexar-mcp audit-server --format json --timeout 60 -- npx -y @acme/mcp-server
 ```
 
+### `vexar-mcp audit-registry <file>`
+
+Audit **every** MCP server named in a registry file or an existing client configuration
+(Claude Desktop, Cursor), and produce one combined report. See
+[the registry section of live-audit.md](live-audit.md#auditing-a-whole-fleet).
+
+```bash
+vexar-mcp audit-registry .vexar-servers.json
+vexar-mcp audit-registry ~/.config/Claude/claude_desktop_config.json --dry-run
+vexar-mcp audit-registry fleet.json --format html --output fleet.html
+```
+
+Each server is audited in isolation: one that cannot start is reported and the run
+continues. A fleet where any server failed or was skipped is **incomplete** and exits `3`,
+because findings from a fleet that was only partly audited do not mean what they appear to
+mean. `--allow-incomplete` downgrades that to the normal gate result.
+
+The **fleet score is the worst audited server**, not the average. Four clean servers and one
+vulnerable one average to a comfortable B, and the B is the only number anyone reads; the
+minimum cannot be improved by adding healthy servers. The mean is still reported beside it,
+labelled as context.
+
+`--dry-run` validates the file and prints the exact argv that would run, launching nothing.
+A registry is a list of commands, so reviewing it before trusting it should not require
+running it.
+
+#### Registry file shape
+
+Either a native registry:
+
+```json
+{
+  "version": 1,
+  "servers": [
+    {"name": "invoices", "command": ["python", "servers/invoices.py"], "timeout": 45},
+    {"name": "search", "command": "npx", "args": ["-y", "@acme/search"], "env": {"API_KEY": "..."}}
+  ]
+}
+```
+
+or a client configuration, read as-is:
+
+```json
+{
+  "mcpServers": {
+    "invoices": {"command": "python", "args": ["servers/invoices.py"], "cwd": "/srv/invoices"}
+  }
+}
+```
+
+Validation fails closed: an unknown shape, both shapes at once, a non-string argv element, a
+non-string `env` value, a non-positive `timeout`, or duplicate server names (including names
+differing only by case) is exit `2` naming the offending field. An empty registry is an error
+rather than a clean fleet. A remote/SSE entry (`url`, or `type` of `http`/`sse`) is
+well-formed but cannot be audited by the stdio client, so it is listed as **skipped** and
+makes the fleet incomplete — never quietly dropped.
+
+Note that **argv is echoed verbatim** into the report for provenance. Put credentials in
+`env`, which is never echoed.
+
 ### `vexar-mcp baseline write|show`
 
 Create or inspect accepted-risk snapshots. See [baseline.md](baseline.md).
@@ -404,6 +464,8 @@ Prefer `ignore` in configuration for project-wide policy and `noqa` for genuinel
 | `0` | Scan completed and no finding met the `--fail-on` threshold |
 | `1` | Scan completed and at least one finding met the threshold |
 | `2` | Usage error, missing target, or unreadable file |
+| `3` | Analysis incomplete — some inputs could not be analyzed (`scan`), or a server in a fleet could not be audited (`audit-registry`) |
+| `4` | No supported MCP tool was found and the policy requires at least one |
 
 `--fail-on never` always returns `0` for a successful scan, which is what you want when you only need a report artifact.
 

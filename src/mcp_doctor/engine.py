@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -308,13 +308,36 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
 
 
 def scan_server(
-    spec_command: Sequence[str], config: ScanConfig | None = None, *, timeout: float = 30.0
+    spec_command: Sequence[str],
+    config: ScanConfig | None = None,
+    *,
+    timeout: float = 30.0,
+    cwd: str | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> ScanReport:
-    """Introspect a live MCP server over stdio and scan its announced tool catalog."""
+    """Introspect a live MCP server over stdio and scan its announced tool catalog.
+
+    Args:
+        spec_command: The argv to launch, passed literally — never through a shell.
+        config: Scan configuration; defaults to a fresh :class:`ScanConfig`.
+        timeout: Seconds allowed for the whole handshake and tools/list exchange.
+        cwd: Working directory for the child, as supplied by a client configuration.
+        env: Extra environment variables for the child, layered over the parent's.
+
+    Returns:
+        A :class:`~mcp_doctor.models.ScanReport` describing the tools the server exposes.
+    """
     from mcp_doctor.live import LiveServerSpec, introspect_server, protocol_diagnostics
 
     effective_cfg = config or ScanConfig()
-    result = introspect_server(LiveServerSpec(command=tuple(spec_command), timeout=timeout))
+    result = introspect_server(
+        LiveServerSpec(
+            command=tuple(spec_command),
+            timeout=timeout,
+            cwd=cwd,
+            env=dict(env or {}),
+        )
+    )
 
     raw: list[Diagnostic] = list(protocol_diagnostics(result))
     for rule in get_all_rules():
