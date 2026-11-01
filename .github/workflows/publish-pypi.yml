@@ -151,11 +151,12 @@ jobs:
   publish:
     name: Upload to PyPI via OIDC
     needs: [verify, build]
-    # A release event publishes; a dispatch or a call publishes only when dry-run is false.
+    # Reusable workflows retain the caller's event name: a tag-triggered call
+    # sees 'push', not 'workflow_call'. Keep dry runs and branch pushes non-publishing.
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.dry-run == false) ||
-      (github.event_name == 'workflow_call' && inputs.dry-run == false)
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && inputs.dry-run == false)
     runs-on: ubuntu-latest
     environment:
       name: pypi
