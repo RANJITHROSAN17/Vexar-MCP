@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Label and annotate the issues this PR closes
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           # The PR body and title are attacker-controlled: they reach JavaScript through the
           # environment, never through interpolation into the script body.
