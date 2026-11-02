@@ -454,11 +454,22 @@ def test_python_pack_missing_hook_and_module(
         load_rule_pack("definitely_not_a_real_module_xyz")
 
 
-def test_invalid_spec_and_empty_spec_are_rejected() -> None:
+def test_invalid_spec_and_empty_spec_are_rejected(tmp_path: Path) -> None:
+    """An unresolvable spec must say so, and must say so on any machine.
+
+    This used `../../etc/passwd`, whose meaning depends on how deep the checkout sits:
+    `/etc/passwd` exists when the repo is at /tmp/morrow but not when it is at
+    /home/runner/work/<repo>/<repo>, so locally the loader took the "parse this file"
+    branch and the test failed with a YAML parse error while passing in CI. The path is
+    now built so it cannot exist anywhere, and the traversal-shaped case keeps a name no
+    module-path regex can accept.
+    """
     with pytest.raises(RulePackError, match="empty rule pack"):
         load_rule_pack("   ")
     with pytest.raises(RulePackError, match="neither an existing"):
-        load_rule_pack("../../etc/passwd")
+        load_rule_pack(str(tmp_path / "missing_pack.yaml"))
+    with pytest.raises(RulePackError, match="neither an existing"):
+        load_rule_pack("../../definitely-not-a-real-pack-xyz")
 
 
 def test_load_rule_packs_accumulates() -> None:
