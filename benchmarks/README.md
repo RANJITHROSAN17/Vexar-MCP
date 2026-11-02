@@ -24,7 +24,7 @@ python scripts/benchmark_tokens.py
 python scripts/benchmark_tokens.py --check
 ```
 
-The script pins tiktoken 0.13.0 and compares `estimate_tokens` with `cl100k_base`
+The script pins tiktoken 0.14.0 and compares `estimate_tokens` with `cl100k_base`
 and `o200k_base`. Each definition is serialized twice with compact separators
 `(',', ':')`, committed key order (`sort_keys=False`), and `ensure_ascii=True` or
 `False`. The **same string** goes to the estimator and reference encoder. UTF-8 byte
