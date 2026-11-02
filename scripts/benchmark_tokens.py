@@ -20,7 +20,6 @@ ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "benchmarks/token_corpus.json"
 REPORT = ROOT / "benchmarks/token_report.json"
 ENCODINGS = ("cl100k_base", "o200k_base")
-TOKENIZER_VERSION = "0.14.0"
 
 
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -38,6 +37,23 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def recorded_version(path: Path = REPORT) -> str | None:
+    """The tiktoken version the committed report was generated with, if there is one.
+
+    This is the single source of truth for the pin. A module constant duplicates a value
+    that already lives in the report and in pyproject.toml, and only pyproject.toml is
+    visible to a dependency bot -- so a bump moved one of the three and left the other two
+    behind, which is a red CI job that reads like an incompatibility. Reading the report
+    means the drift is reported where it can be acted on: regenerate, then review the diff.
+    """
+    if not path.exists():
+        return None
+    try:
+        return str(json.loads(path.read_text(encoding="utf8"))["tokenizer"]["version"])
+    except (KeyError, json.JSONDecodeError, OSError):
+        return None
+
+
 def measure(corpus_path: Path = CORPUS) -> dict[str, Any]:
     """Compare the same serialized bytes with the estimator and two reference encodings."""
     try:
@@ -46,8 +62,7 @@ def measure(corpus_path: Path = CORPUS) -> dict[str, Any]:
         raise RuntimeError(
             'Install the opt-in extra: python -m pip install -e ".[exact-tokenizer]"'
         ) from exc
-    if version("tiktoken") != TOKENIZER_VERSION:
-        raise RuntimeError(f"Reproduction requires tiktoken=={TOKENIZER_VERSION}")
+    installed = version("tiktoken")
     raw = corpus_path.read_text(encoding="utf8").encode("utf8")
     corpus = json.loads(raw)
     if corpus["schema"] != "vexar-token-corpus/v1" or not corpus["cases"]:
@@ -83,7 +98,7 @@ def measure(corpus_path: Path = CORPUS) -> dict[str, Any]:
     return {
         "schema": "vexar-token-benchmark/v1",
         "corpus_sha256": hashlib.sha256(raw).hexdigest(),
-        "tokenizer": {"package": "tiktoken", "version": TOKENIZER_VERSION},
+        "tokenizer": {"package": "tiktoken", "version": installed},
         "serialization": {
             "separators": [",", ":"],
             "sort_keys": False,
@@ -112,6 +127,16 @@ def main(argv: list[str] | None = None) -> int:
     except (RuntimeError, OSError, ValueError) as exc:
         parser.exit(2, f"benchmark_tokens: {exc}\n")
     if args.check:
+        recorded = recorded_version(args.output)
+        measured = json.loads(result)["tokenizer"]["version"]
+        if recorded is not None and recorded != measured:
+            parser.exit(
+                2,
+                f"benchmark_tokens: the committed report was generated with tiktoken=={recorded}, "
+                f"but {measured} is installed. Regenerate with `python scripts/benchmark_tokens.py` "
+                f"and review the diff: if only the tokenizer.version line moved, no measurement "
+                f"changed.\n",
+            )
         if not args.output.exists() or args.output.read_text(encoding="utf8") != result:
             parser.exit(1, "benchmark_tokens: report drifted; regenerate and review the diff\n")
     else:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -19,6 +20,22 @@ spec = importlib.util.spec_from_file_location(
 assert spec is not None and spec.loader is not None
 benchmark = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(benchmark)
+
+
+def _declared_extra_pin() -> str:
+    """The tiktoken version pyproject.toml declares for the exact-tokenizer extra."""
+    match = re.search(
+        r'exact-tokenizer\s*=\s*\[\s*"tiktoken==([0-9][^"]*)"',
+        (ROOT / "pyproject.toml").read_text(encoding="utf8"),
+    )
+    assert match, "pyproject.toml must pin tiktoken in the exact-tokenizer extra"
+    return match.group(1)
+
+
+def test_the_report_and_the_extra_pin_agree() -> None:
+    """Two places hold the version; a bot can only move one, so the test joins them."""
+    report = json.loads(benchmark.REPORT.read_text(encoding="utf8"))
+    assert report["tokenizer"]["version"] == _declared_extra_pin()
 
 
 def test_error_statistics_use_absolute_errors_and_nearest_rank_p95() -> None:
@@ -49,7 +66,10 @@ def test_committed_report_matches_current_estimator_and_serialization() -> None:
     cases = {c["id"]: c for c in json.loads(raw)["cases"]}
     report = json.loads(benchmark.REPORT.read_text(encoding="utf8"))
     assert report["corpus_sha256"] == hashlib.sha256(raw).hexdigest()
-    assert report["tokenizer"]["version"] == benchmark.TOKENIZER_VERSION
+    assert report["tokenizer"]["version"] == _declared_extra_pin(), (
+        "the committed report and the exact-tokenizer extra disagree; regenerate the report "
+        "with `python scripts/benchmark_tokens.py` and review the diff"
+    )
     assert report["framing"]["included_in_measurement"] is False
     assert report["framing"]["raw_schema_path_heuristic_addend"] == 8
     rows = report["observations"]
