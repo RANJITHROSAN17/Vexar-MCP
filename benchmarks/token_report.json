@@ -3,7 +3,7 @@
   "corpus_sha256": "bd29d0b6ca8c7bdd76ac08821a8992684e144636409f7a8f02de477cbc228da2",
   "tokenizer": {
     "package": "tiktoken",
-    "version": "0.13.0"
+    "version": "0.14.0"
   },
   "serialization": {
     "separators": [

@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "benchmarks/token_corpus.json"
 REPORT = ROOT / "benchmarks/token_report.json"
 ENCODINGS = ("cl100k_base", "o200k_base")
-TOKENIZER_VERSION = "0.13.0"
+TOKENIZER_VERSION = "0.14.0"
 
 
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:

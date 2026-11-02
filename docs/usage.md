@@ -645,7 +645,7 @@ python scripts/benchmark_tokens.py
 ```
 
 Review the report diff; CI recomputes it with the pinned tokenizer. Do not hand-edit
-measurements. The optional `exact-tokenizer` extra installs `tiktoken==0.13.0` for
+measurements. The optional `exact-tokenizer` extra installs `tiktoken==0.14.0` for
 this benchmark; it **does not switch the CLI to exact counting**. Default scans do
 not import/download it. On first use tiktoken may download its hash-verified encoding
 tables; later runs can use its cache (`TIKTOKEN_CACHE_DIR` can select the cache).
