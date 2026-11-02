@@ -268,7 +268,10 @@ class TestActionPinConsistency:
     """
 
     # Tracked in RM-035. Delete entries as they are unified -- do not add new ones.
-    KNOWN_DRIFT = frozenset({"actions/checkout", "actions/github-script"})
+    # Emptied when the github-actions group moved checkout to v7 and github-script to v9
+    # across every workflow and action.yml; no action is now pinned to two majors. The
+    # ratchet stays in place: a future split fails the test above and has to be named here.
+    KNOWN_DRIFT: frozenset[str] = frozenset()
 
     def _pins(self) -> dict[str, set[str]]:
         pins: dict[str, set[str]] = {}
