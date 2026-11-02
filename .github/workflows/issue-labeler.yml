@@ -21,7 +21,7 @@ jobs:
     if: github.event.issue.user.type != 'Bot'
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
