@@ -43,11 +43,12 @@ from vexar_mcp.loaders.typescript_loader import (
     Extraction,
     _imports,
     _parameters,
+    _schema_supported,
     _sinks,
     _Source,
     _Span,
 )
-from vexar_mcp.models import ToolSpec
+from vexar_mcp.models import IssueKind, ParseIssue, ToolSpec
 from vexar_mcp.tokens import estimate_tool_tokens
 
 #: How many identifier hops to follow before giving up. A chain longer than this is not a
@@ -373,31 +374,50 @@ def extract_tools(path_text: str, text: str, *, source_file: str) -> Extraction:
     functions, namespaces = _imports(source)
     tools: list[ToolSpec] = []
     unresolved = 0
+    issues: list[ParseIssue] = []
 
     for call in _find_registrations(ast.root):
         kind = _Resolver._text(call.child_by_field_name("function").child_by_field_name("property"))
         args = _argument_nodes(call)
         if len(args) < 2:
             unresolved += 1
+            issues.append(
+                ParseIssue(
+                    source_file,
+                    IssueKind.UNRESOLVED_TOOL,
+                    "tool registration arguments cannot be resolved",
+                    call.start_point[0] + 1,
+                )
+            )
             continue
 
         name_node = resolver.resolve(args[0])
         name = ast.literal(name_node)
         if name is None:
-            # The whole reason this backend exists: count it instead of dropping it.
             unresolved += 1
+            issues.append(
+                ParseIssue(
+                    source_file,
+                    IssueKind.UNRESOLVED_TOOL,
+                    "computed tool registration name cannot be resolved",
+                    call.start_point[0] + 1,
+                )
+            )
             continue
 
         description = ""
         schema_span: _Span = (0, 0)
+        unknown_schema = False
         if kind == "registerTool":
             metadata = resolver.resolve(args[1])
+            unknown_schema = metadata is None or metadata.type != "object"
             description_node = _object_field(metadata, "description")
             description = ast.literal(resolver.resolve(description_node)) or ""
             schema_node = _object_field(metadata, "inputSchema")
             if schema_node is not None:
                 resolved = resolver.resolve(schema_node)
                 schema_span = ast.span(resolved if resolved is not None else schema_node)
+                unknown_schema = not _schema_supported(source, schema_span)
         else:
             first_schema = 1
             literal = ast.literal(resolver.resolve(args[1]))
@@ -405,9 +425,19 @@ def extract_tools(path_text: str, text: str, *, source_file: str) -> Extraction:
                 description, first_schema = literal, 2
             if first_schema < len(args) - 1:
                 resolved = resolver.resolve(args[first_schema])
-                if resolved is not None:
-                    schema_span = ast.span(resolved)
+                schema_span = ast.span(resolved if resolved is not None else args[first_schema])
+                unknown_schema = not _schema_supported(source, schema_span)
 
+        if unknown_schema:
+            unresolved += 1
+            issues.append(
+                ParseIssue(
+                    source_file,
+                    IssueKind.UNRESOLVED_TOOL,
+                    "tool metadata or input schema cannot be resolved",
+                    call.start_point[0] + 1,
+                )
+            )
         handler_node = resolver.resolve(args[-1])
         handler_span = ast.span(handler_node) if handler_node is not None else (0, 0)
         params = _parameters(source, schema_span)
@@ -422,7 +452,9 @@ def extract_tools(path_text: str, text: str, *, source_file: str) -> Extraction:
                 estimated_tokens=estimate_tool_tokens(name, description, params),
             )
         )
-    return Extraction(tools=tuple(tools), backend="tree-sitter", unresolved=unresolved)
+    return Extraction(
+        tools=tuple(tools), backend="tree-sitter", unresolved=unresolved, issues=tuple(issues)
+    )
 
 
 __all__ = [

@@ -523,7 +523,7 @@ def _analysis_failures(
         if report.status is ScanStatus.PARTIAL:
             failed = report.coverage.files_failed
             reasons.append(
-                f"analysis incomplete: {failed} file(s) could not be analyzed, so the "
+                f"analysis incomplete: {failed} file(s) could not be analyzed; other inputs may contain unresolved tools, so the "
                 "result cannot be trusted (re-run with --allow-incomplete to downgrade this)"
             )
         elif report.status is ScanStatus.ERROR:

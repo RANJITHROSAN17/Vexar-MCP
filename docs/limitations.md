@@ -75,7 +75,7 @@ The TS loader is a static scan, not a TypeScript compiler. It recognises common 
 ### Choosing a parser backend: `--ts-parser lexical|tree-sitter`
 
 There are two front ends, and the choice is explicit. **`lexical` is the default and needs
-nothing installed** — a bare `pip install Vexar-MCP` behaves exactly as it always has.
+nothing installed** — a bare `pip install Vexar-MCP` uses it automatically.
 
 ```bash
 vexar-mcp scan .                                  # lexical (default)
@@ -94,20 +94,20 @@ one with a documented blind spot.
 | Construct | `lexical` (default) | `tree-sitter` (opt-in) |
 | :--- | :--- | :--- |
 | `server.tool("literal_name", ...)` | Recognised | Recognised |
-| `const NAME = "x"; server.tool(NAME, ...)` | **Invisible** | Recognised |
+| `const NAME = "x"; server.tool(NAME, ...)` | Unresolved issue | Recognised |
 | `const DESC = "..."` used as the description | Invisible (empty description) | Recognised |
-| `const SCHEMA = { ... };` used as the schema | Invisible (no parameters) | Recognised, with parameters |
-| `function makeSchema() { return { ... }; }` → `makeSchema()` | Invisible | Recognised when it has exactly one `return` |
+| `const SCHEMA = { ... };` used as the schema | Tool kept; unresolved issue | Recognised, with parameters |
+| `function makeSchema() { return { ... }; }` → `makeSchema()` | Tool kept; unresolved issue | Recognised when it has exactly one `return` |
 | `async function handler() {...}` passed by name | Registered, **sinks not inspected** | Registered, sinks inspected |
 | Inline `async () => {}` handler | Recognised | Recognised |
-| `` const ID = `tool_${stage}` `` (template substitution) | Invisible | **Invisible** — counted as unresolved |
-| Identifier imported from another module | Invisible | **Invisible** — counted as unresolved |
-| `const { ID } = config` (destructuring) | Invisible | **Invisible** — counted as unresolved |
-| Factory with several `return` statements | Invisible | **Invisible** — the schema is dropped, the tool is kept |
+| `` const ID = `tool_${stage}` `` (template substitution) | Unresolved issue | Unresolved issue |
+| Identifier imported from another module | Unresolved issue | Unresolved issue |
+| `const { ID } = config` (destructuring) | Unresolved issue | Unresolved issue |
+| Factory with several `return` statements | Tool kept; unresolved issue | Tool kept; unresolved issue |
 | Decorator- or registry-driven registration | Invisible | Invisible |
 
-The last five rows are deliberate. Resolving them would mean guessing, and a security
-scanner that invents a tool's shape grades fiction.
+Unresolvable constructs are deliberately not guessed: a security scanner that invents
+a tool's shape grades fiction. Some registration patterns remain invisible altogether.
 
 **Why same-file only.** Following an `import` would attribute a finding to a file the user
 may not have scanned, using a line number from somewhere else. For a diagnostic tool a
@@ -126,10 +126,44 @@ are only compared when they measured the same way:
 
 `unresolved_registrations` counts registrations that were *visible in the syntax* but whose
 arguments could not be proved. It is the honest counterpart to the tool count: with the
-default backend this number is `0` even for a file full of computed names, because the
-lexical scanner cannot see them to count them. A non-zero value means the tool list is a
+default backend, computed names and unsupported schema expressions are counted even when
+their values cannot be resolved. A non-zero value means the tool list is a
 **floor**, not a verdict. The field is `null` when no TypeScript was parsed at all — a live
 audit, or a scan that found no `.ts`/`.js` files.
+
+### Unresolved tool signals and fixture-corpus audit
+
+An `unresolved_tool` analysis issue identifies a registration whose name, metadata or
+input schema could not be understood, with file and line. Python also flags dynamic
+names in recognized decorators and `Tool(name=...)`, and simple imported non-stdlib
+parameter annotations (including quoted annotations). A partially understood tool may
+still appear in the tool list; unresolved names are not guessed. These issues set status
+to `partial`, withhold the score and cause exit 3 unless `--allow-incomplete` is used;
+they are not security findings. Successfully parsed files remain counted as analyzed.
+
+Before enabling these signals by default, the four committed files in `tests/fixtures/`
+(two Python mock servers and two TypeScript servers) were scanned individually with each
+backend. Manual inspection found **0 false-positive issues / 4 files (0%)** for lexical
+and **0 / 4 (0%)** for tree-sitter. This tiny, mostly literal corpus cannot establish a
+real-world false-positive rate. The Python heuristic treats any simple non-standard-library
+imported parameter type as a possible schema, including imported scalars or enums, which
+can produce false positives. Likewise `.tool` and `.registerTool` are matched by method
+name, not proven to be MCP objects. Conversely, dynamic registration mechanisms, generic
+Python annotations, nested schema fields, and named handlers may be missed without an issue;
+absence of these signals does not prove complete semantic coverage.
+
+Reproduce the audit (install `.[dev]` for tree-sitter):
+
+```python
+from pathlib import Path
+from vexar_mcp.engine import scan_paths
+from vexar_mcp.models import IssueKind, ScanConfig
+for backend in ("lexical", "tree-sitter"):
+    for path in sorted(Path("tests/fixtures").glob("*")):
+        if path.suffix in {".py", ".ts", ".js", ".jsx", ".json"}:
+            report = scan_paths([path], ScanConfig(ts_parser=backend))
+            print(backend, path, [i for i in report.parse_issues if i.kind == IssueKind.UNRESOLVED_TOOL])
+```
 
 ## Token estimates are approximations
 

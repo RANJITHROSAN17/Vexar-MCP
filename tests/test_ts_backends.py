@@ -219,10 +219,10 @@ def test_a_resolvable_and_an_unresolvable_registration_are_both_reported(tmp_pat
     # are both unresolved.
     assert len(extraction.tools) == 2
     assert extraction.unresolved == 3
-    # The lexical scanner sees nothing, and cannot say that five registrations existed.
+    # The lexical scanner sees all five registrations but cannot resolve their names.
     lexical = load_typescript(path)
     assert lexical.tools == ()
-    assert lexical.unresolved == 0
+    assert lexical.unresolved == 5
 
 
 def test_resolution_chain_is_bounded(tmp_path: Path) -> None:
@@ -309,10 +309,10 @@ def test_json_report_records_the_backend_and_the_unresolved_count(
 ) -> None:
     """Acceptance criterion: coverage is comparable across runs."""
     path = _write(tmp_path, SOURCE)
-    assert main(["scan", str(path), "--format", "json", "--fail-on", "never"]) == 0
+    assert main(["scan", str(path), "--format", "json", "--fail-on", "never"]) == 3
     payload = json.loads(capsys.readouterr().out)
     assert payload["typescript"]["backend"] == "lexical"
-    assert payload["typescript"]["unresolved_registrations"] == 0
+    assert payload["typescript"]["unresolved_registrations"] == 5
     # The default backend cannot read this file at all; it says so with an empty tool list
     # rather than a wrong one.
     assert payload["tools"] == []
@@ -325,7 +325,7 @@ def test_json_report_records_tree_sitter_when_selected(
     code = main(
         ["scan", str(path), "--format", "json", "--fail-on", "never", "--ts-parser", "tree-sitter"]
     )
-    assert code == 0
+    assert code == 3
     payload = json.loads(capsys.readouterr().out)
     assert payload["typescript"]["backend"] == "tree-sitter"
     # Three registrations were visible in the syntax but not resolvable.

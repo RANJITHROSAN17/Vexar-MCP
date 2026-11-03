@@ -71,7 +71,7 @@ def render_terminal(report: ScanReport, delta: BaselineDelta | None = None) -> s
 
     if report.parse_issues:
         lines.append("")
-        lines.append("ANALYSIS ISSUES (these inputs were NOT checked)")
+        lines.append("ANALYSIS ISSUES (these inputs were NOT checked or not fully checked)")
         lines.append("-" * 78)
         for issue in report.parse_issues:
             location = f":{issue.line}" if issue.line else ""

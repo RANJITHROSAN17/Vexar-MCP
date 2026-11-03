@@ -108,7 +108,7 @@
       <text class="t24" x="26" y="578" fill="#f8fafc" font-weight="600" xml:space="preserve">Vexar-MCP  |  Health Score: n/a (nothing to grade)  |  Tools: 0 across 0 file(s)</text>
       <text class="t25" x="26" y="599" fill="#cbd5e1" font-weight="400" xml:space="preserve">Coverage: 1 candidate file(s), 0 analyzed, 1 failed, 0 with tools</text>
       <text class="t26" x="26" y="620" fill="#2dd4bf" font-weight="600" xml:space="preserve">ERROR - nothing could be analyzed</text>
-      <text class="t27" x="26" y="641" fill="#2dd4bf" font-weight="600" xml:space="preserve">ANALYSIS ISSUES (these inputs were NOT checked)</text>
+      <text class="t27" x="26" y="641" fill="#2dd4bf" font-weight="600" xml:space="preserve">ANALYSIS ISSUES (these inputs were NOT checked or not fully checked)</text>
       <text class="t28" x="26" y="662" fill="#cbd5e1" font-weight="400" xml:space="preserve">[syntax_error] broken_server.py:1</text>
       <text class="t29" x="26" y="683" fill="#f87171" font-weight="400" xml:space="preserve">SyntaxError: invalid syntax</text>
       <text class="t30" x="26" y="704" fill="#fbbf24" font-weight="600" xml:space="preserve">No MCP tools or agent tool manifests discovered in target path(s). Nothing was graded — this is not a clean bill of</text>
