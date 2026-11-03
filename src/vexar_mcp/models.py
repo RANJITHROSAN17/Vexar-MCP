@@ -54,6 +54,7 @@ class IssueKind(str, Enum):
     INVALID_YAML = "invalid_yaml"
     MISSING_DEPENDENCY = "missing_dependency"
     UNREADABLE = "unreadable"
+    UNRESOLVED_TOOL = "unresolved_tool"
 
 
 class Category(str, Enum):
@@ -91,7 +92,7 @@ class CodeSink:
 
 @dataclass(frozen=True)
 class ParseIssue:
-    """A candidate file that could not be analyzed.
+    """An analysis problem in a candidate file.
 
     Reported separately from :class:`Diagnostic`. Parse issues never produce a security
     finding and never contribute to a score - they exist so that incomplete analysis is

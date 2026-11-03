@@ -43,7 +43,7 @@ _STATUS_COLOR = {
 _STATUS_TEXT = {
     ScanStatus.CLEAN: "Every input was analyzed and no rule fired.",
     ScanStatus.FINDINGS: "Every input was analyzed; findings are listed below.",
-    ScanStatus.PARTIAL: "Some inputs could not be analyzed. Results are incomplete and must not be read as clean.",
+    ScanStatus.PARTIAL: "Some inputs could not be fully analyzed. Results are incomplete and must not be read as clean.",
     ScanStatus.NO_MATCHES: "No supported MCP tool was recognized, so nothing was graded.",
     ScanStatus.ERROR: "Nothing could be analyzed.",
 }
@@ -135,7 +135,7 @@ def render_html(
             for issue in report.parse_issues
         )
         issue_block = (
-            "<section><h2 style='color:#dc2626'>Analysis issues — these inputs were not checked</h2>"
+            "<section><h2 style='color:#dc2626'>Analysis issues — these inputs were not checked or not fully checked</h2>"
             "<table><thead><tr><th>Kind</th><th>File</th><th>Reason</th></tr></thead>"
             f"<tbody>{issue_rows}</tbody></table></section>"
         )

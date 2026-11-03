@@ -27,6 +27,7 @@ from vexar_mcp.loaders.yaml_manifest import (
 )
 from vexar_mcp.models import (
     Diagnostic,
+    IssueKind,
     ParseIssue,
     ScanConfig,
     ScanCoverage,
@@ -158,12 +159,13 @@ def determine_status(
     files_failed: int,
     tools: Sequence[ToolSpec],
     diagnostics: Sequence[Diagnostic],
+    has_unresolved: bool = False,
 ) -> ScanStatus:
     """Classify whether the requested analysis actually completed."""
     analyzed = candidate_files - files_failed
     if candidate_files > 0 and analyzed <= 0:
         return ScanStatus.ERROR
-    if files_failed > 0:
+    if files_failed > 0 or has_unresolved:
         return ScanStatus.PARTIAL
     if not tools:
         return ScanStatus.NO_MATCHES
@@ -231,6 +233,7 @@ def assemble_report(
         files_failed=effective_coverage.files_failed,
         tools=tools,
         diagnostics=scored,
+        has_unresolved=any(issue.kind is IssueKind.UNRESOLVED_TOOL for issue in parse_issues),
     )
 
     # A grade is a claim about the codebase. Withholding it when part of the codebase was
@@ -305,10 +308,13 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
             continue
         raw.extend(rule.check(all_tools, effective_cfg))
 
+    failed_files = {
+        issue.source_file for issue in parse_issues if issue.kind is not IssueKind.UNRESOLVED_TOOL
+    }
     coverage = ScanCoverage(
         candidate_files=len(files),
-        files_analyzed=len(files) - len(parse_issues),
-        files_failed=len(parse_issues),
+        files_analyzed=len(files) - len(failed_files),
+        files_failed=len(failed_files),
         files_with_tools=files_with_tools,
         tools_analyzed=len(all_tools),
     )

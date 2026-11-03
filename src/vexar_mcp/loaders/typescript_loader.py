@@ -38,6 +38,7 @@ class Extraction:
     tools: tuple[ToolSpec, ...]
     backend: str
     unresolved: int = 0
+    issues: tuple[ParseIssue, ...] = ()
 
 
 _LEX = re.compile(
@@ -157,6 +158,22 @@ class _Source:
             args = self.parts(start + 4, close)
             return self.fields(args[0]) if args else {}
         return self.fields((start, end))
+
+
+def _schema_supported(source: _Source, span: _Span) -> bool:
+    """Whether the schema has a shape the parameter extractor can inspect."""
+    start, end = span
+    if start >= end:
+        return False
+    if source.tokens[start].value == "{":
+        return source.pairs.get(start) == end - 1
+    if source.values(start, start + 4) == ["z", ".", "object", "("]:
+        close = source.pairs.get(start + 3)
+        if close is None:
+            return False
+        args = source.parts(start + 4, close)
+        return bool(args) and _schema_supported(source, args[0])
+    return False
 
 
 def _parameters(source: _Source, schema: _Span) -> tuple[ParameterSpec, ...]:
@@ -400,9 +417,12 @@ def load_typescript(
         # Imported lazily: a default install must never import the optional dependency.
         from vexar_mcp.loaders.ts_backends import extract_tools
 
-        return extract_tools(str(path), text, source_file=str(path))
-
-    return _extract_lexical(text, source_file=str(path))
+        extraction = extract_tools(str(path), text, source_file=str(path))
+    else:
+        extraction = _extract_lexical(text, source_file=str(path))
+    if issues is not None:
+        issues.extend(extraction.issues)
+    return extraction
 
 
 def load_typescript_file(
@@ -432,6 +452,8 @@ def _extract_lexical(text: str, *, source_file: str) -> Extraction:
     source = _Source(text)
     functions, namespaces = _imports(source)
     tools = []
+    issues: list[ParseIssue] = []
+    unresolved = 0
     tokens = source.tokens
     for index in range(2, len(tokens) - 1):
         if (
@@ -448,12 +470,23 @@ def _extract_lexical(text: str, *, source_file: str) -> Extraction:
             continue
         name = source.literal(args[0])
         if name is None:
+            unresolved += 1
+            issues.append(
+                ParseIssue(
+                    source_file,
+                    IssueKind.UNRESOLVED_TOOL,
+                    "computed tool registration name cannot be resolved",
+                    source.line(index - 2),
+                )
+            )
             continue
         description = ""
         schema = (0, 0)
+        unknown_metadata = False
         if tokens[index].value == "registerTool":
             if len(args) < 3:
                 continue
+            unknown_metadata = not _schema_supported(source, args[1])
             metadata = source.fields(args[1])
             if "description" in metadata:
                 description = source.literal(metadata["description"][1]) or ""
@@ -466,6 +499,16 @@ def _extract_lexical(text: str, *, source_file: str) -> Extraction:
                 description, first_schema = literal, 2
             if first_schema < len(args) - 1:
                 schema = args[first_schema]
+        if unknown_metadata or (schema != (0, 0) and not _schema_supported(source, schema)):
+            unresolved += 1
+            issues.append(
+                ParseIssue(
+                    source_file,
+                    IssueKind.UNRESOLVED_TOOL,
+                    "tool metadata or input schema cannot be resolved",
+                    source.line(index - 2),
+                )
+            )
         params = _parameters(source, schema)
         tools.append(
             ToolSpec(
@@ -478,4 +521,6 @@ def _extract_lexical(text: str, *, source_file: str) -> Extraction:
                 estimated_tokens=estimate_tool_tokens(name, description, params),
             )
         )
-    return Extraction(tools=tuple(tools), backend="lexical")
+    return Extraction(
+        tools=tuple(tools), backend="lexical", unresolved=unresolved, issues=tuple(issues)
+    )

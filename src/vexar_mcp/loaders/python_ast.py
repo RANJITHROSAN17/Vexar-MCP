@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 from pathlib import Path
 from typing import TypedDict
 
@@ -959,6 +960,20 @@ def load_python_file(path: Path, *, issues: list[ParseIssue] | None = None) -> l
         return []
     base_index = _build_base_index(tree)
     module_aliases = _import_aliases(tree.body)
+    # Imported project/external types may be schema models. The loader cannot inspect
+    # their fields; standard-library annotations such as typing.Any are not models.
+    imported_schemas: set[str] = set()
+    for statement in tree.body:
+        if isinstance(statement, ast.ImportFrom):
+            root = (statement.module or "").split(".")[0]
+            if statement.level or root not in sys.stdlib_module_names:
+                imported_schemas.update(
+                    alias.asname or alias.name for alias in statement.names if alias.name != "*"
+                )
+        elif isinstance(statement, ast.Import):
+            for alias in statement.names:
+                if alias.name.split(".")[0] not in sys.stdlib_module_names:
+                    imported_schemas.add(alias.asname or alias.name.split(".")[0])
     # Sinks delegated to module-local helpers are attributed to the tool that passes the
     # parameter in, so the index is built once per file rather than per tool.
     module_helpers = _index_module_helpers(tree)
@@ -977,6 +992,45 @@ def load_python_file(path: Path, *, issues: list[ParseIssue] | None = None) -> l
                     custom_name = dec_name or custom_name
                     custom_desc = dec_desc or custom_desc
             if not matched:
+                continue
+
+            # A dynamic name is not the Python function name. Do not invent one.
+            dynamic_name = next(
+                (
+                    dec
+                    for dec in node.decorator_list
+                    if isinstance(dec, ast.Call)
+                    and _is_tool_decorator(dec)[0]
+                    and (
+                        (
+                            dec.args
+                            and not (
+                                isinstance(dec.args[0], ast.Constant)
+                                and isinstance(dec.args[0].value, str)
+                            )
+                        )
+                        or any(
+                            kw.arg == "name"
+                            and not (
+                                isinstance(kw.value, ast.Constant)
+                                and isinstance(kw.value.value, str)
+                            )
+                            for kw in dec.keywords
+                        )
+                    )
+                ),
+                None,
+            )
+            if dynamic_name is not None:
+                if issues is not None:
+                    issues.append(
+                        ParseIssue(
+                            str(path),
+                            IssueKind.UNRESOLVED_TOOL,
+                            "computed tool decorator name cannot be resolved",
+                            dynamic_name.lineno,
+                        )
+                    )
                 continue
 
             tool_name = custom_name or node.name
@@ -1000,6 +1054,22 @@ def load_python_file(path: Path, *, issues: list[ParseIssue] | None = None) -> l
                 type_str, ann_bounded = _annotation_info(arg.annotation)
                 if type_str and any(ctx_t in type_str for ctx_t in ("Context", "RequestContext")):
                     continue
+                annotation = arg.annotation
+                if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+                    try:
+                        annotation = ast.parse(annotation.value, mode="eval").body
+                    except SyntaxError:
+                        annotation = None
+                root = _call_qualname(annotation).split(".")[0] if annotation else ""
+                if issues is not None and root in imported_schemas:
+                    issues.append(
+                        ParseIssue(
+                            str(path),
+                            IssueKind.UNRESOLVED_TOOL,
+                            "imported tool parameter schema cannot be resolved",
+                            arg.lineno,
+                        )
+                    )
                 user_param_names.add(arg.arg)
                 if idx < num_pos:
                     has_default = idx >= default_start
@@ -1066,6 +1136,15 @@ def load_python_file(path: Path, *, issues: list[ParseIssue] | None = None) -> l
             kw_map = {kw.arg: kw.value for kw in node.keywords if kw.arg}
             name_node = kw_map.get("name")
             if not (isinstance(name_node, ast.Constant) and isinstance(name_node.value, str)):
+                if issues is not None and name_node is not None:
+                    issues.append(
+                        ParseIssue(
+                            str(path),
+                            IssueKind.UNRESOLVED_TOOL,
+                            "computed Tool name cannot be resolved",
+                            node.lineno,
+                        )
+                    )
                 continue
             desc_node = kw_map.get("description")
             desc_val = (

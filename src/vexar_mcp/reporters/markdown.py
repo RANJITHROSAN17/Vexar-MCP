@@ -57,7 +57,9 @@ def render_markdown(report: ScanReport, delta: BaselineDelta | None = None) -> s
         "",
     ]
     if report.parse_issues:
-        lines.extend(["### Analysis issues — these inputs were **not** checked", ""])
+        lines.extend(
+            ["### Analysis issues — these inputs were **not** checked or not fully checked", ""]
+        )
         for issue in report.parse_issues[:_MAX_LISTED]:
             location = f":{issue.line}" if issue.line else ""
             lines.append(
