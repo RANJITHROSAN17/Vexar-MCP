@@ -158,11 +158,16 @@ Reproduce the audit (install `.[dev]` for tree-sitter):
 from pathlib import Path
 from vexar_mcp.engine import scan_paths
 from vexar_mcp.models import IssueKind, ScanConfig
+
 for backend in ("lexical", "tree-sitter"):
     for path in sorted(Path("tests/fixtures").glob("*")):
         if path.suffix in {".py", ".ts", ".js", ".jsx", ".json"}:
             report = scan_paths([path], ScanConfig(ts_parser=backend))
-            print(backend, path, [i for i in report.parse_issues if i.kind == IssueKind.UNRESOLVED_TOOL])
+            print(
+                backend,
+                path,
+                [i for i in report.parse_issues if i.kind == IssueKind.UNRESOLVED_TOOL],
+            )
 ```
 
 ## Token estimates are approximations
