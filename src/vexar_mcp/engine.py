@@ -17,6 +17,7 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from vexar_mcp.loaders import load_json_manifest, load_python_file
 from vexar_mcp.loaders.typescript_loader import load_typescript
@@ -39,6 +40,9 @@ from vexar_mcp.models import (
 )
 from vexar_mcp.risk import apply_risk
 from vexar_mcp.rules import get_all_rules
+
+if TYPE_CHECKING:
+    from vexar_mcp.live import LiveServerSpec
 
 _SUPPORTED_SUFFIXES = frozenset({".py", ".json", ".ts", ".js", ".jsx"})
 
@@ -332,6 +336,21 @@ def scan_paths(targets: Sequence[Path], config: ScanConfig | None = None) -> Sca
     )
 
 
+def _scan_live_spec(spec: LiveServerSpec, config: ScanConfig | None) -> ScanReport:
+    """Run the analysis pipeline on a live audit spec shared by both transports."""
+    from vexar_mcp.live import introspect_server, protocol_diagnostics
+
+    effective_cfg = config or ScanConfig()
+    result = introspect_server(spec)
+    raw: list[Diagnostic] = list(protocol_diagnostics(result))
+    for rule in get_all_rules():
+        if rule.rule_id in effective_cfg.ignored_rules:
+            continue
+        raw.extend(rule.check(result.tools, effective_cfg))
+    report = assemble_report(result.tools, _inline_suppressed(raw, result.tools), effective_cfg)
+    return replace(report, live_protocol=result.protocol_version, live_mode=result.mode)
+
+
 def scan_server(
     spec_command: Sequence[str],
     config: ScanConfig | None = None,
@@ -352,25 +371,42 @@ def scan_server(
     Returns:
         A :class:`~vexar_mcp.models.ScanReport` describing the tools the server exposes.
     """
-    from vexar_mcp.live import LiveServerSpec, introspect_server, protocol_diagnostics
+    from vexar_mcp.live import LiveServerSpec
 
-    effective_cfg = config or ScanConfig()
-    result = introspect_server(
-        LiveServerSpec(
-            command=tuple(spec_command),
-            timeout=timeout,
-            cwd=cwd,
-            env=dict(env or {}),
-        )
+    return _scan_live_spec(
+        LiveServerSpec(command=tuple(spec_command), timeout=timeout, cwd=cwd, env=dict(env or {})),
+        config,
     )
 
-    raw: list[Diagnostic] = list(protocol_diagnostics(result))
-    for rule in get_all_rules():
-        if rule.rule_id in effective_cfg.ignored_rules:
-            continue
-        raw.extend(rule.check(result.tools, effective_cfg))
-    report = assemble_report(result.tools, _inline_suppressed(raw, result.tools), effective_cfg)
-    return replace(report, live_protocol=result.protocol_version, live_mode=result.mode)
+
+def scan_http_server(
+    url: str,
+    config: ScanConfig | None = None,
+    *,
+    timeout: float = 30.0,
+    allow_http_loopback: bool = False,
+    allow_private_network: bool = False,
+    origin: str | None = None,
+    headers: Mapping[str, str] | None = None,
+) -> ScanReport:
+    """Audit an MCP Streamable HTTP endpoint and scan its announced tool catalog.
+
+    HTTPS is required by default. Cleartext loopback and private-network destinations need
+    explicit opt-ins, and ``headers`` is intended for explicit authentication credentials.
+    """
+    from vexar_mcp.live import LiveServerSpec
+
+    return _scan_live_spec(
+        LiveServerSpec(
+            timeout=timeout,
+            url=url,
+            allow_http_loopback=allow_http_loopback,
+            allow_private_network=allow_private_network,
+            origin=origin,
+            headers=dict(headers or {}),
+        ),
+        config,
+    )
 
 
 __all__ = [
@@ -378,6 +414,7 @@ __all__ = [
     "compute_score",
     "determine_status",
     "discover_candidate_files",
+    "scan_http_server",
     "scan_paths",
     "scan_server",
 ]

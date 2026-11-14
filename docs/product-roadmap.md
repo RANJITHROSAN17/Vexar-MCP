@@ -164,7 +164,7 @@ If the next milestone is to make Vexar-MCP a real product, prioritize these item
 3. Policy presets
    - strict-prod and enterprise defaults
 4. Live server inspection
-   - inspect running MCP servers over stdio / JSON-RPC
+   - inspect running MCP servers over stdio / JSON-RPC and remote Streamable HTTP
 5. Dashboard and historical reporting
    - trend lines, scorecards, drill-down views
 6. Plugin trust model

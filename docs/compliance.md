@@ -3,10 +3,11 @@
 Which parts of the MCP specification this project implements, and the evidence for each claim.
 
 Vexar-MCP is an **analyzer**: it consumes MCP artifacts and, for `audit-server`, acts as an
-MCP **client**. It does not implement an MCP **server**, so requirements that bind a server
-(inbound authentication, HTTP transport rules, tool execution) are marked N/A rather than
-claimed as satisfied. Each row names the test or file that proves it, because a compliance
-table without evidence is a marketing document.
+MCP **client**. It does not implement an MCP **server**, so requirements for operating a
+service (inbound authentication, tool execution, rate limiting) are marked N/A rather than
+claimed as satisfied. Client-side Streamable HTTP requirements for `audit-server` are covered
+in C11 below. Each row names the test or file that proves it, because a compliance table
+without evidence is a marketing document.
 
 Source: [MCP specifications](https://modelcontextprotocol.io/specification/) and the
 [versioning page](https://modelcontextprotocol.io/specification/versioning), read 2026-10-28.
@@ -41,16 +42,17 @@ accepted.
 
 | # | Requirement | Class | Evidence | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| C1 | JSON-RPC 2.0 request/response framing with matching ids | MANDATORY | `live.py::_JsonRpcClient.request` | PASS |
-| C2 | Declare the version per request in `_meta` on stateless revisions | MANDATORY | `tests/test_live_stateless.py::test_requests_declare_the_version_in_meta` | PASS |
+| C1 | JSON-RPC 2.0 request/response framing with matching ids | MANDATORY | `live.py` stdio/HTTP clients; `tests/test_live_http.py` | PASS |
+| C2 | Declare the version per request in `_meta` on stateless revisions | MANDATORY | `tests/test_live_stateless.py`; `test_stateless_http_uses_both_protocol_header_and_request_metadata` | PASS |
 | C3 | Use `server/discover` to learn supported revisions and capabilities | MANDATORY | `live.py::_discover` | PASS |
-| C4 | Support the handshake for revisions ≤ `2025-11-25` | MANDATORY if supported | `test_legacy_server_is_audited_by_handshake` | PASS |
+| C4 | Support the handshake for revisions ≤ `2025-11-25` | MANDATORY if supported | `test_legacy_server_is_audited_by_handshake`; HTTP handshake tests | PASS |
 | C5 | Fail closed on a revision mismatch, with a message naming both sides | MANDATORY | `test_discovery_failure_names_both_paths` | PASS |
-| C6 | Protocol messages on stdout only; diagnostics on stderr | MANDATORY (stdio) | `_stdout_reader` skips banner lines; CLI writes diagnostics to stderr | PASS |
-| C7 | Bound response size, page count and total duration | RECOMMENDED | 8 MiB, 50 pages, single deadline | PASS |
-| C8 | Terminate the child on expiry; no orphaned processes | RECOMMENDED | `_terminate` (terminate → reap → close) | PASS |
+| C6 | Protocol messages on stdout only; diagnostics on stderr | MANDATORY (stdio) | stdio reader skips banner lines; CLI writes diagnostics to stderr | PASS |
+| C7 | Bound response size, page count and total duration | RECOMMENDED | 8 MiB, 50 pages, shared deadline; HTTP body/deadline tests | PASS |
+| C8 | Terminate the child on expiry; no orphaned processes | RECOMMENDED (stdio) | `_terminate` (terminate → reap → close) | PASS |
 | C9 | Identify the client in the handshake | RECOMMENDED | `clientInfo` in `initialize` | PASS |
 | C10 | Treat a hostile server as untrusted input | PRODUCT | `sanitize.py`; `tests/test_sanitize.py` | PASS |
+| C11 | Streamable HTTP version, Origin, cache, redirect and SSRF checks | PRODUCT (security) | `live.py::_StreamableHttpClient`; `tests/test_live_http.py` | PASS |
 
 ---
 
@@ -72,8 +74,7 @@ accepted.
 
 | Requirement | Why it does not apply |
 | :--- | :--- |
-| Inbound authentication, OAuth 2.1, token audience binding, RBAC/ABAC | There is no server and no listener. The only authentication is whatever the audited server does for the *user's* launch command. |
-| Streamable HTTP, `MCP-Protocol-Version` routing header, `Origin` validation, CORS, TLS | The audit transport is stdio. Remote auditing is queued as RM-032, and those requirements become binding when it lands. |
+| Inbound authentication, OAuth 2.1, token audience binding, RBAC/ABAC | Vexar-MCP has no MCP server or inbound listener. The HTTP auditor can send operator-supplied auth headers, but server-side identity and authorization remain the audited service's responsibility. |
 | Human-in-the-loop approval for destructive actions | No tool is ever invoked. `audit-server` calls `tools/list` only. |
 | Sandboxed execution of dynamic analysis | Nothing dynamic is executed. The stronger property holds by construction. |
 | Rate limiting, quota, DDoS protection, readiness probes | A CLI process has no request surface. |

@@ -23,6 +23,11 @@ Versioning contract, so upgrades are predictable:
 - A reproducible token-estimator benchmark with an original MIT-licensed Unicode/schema
   corpus, per-encoding/serialization error distributions, and opt-in exact-tokenizer extra.
   Removes the unsupported ~8% accuracy claim without changing the estimator formula.
+- `audit-server --url` audits remote MCP servers over Streamable HTTP, including handshake and
+  stateless negotiation, authentication headers, Origin/cache checks, same-origin redirects,
+  HTTPS/TLS verification, private-network opt-ins, and bounded response/deadline handling.
+  The new `scan_http_server()` library API uses the same analysis and reporting pipeline as
+  stdio audits.
 
 ## [0.3.0] - 2026-11-01
 

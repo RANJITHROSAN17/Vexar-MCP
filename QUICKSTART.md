@@ -166,7 +166,7 @@ job fails rather than reporting a comfortable zero. See [policies](docs/policies
 | Pick a preset, or write your own | [docs/policies.md](docs/policies.md) |
 | Suppress one finding, justified, in a review | [Configuration](docs/usage.md#configuration) |
 | Know exactly when a scan is trustworthy | [docs/scan-status.md](docs/scan-status.md) |
-| Audit a running server over stdio | [docs/live-audit.md](docs/live-audit.md) |
+| Audit a running server over stdio or remote Streamable HTTP | [docs/live-audit.md](docs/live-audit.md) |
 | Add your own rules without forking | [docs/rule-packs.md](docs/rule-packs.md) |
 | Contribute a rule, loader or reporter | [CONTRIBUTING.md](CONTRIBUTING.md) |
 

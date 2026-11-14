@@ -350,7 +350,8 @@ Vexar-MCP is deliberately **configuration-file driven** — it reads **no applic
 vexar-mcp scan [PATHS...]        # static analysis: files, dirs, manifests
 vexar-mcp token-report [PATHS...] # per-tool context-window leaderboard
 vexar-mcp simulate [PATHS...]     # monthly $ projection for a model + volume
-vexar-mcp audit-server -- CMD...  # live stdio JSON-RPC audit
+vexar-mcp audit-server -- CMD...     # live stdio JSON-RPC audit
+vexar-mcp audit-server --url HTTPS_URL  # remote Streamable HTTP audit
 vexar-mcp baseline write|show     # accepted-risk snapshots
 vexar-mcp policy                  # list enforcement presets
 vexar-mcp rules                   # list the 15 rules

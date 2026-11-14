@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import sys
 from collections.abc import Sequence
@@ -33,7 +34,7 @@ from vexar_mcp.baseline import (
     write_baseline,
 )
 from vexar_mcp.config import describe_config, discover_config, load_config
-from vexar_mcp.engine import scan_paths, scan_server
+from vexar_mcp.engine import scan_http_server, scan_paths, scan_server
 from vexar_mcp.live import LiveAuditError
 from vexar_mcp.models import Category, Diagnostic, ScanConfig, ScanReport, ScanStatus
 from vexar_mcp.policies import PolicyViolation, apply_policy, list_policies, resolve_policy
@@ -77,7 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="vexar-mcp",
         description=(
             "Security, schema and token-cost analyzer for MCP servers. "
-            "Static scans by default; live stdio introspection with `audit-server`."
+            "Static scans by default; live stdio or Streamable HTTP audits with `audit-server`."
         ),
     )
     parser.add_argument("--version", action="version", version=f"vexar-mcp {__version__}")
@@ -209,10 +210,11 @@ def _build_parser() -> argparse.ArgumentParser:
     # ------------------------------------------------------- audit-server
     live_p = sub.add_parser(
         "audit-server",
-        help="Introspect a running MCP server over stdio JSON-RPC and scan its tool catalog.",
+        help="Audit a local stdio server or remote Streamable HTTP endpoint.",
         description=(
-            "Launch an MCP server, complete the initialize handshake, call tools/list, and run "
-            "the full rule set over the announced tools. Use `--` before the server command."
+            "Audit a local MCP server over stdio or a remote Streamable HTTP endpoint, "
+            "negotiate the protocol, call tools/list, and run the full rule set. Use `--` "
+            "before a local server command or pass `--url` for HTTP."
         ),
     )
     live_p.add_argument(
@@ -231,7 +233,43 @@ def _build_parser() -> argparse.ArgumentParser:
         "--timeout",
         type=float,
         default=30.0,
-        help="Seconds to allow for the whole handshake and tools/list exchange (default 30).",
+        help="Total seconds for negotiation and every tools/list page (default 30).",
+    )
+    live_p.add_argument(
+        "--url",
+        default=None,
+        metavar="HTTPS_URL",
+        help="Audit an MCP Streamable HTTP endpoint instead of launching a local command.",
+    )
+    live_p.add_argument(
+        "--origin",
+        default=None,
+        metavar="ORIGIN",
+        help="Origin to send and verify against Access-Control-Allow-Origin (defaults to the endpoint origin).",
+    )
+    live_p.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        metavar="NAME:VALUE",
+        help="Additional HTTP header, e.g. --header 'Authorization: Bearer TOKEN' (repeatable).",
+    )
+    live_p.add_argument(
+        "--header-from-env",
+        action="append",
+        default=[],
+        metavar="NAME:ENV_VAR",
+        help="Read a header value from an environment variable to avoid putting secrets in argv.",
+    )
+    live_p.add_argument(
+        "--allow-http-loopback",
+        action="store_true",
+        help="Allow plaintext HTTP only when the URL resolves exclusively to loopback addresses.",
+    )
+    live_p.add_argument(
+        "--allow-private-network",
+        action="store_true",
+        help="Allow HTTPS endpoints resolving to private or otherwise non-public IP addresses.",
     )
     live_p.add_argument(
         "--fail-on-no-matches",
@@ -771,14 +809,71 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
     return code
 
 
+def _parse_http_header_args(
+    values: Sequence[str], env_values: Sequence[str] = ()
+) -> dict[str, str]:
+    """Parse HTTP header options without echoing secret values."""
+    headers: dict[str, str] = {}
+    seen: set[str] = set()
+    for raw in values:
+        name, separator, value = raw.partition(":")
+        name = name.strip()
+        if not separator or not name:
+            raise ValueError("--header must use NAME:VALUE syntax")
+        lowered = name.lower()
+        if lowered in seen:
+            raise ValueError(f"duplicate HTTP header name: {name}")
+        seen.add(lowered)
+        headers[name] = value.strip()
+    for raw in env_values:
+        name, separator, variable = raw.partition(":")
+        name = name.strip()
+        variable = variable.strip()
+        if not separator or not name or not variable:
+            raise ValueError("--header-from-env must use NAME:ENV_VAR syntax")
+        lowered = name.lower()
+        if lowered in seen:
+            raise ValueError(f"duplicate HTTP header name: {name}")
+        env_value = os.environ.get(variable)
+        if env_value is None:
+            raise ValueError(f"environment variable '{variable}' for HTTP header is not set")
+        seen.add(lowered)
+        headers[name] = env_value
+    return headers
+
+
 def _cmd_audit_server(args: argparse.Namespace) -> int:
     command = [part for part in args.server_command if part != "--"]
-    if not command:
+    url = args.url
+    if url and command:
         print(
-            "vexar-mcp: error: no server command given. "
-            "Usage: vexar-mcp audit-server -- python my_server.py",
+            "vexar-mcp: error: use either --url or a local server command, not both",
             file=sys.stderr,
         )
+        return 2
+    if not url and not command:
+        print(
+            "vexar-mcp: error: no server command or --url given. Use `audit-server -- <command>` "
+            "or `audit-server --url https://host.example/mcp`.",
+            file=sys.stderr,
+        )
+        return 2
+    if not url and (
+        args.origin is not None
+        or args.header
+        or args.header_from_env
+        or args.allow_http_loopback
+        or args.allow_private_network
+    ):
+        print(
+            "vexar-mcp: error: HTTP origin, header, and network options require --url",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        headers = _parse_http_header_args(args.header, args.header_from_env)
+    except ValueError as exc:
+        print(f"vexar-mcp: error: {exc}", file=sys.stderr)
         return 2
 
     try:
@@ -788,7 +883,18 @@ def _cmd_audit_server(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        report = scan_server(command, cfg, timeout=args.timeout)
+        if url:
+            report = scan_http_server(
+                url,
+                cfg,
+                timeout=args.timeout,
+                allow_http_loopback=args.allow_http_loopback,
+                allow_private_network=args.allow_private_network,
+                origin=args.origin,
+                headers=headers,
+            )
+        else:
+            report = scan_server(command, cfg, timeout=args.timeout)
     except LiveAuditError as exc:
         print(f"vexar-mcp: live audit failed: {exc}", file=sys.stderr)
         return 2

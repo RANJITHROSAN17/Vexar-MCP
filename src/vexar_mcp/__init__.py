@@ -4,13 +4,14 @@ Public API:
 
 * :func:`vexar_mcp.scan_paths` - static scan of files and directories
 * :func:`vexar_mcp.scan_server` - live scan of a running MCP server over stdio
+* :func:`vexar_mcp.scan_http_server` - live scan over Streamable HTTP
 * :mod:`vexar_mcp.policies` - enforcement presets and the protected-rule invariant
 * :mod:`vexar_mcp.baseline` - accepted-risk snapshots and delta gating
 * :mod:`vexar_mcp.risk` - deterministic risk scoring
 * :mod:`vexar_mcp.rules.plugin` - opt-in rule packs
 """
 
-from vexar_mcp.engine import scan_paths, scan_server
+from vexar_mcp.engine import scan_http_server, scan_paths, scan_server
 from vexar_mcp.models import (
     Category,
     Diagnostic,
@@ -34,6 +35,7 @@ __all__ = [
     "ScanSummary",
     "Severity",
     "ToolSpec",
+    "scan_http_server",
     "scan_paths",
     "scan_server",
 ]

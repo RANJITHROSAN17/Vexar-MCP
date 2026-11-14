@@ -206,15 +206,30 @@ strict-prod              warning      90       200  security
 enterprise-governance    info         97       180  security,contract
 ```
 
-### `vexar-mcp audit-server -- <command>`
+### `vexar-mcp audit-server -- <command> | --url <HTTPS_URL>`
 
-Introspect a *running* MCP server over stdio JSON-RPC and scan its announced tool catalog.
-See [live-audit.md](live-audit.md).
+Introspect a live MCP server over stdio or Streamable HTTP and scan its announced tool
+catalog. See [live-audit.md](live-audit.md) for negotiation and safety details.
 
 ```bash
+# Local stdio server
 vexar-mcp audit-server -- python my_server.py
 vexar-mcp audit-server --format json --timeout 60 -- npx -y @acme/mcp-server
+
+# Remote Streamable HTTP server
+vexar-mcp audit-server --url https://mcp.example.com/mcp
+vexar-mcp audit-server --url https://mcp.example.com/mcp \
+  --header 'Authorization: Bearer TOKEN' --origin https://console.example.com
+
+# Local development only; private HTTPS destinations need their own opt-in.
+vexar-mcp audit-server --url http://127.0.0.1:8080/mcp --allow-http-loopback
 ```
+
+HTTP auth can be passed with repeatable `--header NAME:VALUE` or read from the environment
+with `--header-from-env NAME:ENV_VAR` (recommended to keep secrets out of argv). Credential
+values are not emitted in reports or errors. Cleartext HTTP is refused except when explicitly
+allowed for loopback. Private and non-public destinations are refused unless
+`--allow-private-network` is set.
 
 ### `vexar-mcp audit-registry <file>`
 
@@ -270,8 +285,9 @@ Validation fails closed: an unknown shape, both shapes at once, a non-string arg
 non-string `env` value, a non-positive `timeout`, or duplicate server names (including names
 differing only by case) is exit `2` naming the offending field. An empty registry is an error
 rather than a clean fleet. A remote/SSE entry (`url`, or `type` of `http`/`sse`) is
-well-formed but cannot be audited by the stdio client, so it is listed as **skipped** and
-makes the fleet incomplete — never quietly dropped.
+well-formed but is not yet run as part of `audit-registry`'s stdio fleet, so it is listed as
+**skipped** and makes the fleet incomplete — never quietly dropped. Audit a remote endpoint
+directly with `audit-server --url` and the HTTP safety/authentication options above.
 
 Note that **argv is echoed verbatim** into the report for provenance. Put credentials in
 `env`, which is never echoed.
