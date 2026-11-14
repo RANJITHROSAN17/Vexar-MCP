@@ -1,17 +1,34 @@
 # Live server auditing
 
-Static analysis cannot see tools a server generates at runtime, gated behind feature flags,
-or assembled from a database. `audit-server` launches the server the way a client would,
-completes the real `initialize` handshake, calls `tools/list`, and runs the entire rule set
-over the tools that are *actually* exposed.
+Static analysis cannot see tools a server generates at runtime, gates behind feature flags,
+or assembles from a database. `audit-server` performs the real MCP negotiation, calls
+`tools/list`, and runs the entire rule set over the tools that are *actually* exposed. It can
+launch a local stdio server or connect to a remote Streamable HTTP endpoint.
 
 ```bash
+# Local server over stdio; everything after -- is argv, never shell-expanded.
 vexar-mcp audit-server -- python my_server.py
 vexar-mcp audit-server --format sarif --output live.sarif -- npx -y @acme/mcp-server
-vexar-mcp audit-server --policy strict-prod --timeout 60 -- uv run python -m acme.server
+
+# Remote endpoint; HTTPS is required by default.
+vexar-mcp audit-server --url https://mcp.example.com/mcp
+vexar-mcp audit-server --url https://mcp.example.com/mcp \
+  --header 'Authorization: Bearer …' --origin https://console.example.com
+
+# For a local development server only. HTTP loopback must be explicitly enabled.
+vexar-mcp audit-server --url http://127.0.0.1:8080/mcp --allow-http-loopback
+
+# Private HTTPS networks are blocked unless explicitly opted in.
+vexar-mcp audit-server --url https://mcp.internal.example/mcp --allow-private-network
 ```
 
-Everything after `--` is the server command, passed as an argv list with **no shell**.
+`--header NAME:VALUE` and `--header-from-env NAME:ENV_VAR` are repeatable ways to provide
+HTTP headers. Prefer `--header-from-env` for credentials so the secret is not exposed in argv;
+credential values are not included in errors or reports, even if a server echoes them. Do not
+put credentials in the URL. `--origin` selects the request's `Origin`; by default it is
+derived from the endpoint URL. A response whose
+`Access-Control-Allow-Origin` is missing, wildcarded, or different from that requested origin
+becomes an `MCP012` finding.
 
 ## What is validated
 
@@ -24,6 +41,9 @@ Everything after `--` is the server command, passed as an argv list with **no sh
 | Server advertises the `tools` capability | `MCP012` warning |
 | Every `tools/list` entry is a JSON object with a `name` | `MCP012` warning |
 | Every tool returns an object `inputSchema` | `MCP012` warning |
+| HTTP response `MCP-Protocol-Version`, when present, matches the negotiated revision | `MCP012` warning |
+| HTTP response `Access-Control-Allow-Origin` matches the sent `Origin` | `MCP012` when missing or foreign |
+| HTTP response does not opt the catalog into public/shared caching | `MCP012` when publicly cacheable |
 | Pagination is followed and does not run away | `MCP012` warning past 50 pages |
 
 **Tool quality** — the fetched catalog is normalized by the same code path as file scans
@@ -38,8 +58,8 @@ An unknown negotiated revision is reported, not silently accepted.
 
 | Mode | When | How the revision is agreed |
 | :--- | :--- | :--- |
-| `handshake` | revisions `2025-11-25` and earlier | `initialize` → `notifications/initialized`, version in the result |
-| `stateless` | `2026-07-28` and later | `server/discover` → newest mutually supported revision, carried per request in `params._meta["io.modelcontextprotocol/protocolVersion"]` |
+| `handshake` | revisions `2025-11-25` and earlier | `initialize` → `notifications/initialized`, version in the result; HTTP sends that revision in `MCP-Protocol-Version` on subsequent requests |
+| `stateless` | `2026-07-28` and later | `server/discover` → newest mutually supported revision; HTTP sends it in both `MCP-Protocol-Version` and `params._meta["io.modelcontextprotocol/protocolVersion"]` |
 
 The client tries the handshake first and falls back to discovery. This is not a compatibility
 nicety: `2026-07-28` **removed** the handshake, so a handshake-only client cannot audit any
@@ -52,24 +72,36 @@ because the two modes prove different things about the server.
 
 ## Safety rails
 
-Running an untrusted process is not a small thing, so the boundaries are explicit:
+Running an untrusted process or contacting an untrusted endpoint needs explicit boundaries:
 
-- **argv only, never `shell=True`.** Nothing in the command is shell-expanded.
-- **Hard deadline.** One total timeout covers the handshake and every `tools/list` page;
-  the child is killed (process group SIGTERM, then SIGKILL) when it expires.
-- **Bounded responses.** A single response may not exceed 8 MiB, and pagination stops at 50
-  pages.
-- **JSON only.** Server output is parsed, never evaluated. Non-JSON banners on stdout are
-  skipped so chatty servers remain auditable.
-- **No credential handling.** `audit-server` passes the parent environment through so the
-  server can find its own configuration, and reads nothing from its own config.
-- **Vexar-MCP still does not scan by executing your code.** `scan` remains pure static
-  analysis; `audit-server` is the one command that starts a process, and it does so only
-  when you name the command yourself. Rule packs are the only other code-executing feature,
-  and they are opt-in — see [rule-packs.md](rule-packs.md).
+- **argv only, never `shell=True`.** A local server command is passed literally; nothing is
+  shell-expanded.
+- **One total deadline.** The timeout covers negotiation and every `tools/list` page. The
+  child process is killed on expiry; HTTP DNS resolution, redirects, and body reads share the
+  same deadline.
+- **Bounded responses.** Each JSON/SSE response is capped at 8 MiB and pagination stops at
+  50 pages. HTTP follows at most three method-preserving `307`/`308` redirects, only within
+  the original origin.
+- **HTTPS and SSRF protection.** HTTP is refused except for loopback with
+  `--allow-http-loopback`. Every DNS address is checked and pinned before connecting; private,
+  loopback, link-local and other non-public addresses are refused unless
+  `--allow-private-network` is explicitly set (the loopback HTTP flag is the narrow exception
+  for local development).
+- **Origin and cache checks.** HTTP sends an `Origin` header and `Cache-Control: no-store`;
+  it checks the response's `Access-Control-Allow-Origin` and reports missing/foreign values
+  as `MCP012`. A response that explicitly permits shared/public caching is also `MCP012`.
+  The auditor itself does not cache catalogs or security findings.
+- **Credentials are opt-in.** Stdio inherits the parent environment for the named child. HTTP
+  credentials must be supplied as explicit `--header` values; they are not echoed in errors
+  or reports, and cross-origin redirects are refused so they cannot leak to another host.
+- **Read-only protocol use.** The auditor calls initialization/discovery and `tools/list`; it
+  never invokes a tool. Server output is parsed as JSON or SSE, never evaluated.
+- **Static scans still execute no server code.** `scan` remains pure static analysis;
+  `audit-server` starts the command you name or connects to the URL you give. Rule packs are
+  the only other code-executing feature, and they are opt-in — see [rule-packs.md](rule-packs.md).
 
-Recommended posture: run `audit-server` in a container or sandbox in CI, with only the
-secrets that server needs. It is a *client*, so treat it like one.
+Recommended posture: run local audits in a container or sandbox in CI, with only the secrets
+that server needs. Treat the remote HTTP mode like any other authenticated network client.
 
 ## Failure behaviour
 
@@ -77,8 +109,11 @@ secrets that server needs. It is a *client*, so treat it like one.
 | :--- | :--- |
 | Executable missing | `LiveAuditError`, exit `2`, message names the executable |
 | Server exits mid-handshake | exit `2`, includes the exit code and stderr tail |
-| Server never responds | exit `2` after `--timeout`, child killed |
-| Server rejects `tools/list` | exit `2`, includes the server's error message |
+| Server never responds | exit `2` after `--timeout`; child killed or HTTP socket closed |
+| Server rejects `tools/list` | exit `2`; stdio includes the server error, HTTP avoids reflecting remote error text |
+| HTTP endpoint requires authentication | exit `2`, points to `--header`/`--header-from-env` without printing credential values |
+| HTTP URL is cleartext/non-public without opt-in | exit `2` before an outbound connection |
+| HTTP response exceeds 8 MiB or redirects outside the origin | exit `2`, response/redirect refused |
 | Server speaks an old revision | exit `0`/`1` depending on gates, with `MCP012` findings |
 
 Exit `2` means "we could not audit this server" — which is not the same as "the server is
@@ -100,8 +135,10 @@ vexar-mcp audit-server --timeout 120 -- docker run --rm -i my-mcp-server
 ## Auditing a whole fleet
 
 Teams do not run one MCP server. `audit-registry` reads the file that already lists them —
-a Claude Desktop or Cursor configuration, or a checked-in registry — audits each server
-over the same stdio client, and emits one combined report.
+a Claude Desktop or Cursor configuration, or a checked-in registry — audits local stdio
+entries and emits one combined report. Remote entries remain explicitly **skipped** in fleet
+mode; use `audit-server --url` to audit a remote endpoint with explicit network and auth
+controls.
 
 ```bash
 vexar-mcp audit-registry .vexar-servers.json
@@ -233,9 +270,19 @@ Three keys carry the honesty of the document and should be read together:
 ## Library use
 
 ```python
-from vexar_mcp.engine import scan_server
+from vexar_mcp.engine import scan_http_server, scan_server
 from vexar_mcp.models import ScanConfig
 
-report = scan_server(["python", "my_server.py"], ScanConfig(policy_name="strict-prod"), timeout=60)
-print(report.summary.score, report.summary.risk_index)
+local = scan_server(["python", "my_server.py"], ScanConfig(policy_name="strict-prod"), timeout=60)
+remote = scan_http_server(
+    "https://mcp.example.com/mcp",
+    ScanConfig(policy_name="strict-prod"),
+    timeout=60,
+    origin="https://console.example.com",
+    headers={"Authorization": "Bearer " + token},
+)
+print(remote.summary.score, remote.summary.risk_index)
 ```
+
+`scan_http_server` accepts `allow_http_loopback` and `allow_private_network` as explicit
+opt-ins for local development or trusted private HTTPS deployments.
